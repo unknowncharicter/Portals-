@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 
-export const PORTAL_W = 1.3;
-export const PORTAL_H = 2.3;
+export const PORTAL_W = 1.6;
+export const PORTAL_H = 2.6;
 export const PORTAL_LIFETIME = 60;     // seconds, then it closes no matter what
 const SURFACE_OFFSET = 0.012;          // lift off the wall to avoid z-fighting
 const ROT_Y_PI = new THREE.Matrix4().makeRotationY(Math.PI);
@@ -43,7 +43,7 @@ const surfaceFrag = /* glsl */`
   }
 `;
 
-const ringGeo = new THREE.RingGeometry(0.93, 1.08, 64);
+const ringGeo = new THREE.RingGeometry(0.975, 1.03, 96);
 const surfGeo = new THREE.PlaneGeometry(1, 1);
 
 export class Portal {
@@ -437,7 +437,7 @@ export class PortalSystem {
 
   // Oblique near plane: hide everything behind the exit portal (e.g. the wall it is on).
   obliqueClip(cam, portal) {
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(portal.normal, portal.pos.clone().addScaledVector(portal.normal, -0.01));
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(portal.normal, portal.pos.clone().addScaledVector(portal.normal, 0.02));
     plane.applyMatrix4(cam.matrixWorldInverse);
     if (Math.abs(plane.constant) < 0.02) return;
     const clip = new THREE.Vector4(plane.normal.x, plane.normal.y, plane.normal.z, plane.constant);
