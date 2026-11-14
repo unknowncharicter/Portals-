@@ -1,0 +1,332 @@
+import * as THREE from 'three';
+import { Character } from './Character.js';
+import { BotBrain } from './Bot.js';
+import { PortalGhost } from './Portals.js';
+import { buildStats } from './Weapons.js';
+import { Sfx } from '../audio.js';
+import { COLORS } from '../save.js';
+
+export const ROUNDS_TO_WIN = 3;
+const COUNTDOWN = 3;
+const ROUND_END_TIME = 3;
+const TEAM_COLORS = ['#3a6fd8', '#d84a4a'];
+const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
+const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
+
+export const MODES = {
+  '1v1': { label: '1v1', teams: [[0], [1]] },
+  '2v2': { label: '2v2', teams: [[0, 1], [2, 3]] },
+  'ffa': { label: 'Free for all', ffa: true, count: 4 },
+};
+
+export class Match {
+  constructor(ctx, modeId, save, onEnd) {
+    Object.assign(this, ctx); // scene, renderer, camera, world, portals, effects, viewmodel, input, hud
+    this.mode = MODES[modeId];
+    this.modeId = modeId;
+    this.save = save;
+    this.onEnd = onEnd;
+    this.chars = [];
+    this.bots = [];
+    this.wins = {};
+    this.state = 'countdown';
+    this.stateT = 0;
+    this.round = 0;
+    this.earned = { kills: 0, rounds: 0 };
+    this.ghostMode = false;
+    this.ghost = new PortalGhost(this.scene);
+    this.deathCam = null;
+
+    this.portals.onEvent = (type, c) => {
+      if (type === 'teleport') {
+        if (c === this.player) Sfx.teleport();
+        const brain = this.bots.find(b => b.c === c);
+        if (brain) brain.flank = null;
+      }
+    };
+    this.setup();
+    this.startRound();
+  }
+
+  setup() {
+    const botColors = COLORS.filter(c => c !== this.save.color);
+    const make = (i, team, bodyColor) => {
+      const isBot = i !== 0;
+      const c = new Character({
+        name: isBot ? BOT_NAMES[(i - 1) % BOT_NAMES.length] : 'You',
+        team, color: bodyColor,
+        portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
+        isBot, stats: buildStats(isBot ? null : this.save),
+      });
+      this.chars.push(c);
+      this.scene.add(c.mesh);
+      if (isBot) this.bots.push(new BotBrain(c, this, 0.55 + Math.random() * 0.15));
+      return c;
+    };
+    if (this.mode.ffa) {
+      for (let i = 0; i < this.mode.count; i++) make(i, i, FFA_COLORS[i]);
+    } else {
+      this.mode.teams.forEach((members, team) => members.forEach(i => make(i, team, TEAM_COLORS[team])));
+      this.chars.sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0));
+    }
+    this.player = this.chars.find(c => !c.isBot);
+    this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
+    for (const c of this.chars) this.wins[c.team] = 0;
+  }
+
+  enemiesOf(c) { return this.chars.filter(o => o.team !== c.team); }
+
+  startRound() {
+    this.round++;
+    this.portals.clear();
+    this.effects.clear();
+    this.ghostMode = false;
+    this.ghost.hide();
+    this.deathCam = null;
+    const teamIdx = {};
+    for (const c of this.chars) {
+      let at, yaw;
+      if (this.mode.ffa) {
+        at = this.world.spawns.ffa[c.team];
+      } else {
+        teamIdx[c.team] = (teamIdx[c.team] || 0);
+        at = this.world.spawns[c.team][teamIdx[c.team]++];
+      }
+      yaw = Math.atan2(at.x, at.z); // face the centre of the map
+      c.spawn(at, yaw);
+      c.animate(0);
+    }
+    for (const b of this.bots) b.reset();
+    this.state = 'countdown';
+    this.stateT = COUNTDOWN;
+    this.lastBeep = null;
+    this.updateScore();
+  }
+
+  updateScore() {
+    if (this.mode.ffa) {
+      this.hud.setScore(this.chars.map(c => `<span style="color:${c.color}">${c.name} ${this.wins[c.team]}</span>`).join(' · '));
+    } else {
+      const my = this.player.team, other = 1 - my;
+      this.hud.setScore(`<span style="color:${TEAM_COLORS[my]}">YOU ${this.wins[my]}</span> — <span style="color:${TEAM_COLORS[other]}">${this.wins[other]} ENEMY</span> <span style="opacity:.6;font-size:14px">Round ${this.round}</span>`);
+    }
+  }
+
+  // ---------- Actions shared by player and bots ----------
+
+  fire(c, extraSpread = 0) {
+    const w = c.weapon;
+    if (c.switchT > 0 || !c.alive) return false;
+    if (w.ammo === 0) { this.reload(c); return false; }
+    if (!w.canFire()) return false;
+    w.consume();
+
+    const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
+    const spread = w.def.spread * (moving ? 1.8 : 1) * (c.grounded ? 1 : 2.2) + extraSpread;
+    const dir = c.lookDir();
+    dir.x += (Math.random() - 0.5) * 2 * spread;
+    dir.y += (Math.random() - 0.5) * 2 * spread;
+    dir.z += (Math.random() - 0.5) * 2 * spread;
+    dir.normalize();
+    const origin = c.eyePos();
+    const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
+
+    // Tracer starts at the gun for the player.
+    if (c === this.player) {
+      tr.segments[0].from = this.viewmodel.muzzleView().applyMatrix4(this.camera.matrixWorld);
+      this.viewmodel.fire();
+      if (!c.isBot) c.pitch = Math.min(1.5, c.pitch + (w.def.id === 'rifle' ? 0.008 : 0.02)); // recoil
+    } else {
+      tr.segments[0].from = c.pos.clone().add(new THREE.Vector3(0.3, 0.38, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.yaw)).addScaledVector(c.lookDir(), 0.9);
+    }
+    this.effects.tracer(tr.segments, c.portalColor);
+
+    const vol = c === this.player ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
+    (w.def.id === 'rifle' ? Sfx.rifle : Sfx.pistol)(vol);
+
+    const hit = tr.hit;
+    if (!hit) return true;
+    if (hit.type === 'world') { this.effects.spark(hit.point); return true; }
+    if (hit.type === 'character') {
+      const t = hit.character;
+      if (t !== c && t.team === c.team) return true; // no friendly fire (you CAN hit yourself)
+      const dmg = w.damage * (hit.head ? w.def.headMult : 1);
+      this.effects.spark(hit.point, '#ff4040');
+      if (c === this.player) { this.hud.hit(hit.head); Sfx.hit(); }
+      if (t === this.player) { this.hud.hurt(); Sfx.hurt(); }
+      const killed = t.damage(dmg, c);
+      if (killed) this.onKill(c, t);
+    }
+    return true;
+  }
+
+  onKill(killer, victim) {
+    const self = killer === victim;
+    this.hud.kill(killer, victim, self);
+    if (!self) killer.kills++;
+    if (killer === this.player && !self) this.earned.kills++;
+    this.portals.removeOwner(victim);
+    if (victim === this.player) {
+      this.deathCam = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone() };
+      this.ghostMode = false; this.ghost.hide();
+      this.hud.centerText(self ? 'You shot yourself!' : `Eliminated by ${killer.name}`, 2000, '#f66');
+    }
+  }
+
+  reload(c) {
+    if (c.weapon.startReload() && c === this.player) Sfx.reload();
+  }
+
+  heal(c) {
+    if (c.tryHeal() && c === this.player) Sfx.heal();
+  }
+
+  placePortal(c, pose) {
+    if (c.portalCd > 0 || !pose || !pose.valid) return false;
+    this.portals.place(c, pose);
+    c.portalCd = c.stats.portalCooldown;
+    if (c === this.player) Sfx.portalPlace();
+    return true;
+  }
+
+  // ---------- Player input ----------
+
+  updatePlayer(dt, canAct) {
+    const p = this.player, inp = this.input;
+    if (!p.alive) return new THREE.Vector3();
+
+    p.yaw -= inp.dx * inp.sensitivity;
+    p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * inp.sensitivity, -1.55, 1.55);
+
+    const wish = new THREE.Vector3();
+    if (canAct) {
+      const fwd = new THREE.Vector3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw));
+      const right = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
+      if (inp.down('KeyW')) wish.add(fwd);
+      if (inp.down('KeyS')) wish.sub(fwd);
+      if (inp.down('KeyD')) wish.add(right);
+      if (inp.down('KeyA')) wish.sub(right);
+      if (wish.lengthSq() > 0) wish.normalize();
+
+      if (inp.hit('Digit1')) p.switchTo(0);
+      if (inp.hit('Digit2')) p.switchTo(1);
+      if (inp.wheel) p.switchTo((p.slot + 1) % 2);
+      if (inp.hit('KeyR')) this.reload(p);
+      if (inp.hit('KeyF')) this.heal(p);
+
+      const w = p.weapon;
+      if (w.def.auto ? inp.mouseDown : inp.mouseClicked) this.fire(p);
+
+      // Portals: E shows the outline, E again places it. Q cancels.
+      if (inp.hit('KeyQ') && this.ghostMode) { this.ghostMode = false; }
+      if (inp.hit('KeyE')) {
+        if (!this.ghostMode) { this.ghostMode = true; Sfx.portalGhost(); }
+        else {
+          const pose = this.portals.aimPose(p.eyePos(), p.lookDir(), p);
+          if (this.placePortal(p, pose)) this.ghostMode = false;
+          else Sfx.portalDeny();
+        }
+      }
+    }
+    if (this.ghostMode) {
+      const pose = this.portals.aimPose(p.eyePos(), p.lookDir(), p);
+      this.ghost.show(pose, p.portalColor, pose && pose.valid && p.portalCd <= 0);
+    } else this.ghost.hide();
+    return wish;
+  }
+
+  // ---------- Main update ----------
+
+  update(dt) {
+    const fighting = this.state === 'fight';
+    const p = this.player;
+    for (const c of this.chars) c.tick(dt);
+
+    const wish = this.updatePlayer(dt, fighting);
+    const jump = fighting && this.input.down('Space') && p.grounded;
+    const sprint = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
+
+    for (const b of this.bots) { if (fighting) b.update(dt); else { b.wish.set(0, 0, 0); b.jump = false; } }
+
+    for (const c of this.chars) {
+      if (!c.alive) continue;
+      const brain = this.bots.find(b => b.c === c);
+      const w = brain ? brain.wish : wish;
+      const j = brain ? brain.jump && c.grounded : jump;
+      c.move(dt, w, j, brain ? false : sprint, this.world, this.portals.ignoredBoxes(c));
+      this.portals.checkTeleport(c);
+      if (c.pos.y < -40) { c.damage(9999, c.lastAttacker || c); this.onKill(c.lastAttacker || c, c); }
+    }
+
+    this.portals.update(dt);
+    this.effects.update(dt);
+    this.updateCamera();
+    this.viewmodel.show(p.weapon.def.id);
+    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / 0.3, reloading: p.weapon.reloading });
+    this.hud.update(p, this.portals.ownerCount(p));
+
+    this.stateT -= dt;
+    if (this.state === 'countdown') {
+      const n = Math.ceil(this.stateT);
+      if (n !== this.lastBeep && n > 0) { this.lastBeep = n; this.hud.centerText(String(n)); Sfx.beep(false); }
+      if (this.stateT <= 0) { this.state = 'fight'; this.hud.centerText('FIGHT!', 700, '#7cf'); Sfx.beep(true); }
+    } else if (this.state === 'fight') {
+      const teamsAlive = new Set(this.chars.filter(c => c.alive).map(c => c.team));
+      if (teamsAlive.size <= 1) this.endRound([...teamsAlive][0]);
+    } else if (this.state === 'roundEnd' && this.stateT <= 0) {
+      const champ = Object.keys(this.wins).find(t => this.wins[t] >= ROUNDS_TO_WIN);
+      if (champ !== undefined) this.finish(Number(champ));
+      else this.startRound();
+    }
+  }
+
+  endRound(winnerTeam) {
+    this.state = 'roundEnd';
+    this.stateT = ROUND_END_TIME;
+    if (winnerTeam !== undefined) this.wins[winnerTeam]++;
+    const won = winnerTeam === this.player.team;
+    if (won) this.earned.rounds++;
+    const name = this.mode.ffa && winnerTeam !== undefined ? this.chars.find(c => c.team === winnerTeam).name : null;
+    this.hud.centerText(won ? 'ROUND WON' : name ? `${name} wins the round` : 'ROUND LOST', 2500, won ? '#7f7' : '#f77');
+    won ? Sfx.win() : Sfx.lose();
+    this.updateScore();
+  }
+
+  finish(winnerTeam) {
+    this.state = 'done';
+    const won = winnerTeam === this.player.team;
+    const coins = 20 + this.earned.kills * 10 + this.earned.rounds * 20 + (won ? 100 : 0);
+    this.onEnd({ won, coins, kills: this.earned.kills, rounds: this.earned.rounds });
+  }
+
+  updateCamera() {
+    const cam = this.camera, p = this.player;
+    if (p.alive) {
+      p.eyePos(cam.position);
+      cam.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
+    } else if (this.deathCam) {
+      // Float up and look down at where you died.
+      cam.position.lerp(this.deathCam.pos.clone().add(new THREE.Vector3(0, 6, 0)), 0.02);
+      cam.lookAt(this.deathCam.pos);
+    }
+    cam.updateMatrixWorld();
+  }
+
+  render() {
+    this.portals.renderViews(this.camera);
+    this.renderer.render(this.scene, this.camera);
+    if (this.player.alive) {
+      this.renderer.autoClear = false;
+      this.viewmodel.render(this.renderer);
+      this.renderer.autoClear = true;
+    }
+  }
+
+  dispose() {
+    this.portals.clear();
+    this.effects.clear();
+    this.portals.onEvent = () => {};
+    this.scene.remove(this.ghost.mesh);
+    for (const c of this.chars) this.scene.remove(c.mesh);
+  }
+}

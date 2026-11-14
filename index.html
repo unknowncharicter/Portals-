@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portal Duel</title>
+  <link rel="stylesheet" href="./src/style.css" />
+  <!-- CrazyGames SDK (safe to keep; the game works without it) -->
+  <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- Main menu -->
+  <div id="menu" class="screen">
+    <h1 class="logo">PORTAL<span>DUEL</span></h1>
+    <p class="tag">Shoot through portals. Outsmart everyone.</p>
+    <button id="btn-play" class="big">PLAY</button>
+  </div>
+
+  <!-- Lobby -->
+  <div id="lobby" class="screen hidden">
+    <div class="lobby-top">
+      <h2>LOBBY</h2>
+      <div class="coins">🪙 <span id="coin-count">0</span></div>
+    </div>
+    <div class="lobby-grid">
+      <section class="panel">
+        <h3>Upgrades</h3>
+        <div id="upgrades"></div>
+      </section>
+      <section class="panel">
+        <h3>Portal colour</h3>
+        <div id="colors" class="colors"></div>
+        <h3>Game mode</h3>
+        <div id="modes" class="modes"></div>
+        <button id="btn-start" class="big">START MATCH</button>
+        <p class="hint">vs bots · first to 3 rounds</p>
+      </section>
+      <section class="panel">
+        <h3>Controls</h3>
+        <ul class="controls">
+          <li><b>WASD</b> move · <b>Space</b> jump · <b>Shift</b> sprint</li>
+          <li><b>Mouse</b> aim · <b>Click</b> shoot · <b>R</b> reload</li>
+          <li><b>1 / 2</b> rifle / pistol · <b>F</b> heal</li>
+          <li><b>E</b> show portal outline → <b>E</b> again to place</li>
+          <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
+          <li>You keep your 2 newest portals. Portals close after 60s.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    <div id="damage"></div>
+    <div id="score"></div>
+    <div id="center-text"></div>
+    <div id="killfeed"></div>
+    <div id="bottom-left">
+      <div class="hp-wrap"><div id="hp-bar"></div><span id="hp-text">100</span></div>
+      <div id="heal-info"></div>
+    </div>
+    <div id="bottom-right">
+      <div id="weapon-name"></div>
+      <div id="ammo"></div>
+      <div id="portal-info"></div>
+    </div>
+  </div>
+
+  <!-- Pause -->
+  <div id="pause" class="screen hidden">
+    <h2>PAUSED</h2>
+    <button id="btn-resume" class="big">RESUME</button>
+    <button id="btn-quit">QUIT TO LOBBY</button>
+  </div>
+
+  <!-- Results -->
+  <div id="results" class="screen hidden">
+    <h2 id="results-title"></h2>
+    <p id="results-detail"></p>
+    <button id="btn-continue" class="big">CONTINUE</button>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
