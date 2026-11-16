@@ -9,6 +9,7 @@ export class Input {
     this.rightClicked = false;
     this.dx = 0; this.dy = 0;
     this.wheel = 0;
+    this.moveX = 0; this.moveY = 0; this.touchSprint = false; // touch joystick
     this.sensitivity = 0.0022;
     this.enabled = false;
 
@@ -49,6 +50,11 @@ export class Input {
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
+  // Virtual keys (touch buttons).
+  press(code) { if (!this.keys.has(code)) this.pressed.add(code); this.keys.add(code); }
+  release(code) { this.keys.delete(code); }
+  tap(code) { this.pressed.add(code); }
+
   down(code) { return this.keys.has(code); }
   hit(code) { return this.pressed.has(code); }
 
@@ -59,5 +65,8 @@ export class Input {
     this.dx = 0; this.dy = 0; this.wheel = 0;
   }
 
-  reset() { this.keys.clear(); this.pressed.clear(); this.mouseDown = false; this.dx = this.dy = 0; }
+  reset() {
+    this.keys.clear(); this.pressed.clear(); this.mouseDown = false; this.dx = this.dy = 0;
+    this.moveX = this.moveY = 0; this.touchSprint = false;
+  }
 }

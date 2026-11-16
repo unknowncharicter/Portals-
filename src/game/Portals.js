@@ -263,7 +263,7 @@ export class PortalSystem {
     }
     for (const p of mine) {
       if (p.partner && !p.rt) {
-        p.rt = new THREE.WebGLRenderTarget(this.rtSize.x, this.rtSize.y, { samples: 4 });
+        p.rt = new THREE.WebGLRenderTarget(this.rtSize.x, this.rtSize.y, { samples: this.lowQuality ? 0 : 4 });
         p.rt.texture.colorSpace = THREE.SRGBColorSpace;
       }
       p.uniforms.tex.value = p.rt ? p.rt.texture : null;

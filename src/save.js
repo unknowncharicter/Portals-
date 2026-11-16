@@ -15,7 +15,7 @@ export const COLORS = ['#33aaff', '#ff44cc', '#44ff88', '#ffcc22', '#ff5533', '#
 import { DEFAULT_LOOK } from './game/Look.js';
 
 const DEFAULT = {
-  coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'normal',
+  coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'normal', map: 'arena',
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },
   owned: ['none', 'cap', 'beanie'],

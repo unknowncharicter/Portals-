@@ -155,7 +155,7 @@ export class BotBrain {
     if (!this.flank && this.hiddenT > 2.5 && c.portalCd <= 0 && Math.random() < dt * 0.6) this.planFlank();
     if (this.flank) {
       if (this.flank.stage === 1 && c.portalCd <= 0) this.placeEntrance();
-      if (this.flank.stage === 2) goal = this.flank.entry;
+      if (this.flank && this.flank.stage === 2) goal = this.flank.entry;
     }
 
     const to = goal.clone().sub(c.pos).setY(0);
@@ -208,21 +208,34 @@ export class BotBrain {
     this.flank = null;
   }
 
-  // Steer around obstacles in front of us.
+  wantsPortalDrop(p) {
+    return !!(this.flank && this.flank.stage === 2 && this.flank.entry && this.flank.entry.distanceTo(p) < 2.5);
+  }
+
+  // Steer around obstacles and edges in front of us.
   avoid() {
     const c = this.c, w = this.m.world;
     if (this.wish.lengthSq() === 0) return;
     const origin = c.pos.clone().setY(c.pos.y - 0.3);
     const ignored = this.m.portals.ignoredBoxes(c);
+    const down = new THREE.Vector3(0, -1, 0);
+    let ledge = false;
     const blocked = (d) => {
       const h = w.raycast(origin, d, 1.3);
-      return h && !ignored.has(h.box) && h.box.max.y - (c.pos.y - c.halfHeight) > 0.55;
+      if (h && !ignored.has(h.box) && h.box.max.y - (c.pos.y - c.halfHeight) > 0.55) return true;
+      // Don't walk off edges (unless it's into a portal on purpose).
+      if (!c.grounded) return false;
+      const ahead = c.pos.clone().addScaledVector(d, 1.4);
+      const g = w.raycast(ahead, down, 4);
+      if (!g && !this.wantsPortalDrop(ahead)) { ledge = true; return true; }
+      return false;
     };
     if (!blocked(this.wish)) return;
     for (const a of [0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
       const d = _v.copy(this.wish).applyAxisAngle(new THREE.Vector3(0, 1, 0), a * this.strafeSign);
       if (!blocked(d)) { this.wish.copy(d); return; }
     }
-    this.jump = true;
+    if (ledge) this.wish.set(0, 0, 0); // stand still instead of jumping off
+    else this.jump = true;
   }
 }

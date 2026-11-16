@@ -29,6 +29,9 @@ export class Character {
     this.yaw = 0; this.pitch = 0;
     this.grounded = false;
     this.teleportCooldown = 0;
+    this.airT = 0;
+    this.landImpact = 0;
+    this.jumped = false;
 
     this.maxHp = stats.maxHp;
     this.hp = this.maxHp;
@@ -114,11 +117,11 @@ export class Character {
   move(dt, wish, jump, sprint, world, ignored) {
     this.teleportCooldown = Math.max(0, this.teleportCooldown - dt);
     const speed = sprint ? SPRINT : WALK;
+    this.jumped = false;
     if (this.grounded) {
       const k = Math.min(1, 14 * dt);
       this.vel.x += (wish.x * speed - this.vel.x) * k;
       this.vel.z += (wish.z * speed - this.vel.z) * k;
-      if (jump) { this.vel.y = JUMP_SPEED; this.grounded = false; }
     } else if (wish.lengthSq() > 0) {
       // Air control that never cancels momentum (portal flings stay fun).
       const cur = this.vel.x * wish.x + this.vel.z * wish.z;
@@ -128,7 +131,12 @@ export class Character {
         this.vel.x += wish.x * a; this.vel.z += wish.z * a;
       }
     }
+    // Jump, with a little "coyote time" so jumping just after a ledge still works.
+    if (jump && (this.grounded || this.airT < 0.12) && this.vel.y <= 1) {
+      this.vel.y = JUMP_SPEED; this.grounded = false; this.airT = 1; this.jumped = true;
+    }
     this.vel.y = Math.max(this.vel.y - GRAVITY * dt, -55);
+    const vyBefore = this.vel.y;
 
     const solid = world.boxes.filter(b => !ignored.has(b));
     this.unstick(solid);
@@ -143,6 +151,10 @@ export class Character {
       this.moveAxis(2, this.vel.z * sdt, solid, wasGrounded);
       this.moveAxis(1, this.vel.y * sdt, solid, wasGrounded);
     }
+    if (this.grounded) {
+      if (!wasGrounded) this.landImpact = -vyBefore;
+      this.airT = 0;
+    } else this.airT += dt;
     this.animate(dt);
   }
 

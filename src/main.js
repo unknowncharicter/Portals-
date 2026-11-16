@@ -7,6 +7,8 @@ import { Match, MODES, DIFFICULTIES } from './game/Match.js';
 import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, cleanName } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
+import { TouchControls, isTouchDevice } from './touch.js';
+import { MAPS, MAP_IDS } from './game/maps.js';
 import { Sfx, setVolume } from './audio.js';
 import { SDK, initSDK } from './sdk.js';
 import { loadModels, gunModel } from './game/Models.js';
@@ -18,7 +20,10 @@ const canvas = $('game');
 
 // ---------- Renderer & shared objects ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+const IS_TOUCH = isTouchDevice();
+if (IS_TOUCH) document.body.classList.add('touch');
+// Phones: render at a lower resolution so it stays smooth.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -32,6 +37,8 @@ const effects = new Effects(scene);
 const viewmodel = new Viewmodel();
 const hud = new Hud();
 const input = new Input(canvas);
+portals.lowQuality = IS_TOUCH;
+const touch = new TouchControls(input, { onPause: () => pause() });
 
 let save = loadSave();
 let match = null;
@@ -167,6 +174,8 @@ resize();
 function showScreen(id) {
   for (const s of ['menu', 'lobby', 'pause', 'results']) $(s).classList.toggle('hidden', s !== id);
   hud.show(id === null);
+  document.body.classList.toggle('playing', id === null);
+  touch.show(IS_TOUCH && id === null);
 }
 
 function buildLobby() {
@@ -221,6 +230,20 @@ function buildLobby() {
     lo.appendChild(row);
   }
 
+  const mapsEl = $('maps');
+  mapsEl.innerHTML = '';
+  for (const id of [...MAP_IDS, 'random']) {
+    const b = document.createElement('button');
+    b.textContent = id === 'random' ? '🎲 Random' : MAPS[id].name;
+    if (id === (save.map || 'arena')) b.classList.add('sel');
+    b.onclick = () => {
+      save.map = id; writeSave(save);
+      if (id !== 'random') world.load(id);
+      buildLobby();
+    };
+    mapsEl.appendChild(b);
+  }
+
   const diff = $('difficulty');
   diff.innerHTML = '';
   for (const [id, d] of Object.entries(DIFFICULTIES)) {
@@ -247,6 +270,7 @@ function buildLobby() {
 function goLobby() {
   state = 'lobby';
   input.enabled = false;
+  if (MAPS[save.map]) world.load(save.map);
   buildSettings();
   input.unlock();
   buildLobby();
@@ -256,12 +280,14 @@ function goLobby() {
 function startMatch() {
   if (match) match.dispose();
   hud.clear();
+  const mapId = save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena');
+  world.load(mapId);
   match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, save.mode, save, onMatchEnd);
   state = 'playing';
   input.enabled = true;
   input.reset();
   showScreen(null);
-  input.lock();
+  if (!IS_TOUCH) input.lock();
   SDK.gameplayStart();
 }
 
@@ -293,7 +319,7 @@ function resume() {
   state = 'playing';
   input.enabled = true;
   showScreen(null);
-  input.lock();
+  if (!IS_TOUCH) input.lock();
   SDK.gameplayStart();
 }
 
@@ -301,9 +327,18 @@ document.addEventListener('pointerlockchange', () => {
   if (!document.pointerLockElement && state === 'playing') pause();
 });
 // Clicking the game while playing re-grabs the mouse (e.g. after a failed lock).
-canvas.addEventListener('click', () => { if (state === 'playing' && !input.locked) input.lock(); });
+canvas.addEventListener('click', () => { if (!IS_TOUCH && state === 'playing' && !input.locked) input.lock(); });
 
-$('btn-play').onclick = () => { Sfx.unlock(); goLobby(); };
+$('btn-play').onclick = () => {
+  Sfx.unlock();
+  if (IS_TOUCH) {
+    // Full screen + landscape where the browser allows it.
+    const el = document.documentElement;
+    try { (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {}); } catch (e) { /* ignore */ }
+    try { screen.orientation?.lock?.('landscape')?.catch?.(() => {}); } catch (e) { /* ignore */ }
+  }
+  goLobby();
+};
 $('btn-start').onclick = async () => {
   Sfx.unlock();
   const b = $('btn-start');
@@ -312,6 +347,7 @@ $('btn-start').onclick = async () => {
   b.disabled = false; b.textContent = 'START MATCH';
   startMatch();
 };
+$('btn-start-top').onclick = () => $('btn-start').onclick();
 $('btn-resume').onclick = resume;
 $('btn-quit').onclick = () => { if (match) { match.dispose(); match = null; } goLobby(); };
 $('btn-continue').onclick = async () => {
@@ -330,6 +366,7 @@ function frame() {
 
   if (state === 'playing' && match) {
     match.update(dt);
+    if (IS_TOUCH) touch.update(match);
     if (match && match.state !== 'done') match.render();
   } else if (match && (state === 'paused' || state === 'results')) {
     match.render();
@@ -337,7 +374,8 @@ function frame() {
     if (state === 'lobby') renderPreview(dt);
     // Slow fly-around of the map behind the menus.
     menuCam.t += dt * 0.08;
-    camera.position.set(Math.cos(menuCam.t) * 28, 14, Math.sin(menuCam.t) * 18);
+    const v = world.map.view;
+    camera.position.set(Math.cos(menuCam.t) * v.r, v.h, Math.sin(menuCam.t) * v.r * 0.65);
     camera.lookAt(0, 1, 0);
     camera.updateMatrixWorld();
     renderer.render(scene, camera);

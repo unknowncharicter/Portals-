@@ -9,6 +9,8 @@ export class Hud {
     this.score = $('score'); this.center = $('center-text');
     this.killfeed = $('killfeed'); this.hitmarker = $('hitmarker'); this.dmg = $('damage');
     this.scopeEl = $('scope'); this.crosshair = $('crosshair');
+    this.timer = $('timer'); this.killpopEl = $('killpop');
+    this._kpT = null; this._spread = -1;
     this._hitT = null; this._dmgT = null; this._centerT = null;
   }
   show(v) { this.el.classList.toggle('hidden', !v); }
@@ -18,7 +20,8 @@ export class Hud {
     this.hp.style.width = pct + '%';
     this.hp.style.background = pct > 50 ? 'linear-gradient(90deg,#3d6,#8f6)' : pct > 25 ? 'linear-gradient(90deg,#db3,#fd5)' : 'linear-gradient(90deg,#d33,#f66)';
     this.hpText.textContent = Math.ceil(p.hp);
-    this.heal.textContent = p.healCd > 0 ? `F heal · ${Math.ceil(p.healCd)}s` : `F heal · READY (+${p.stats.heal})`;
+    const hk = document.body.classList.contains('touch') ? 'Heal' : 'F heal';
+    this.heal.textContent = p.healCd > 0 ? `${hk} · ${Math.ceil(p.healCd)}s` : `${hk} · READY (+${p.stats.heal})`;
     const w = p.weapon;
     this.weapon.textContent = `${w.def.name}  [1/2]`;
     this.ammo.textContent = w.reloading ? 'RELOADING' : `${w.ammo} / ${w.mag}`;
@@ -29,6 +32,26 @@ export class Hud {
   scope(on) {
     this.scopeEl.classList.toggle('hidden', !on);
     this.crosshair.classList.toggle('hidden', on);
+  }
+
+  setSpread(px) {
+    const v = Math.round(Math.min(40, 3 + px));
+    if (v !== this._spread) { this._spread = v; this.crosshair.style.setProperty('--gap', v + 'px'); }
+  }
+
+  setTimer(sec) {
+    if (sec === null) { this.timer.textContent = ''; return; }
+    const s = Math.max(0, Math.ceil(sec));
+    this.timer.textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    this.timer.classList.toggle('low', s <= 15);
+  }
+
+  killPop(name) {
+    const k = this.killpopEl;
+    k.innerHTML = `<small>ELIMINATED</small>${name}`;
+    k.classList.remove('show'); void k.offsetWidth; k.classList.add('show');
+    clearTimeout(this._kpT);
+    this._kpT = setTimeout(() => k.classList.remove('show'), 1400);
   }
 
   setScore(html) { this.score.innerHTML = html; }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Portal Duel</title>
   <link rel="stylesheet" href="./src/style.css" />
   <!-- CrazyGames SDK (safe to keep; the game works without it) -->
@@ -22,6 +22,8 @@
   <div id="lobby" class="screen hidden">
     <div class="lobby-top">
       <h2>LOBBY</h2>
+      <div class="grow"></div>
+      <button id="btn-start-top" class="big">▶ START</button>
       <div class="coins">🪙 <span id="coin-count">0</span></div>
     </div>
     <div class="lobby-grid">
@@ -43,6 +45,8 @@
         <div id="loadout" class="loadout"></div>
         <h3>Portal colour</h3>
         <div id="colors" class="colors"></div>
+        <h3>Map</h3>
+        <div id="maps" class="modes wrap"></div>
         <h3>Game mode</h3>
         <div id="modes" class="modes"></div>
         <h3>Bot difficulty</h3>
@@ -70,7 +74,9 @@
   <!-- HUD -->
   <div id="hud" class="hidden">
     <div id="scope" class="hidden"></div>
-    <div id="crosshair"></div>
+    <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+    <div id="timer"></div>
+    <div id="killpop"></div>
     <div id="hitmarker"></div>
     <div id="damage"></div>
     <div id="score"></div>
@@ -86,6 +92,10 @@
       <div id="portal-info"></div>
     </div>
   </div>
+
+  <!-- Touch controls -->
+  <div id="touch" class="hidden"></div>
+  <div id="rotate">↻ Turn your device sideways to play</div>
 
   <!-- Pause -->
   <div id="pause" class="screen hidden">

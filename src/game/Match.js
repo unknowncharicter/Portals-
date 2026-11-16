@@ -24,6 +24,7 @@ const shadowTex = (() => {
 
 export const ROUNDS_TO_WIN = 3;
 const COUNTDOWN = 3;
+const ROUND_TIME = 120;
 const ROUND_END_TIME = 3;
 const TEAM_COLORS = ['#3a6fd8', '#d84a4a'];
 const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
@@ -54,6 +55,8 @@ export class Match {
     this.deathCam = null;
     this.scoped = false;
     this.baseFov = this.camera.fov;
+    this.jumpBuf = 0; this.bobT = 0; this.dip = 0; this.dipV = 0; this.shake = 0; this.bloom = 0;
+    this.sprinting = false; this.roundT = ROUND_TIME;
 
     this.portals.onEvent = (type, c) => {
       if (type === 'teleport') {
@@ -126,6 +129,7 @@ export class Match {
     for (const b of this.bots) b.reset();
     this.state = 'countdown';
     this.stateT = COUNTDOWN;
+    this.roundT = ROUND_TIME;
     this.lastBeep = null;
     this.updateScore();
   }
@@ -186,6 +190,7 @@ export class Match {
         const fx = -Math.sin(t.yaw) * d.x - Math.cos(t.yaw) * d.z;
         const rx = Math.cos(t.yaw) * d.x - Math.sin(t.yaw) * d.z;
         this.hud.hurt(Math.atan2(rx, fx));
+        this.shake = Math.min(1, this.shake + 0.6);
         Sfx.hurt();
       }
       if (t.damage(dmg, c)) this.onKill(c, t);
@@ -195,6 +200,7 @@ export class Match {
       if (anyHit) { this.hud.hit(anyHead); Sfx.hit(); }
       const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045 }[def.id] || 0.02;
       this.viewmodel.fire(Math.min(1.5, kick * 30));
+      this.bloom = Math.min(3, this.bloom + kick * 40);
       c.pitch = Math.min(1.5, c.pitch + kick);
       if (def.zoom) this.setScope(false); // sniper un-scopes after each shot
     }
@@ -218,7 +224,7 @@ export class Match {
     const self = killer === victim;
     this.hud.kill(killer, victim, self);
     if (!self) killer.kills++;
-    if (killer === this.player && !self) this.earned.kills++;
+    if (killer === this.player && !self) { this.earned.kills++; this.hud.killPop(victim.name); Sfx.kill(); }
     this.portals.removeOwner(victim);
     if (victim === this.player) {
       this.setScope(false);
@@ -263,6 +269,11 @@ export class Match {
       if (inp.down('KeyD')) wish.add(right);
       if (inp.down('KeyA')) wish.sub(right);
       if (wish.lengthSq() > 0) wish.normalize();
+      if (inp.moveX || inp.moveY) {
+        // Touch joystick (analog: a small push walks slowly).
+        wish.addScaledVector(fwd, -inp.moveY).addScaledVector(right, inp.moveX);
+        if (wish.lengthSq() > 1) wish.normalize();
+      }
 
       if (inp.hit('Digit1') && p.switchTo(0)) this.setScope(false);
       if (inp.hit('Digit2') && p.switchTo(1)) this.setScope(false);
@@ -301,8 +312,12 @@ export class Match {
     for (const c of this.chars) c.tick(dt);
 
     const wish = this.updatePlayer(dt, fighting);
-    const jump = fighting && this.input.down('Space') && p.grounded;
-    const sprint = this.input.down('ShiftLeft') || this.input.down('ShiftRight');
+    const inp = this.input;
+    this.jumpBuf = Math.max(0, this.jumpBuf - dt);
+    if (inp.hit('Space')) this.jumpBuf = 0.15; // pressing jump just before landing still counts
+    const jump = fighting && (this.jumpBuf > 0 || inp.down('Space'));
+    const sprint = inp.down('ShiftLeft') || inp.down('ShiftRight') || inp.touchSprint;
+    this.sprinting = sprint && wish.lengthSq() > 0.5;
 
     for (const b of this.bots) { if (fighting) b.update(dt); else { b.wish.set(0, 0, 0); b.jump = false; } }
 
@@ -312,8 +327,9 @@ export class Match {
       const w = brain ? brain.wish : wish;
       const j = brain ? brain.jump && c.grounded : jump;
       c.move(dt, w, j, brain ? false : sprint, this.world, this.portals.ignoredBoxes(c));
+      if (c === p && c.jumped) this.jumpBuf = 0;
       this.portals.checkTeleport(c);
-      if (c.pos.y < -40) { c.damage(9999, c.lastAttacker || c); this.onKill(c.lastAttacker || c, c); }
+      if (c.pos.y < this.world.killY) { c.damage(9999, c.lastAttacker || c); this.onKill(c.lastAttacker || c, c); }
     }
 
     for (const c of this.chars) {
@@ -330,10 +346,15 @@ export class Match {
 
     this.portals.update(dt);
     this.effects.update(dt);
-    this.updateCamera();
+    this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id);
-    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / 0.3, reloading: p.weapon.reloading });
+    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / 0.3, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
     this.hud.update(p, this.portals.ownerCount(p));
+    // Crosshair opens up while moving, jumping and shooting.
+    this.bloom = Math.max(0, this.bloom - dt * 3);
+    const def = p.weapon.def;
+    const mv = Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.8 : 1;
+    this.hud.setSpread((def.pellets ? 0.6 : 1) * (def.spread * mv * (p.grounded ? 1 : 2.2) * 500 + this.bloom * 10));
 
     this.stateT -= dt;
     if (this.state === 'countdown') {
@@ -341,8 +362,17 @@ export class Match {
       if (n !== this.lastBeep && n > 0) { this.lastBeep = n; this.hud.centerText(String(n)); Sfx.beep(false); }
       if (this.stateT <= 0) { this.state = 'fight'; this.hud.centerText('FIGHT!', 700, '#7cf'); Sfx.beep(true); }
     } else if (this.state === 'fight') {
+      this.roundT -= dt;
+      this.hud.setTimer(this.roundT);
       const teamsAlive = new Set(this.chars.filter(c => c.alive).map(c => c.team));
       if (teamsAlive.size <= 1) this.endRound([...teamsAlive][0]);
+      else if (this.roundT <= 0) {
+        // Time up: the team with the most health left wins.
+        const hp = {};
+        for (const c of this.chars) if (c.alive) hp[c.team] = (hp[c.team] || 0) + c.hp / c.maxHp;
+        const sorted = Object.entries(hp).sort((a, b) => b[1] - a[1]);
+        this.endRound(sorted.length > 1 && sorted[0][1] - sorted[1][1] < 0.01 ? undefined : Number(sorted[0][0]), true);
+      }
     } else if (this.state === 'roundEnd' && this.stateT <= 0) {
       const champ = Object.keys(this.wins).find(t => this.wins[t] >= ROUNDS_TO_WIN);
       if (champ !== undefined) this.finish(Number(champ));
@@ -350,14 +380,16 @@ export class Match {
     }
   }
 
-  endRound(winnerTeam) {
+  endRound(winnerTeam, timeUp = false) {
+    this.hud.setTimer(null);
     this.state = 'roundEnd';
     this.stateT = ROUND_END_TIME;
     if (winnerTeam !== undefined) this.wins[winnerTeam]++;
     const won = winnerTeam === this.player.team;
     if (won) this.earned.rounds++;
     const name = this.mode.ffa && winnerTeam !== undefined ? this.chars.find(c => c.team === winnerTeam).name : null;
-    this.hud.centerText(won ? 'ROUND WON' : name ? `${name} wins the round` : 'ROUND LOST', 2500, won ? '#7f7' : '#f77');
+    const text = winnerTeam === undefined ? 'DRAW' : won ? 'ROUND WON' : name ? `${name} wins the round` : 'ROUND LOST';
+    this.hud.centerText((timeUp ? "TIME'S UP · " : '') + text, 2500, won ? '#7f7' : winnerTeam === undefined ? '#fff' : '#f77');
     won ? Sfx.win() : Sfx.lose();
     this.updateScore();
   }
@@ -370,11 +402,30 @@ export class Match {
     this.onEnd({ won, coins, kills: this.earned.kills, rounds: this.earned.rounds });
   }
 
-  updateCamera() {
+  updateCamera(dt = 0) {
     const cam = this.camera, p = this.player;
     if (p.alive) {
       p.eyePos(cam.position);
-      cam.rotation.set(p.pitch, p.yaw, 0, 'YXZ');
+      // Head bob, landing dip and a little shake when hit.
+      const hs = Math.hypot(p.vel.x, p.vel.z);
+      if (p.grounded && hs > 1) this.bobT += dt * hs * 1.5;
+      const bob = p.grounded ? Math.sin(this.bobT) * 0.03 * Math.min(1, hs / 7) : 0;
+      if (p.landImpact > 4) this.dipV -= Math.min(p.landImpact, 22) * 0.025;
+      p.landImpact = 0;
+      this.dipV += (-this.dip * 140 - this.dipV * 16) * dt;
+      this.dip = THREE.MathUtils.clamp(this.dip + this.dipV * dt, -0.35, 0.1);
+      cam.position.y += bob + this.dip;
+      this.shake = Math.max(0, this.shake - dt * 3);
+      const sh = this.shake * 0.015;
+      cam.rotation.set(p.pitch + (Math.random() - 0.5) * sh, p.yaw + (Math.random() - 0.5) * sh, Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, hs / 7), 'YXZ');
+      // Field of view widens a little while sprinting.
+      if (!this.scoped) {
+        const target = this.baseFov + (this.sprinting && hs > 7.5 ? 7 : 0);
+        if (Math.abs(cam.fov - target) > 0.01) {
+          cam.fov += (target - cam.fov) * Math.min(1, dt * 8);
+          cam.updateProjectionMatrix();
+        }
+      }
     } else if (this.deathCam) {
       // Float up and look down at where you died.
       cam.position.lerp(this.deathCam.pos.clone().add(new THREE.Vector3(0, 6, 0)), 0.02);

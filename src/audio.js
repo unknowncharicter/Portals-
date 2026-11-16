@@ -58,6 +58,7 @@ export const Sfx = {
   portalDeny: () => tone(160, 0.2, 'square', 0.2, 100),
   teleport: () => tone(900, 0.25, 'sine', 0.25, 200),
   hit: () => tone(1200, 0.06, 'square', 0.2),
+  kill: () => { tone(880, 0.12, 'triangle', 0.3); setTimeout(() => tone(1320, 0.2, 'triangle', 0.3), 90); },
   hurt: () => tone(180, 0.2, 'sawtooth', 0.3, 80),
   heal: () => { tone(500, 0.3, 'sine', 0.25, 1000); },
   beep: (hi) => tone(hi ? 1100 : 660, 0.15, 'sine', 0.35),

@@ -28,6 +28,7 @@ export class Viewmodel {
     this.scene.add(this.flash);
 
     this.kick = 0; this.bobT = 0; this.flashT = 0;
+    this.swayX = 0; this.swayY = 0;
     this.current = null;
     this.hidden = false;
   }
@@ -46,7 +47,11 @@ export class Viewmodel {
 
   fire(strength = 1) { this.kick = strength; this.flashT = 0.05; }
 
-  update(dt, { moving, switching, reloading }) {
+  update(dt, { moving, switching, reloading, lookX = 0, lookY = 0 }) {
+    // The gun lags a little behind your aim.
+    const k = Math.min(1, dt * 10);
+    this.swayX += (THREE.MathUtils.clamp(-lookX * 0.0006, -0.04, 0.04) - this.swayX) * k;
+    this.swayY += (THREE.MathUtils.clamp(lookY * 0.0006, -0.04, 0.04) - this.swayY) * k;
     this.bobT += dt * (moving ? 9 : 2);
     const bobA = moving ? 0.01 : 0.002;
     this.kick = Math.max(0, this.kick - dt * 8);
@@ -58,7 +63,7 @@ export class Viewmodel {
     let rx = this.kick * 0.12;
     if (switching > 0) y -= switching * 0.5;
     if (reloading) { y -= 0.06; rx -= 0.45; }
-    this.root.position.set(x, y, hold.z + this.kick * 0.05);
+    this.root.position.set(x + this.swayX, y + this.swayY, hold.z + this.kick * 0.05);
     this.root.rotation.set(rx, 0.04, reloading ? 0.35 : 0);
     this.root.updateMatrixWorld();
 

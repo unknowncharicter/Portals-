@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { MAPS } from './maps.js';
 
 // The map is built only from axis-aligned boxes. That keeps collision, raycasts and
 // portal placement simple and exact.
@@ -40,17 +41,40 @@ export class World {
     this.spawns = { 0: [], 1: [], ffa: [] };
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.buildLights();
-    this.buildMap();
+    this.tex = gridTexture();
+    this.hemi = new THREE.HemisphereLight('#dfefff', '#4a4a5a', 1.6);
+    this.sun = new THREE.DirectionalLight('#fff4e0', 1.8);
+    this.sun.position.set(30, 60, 20);
+    scene.add(this.hemi, this.sun);
+    this.mapId = null;
+    this.load('arena');
   }
 
-  buildLights() {
-    this.scene.background = new THREE.Color('#8fb8e8');
-    this.scene.fog = new THREE.Fog('#8fb8e8', 60, 160);
-    const hemi = new THREE.HemisphereLight('#dfefff', '#4a4a5a', 1.6);
-    const sun = new THREE.DirectionalLight('#fff4e0', 1.8);
-    sun.position.set(30, 60, 20);
-    this.scene.add(hemi, sun);
+  load(id) {
+    const map = MAPS[id] || MAPS.arena;
+    if (this.mapId === id) return;
+    this.mapId = id;
+    this.map = map;
+    // Clear the old map.
+    for (const child of [...this.group.children]) {
+      this.group.remove(child);
+      child.geometry.dispose();
+      child.material.dispose();
+    }
+    this.boxes = [];
+    const t = map.theme;
+    this.scene.background = new THREE.Color(t.sky);
+    this.scene.fog = new THREE.Fog(t.sky, t.fog[0], t.fog[1]);
+    this.hemi.intensity = t.hemi;
+    this.sun.intensity = t.sun;
+    this.killY = map.killY ?? -40;
+    map.build({
+      box: (min, max, color) => this.addBox(min, max, color),
+      mirror: (min, max, color) => this.mirrorX(min, max, color),
+    });
+    const toV = (p) => new THREE.Vector3(p.x, p.y, p.z);
+    this.spawns = { 0: map.spawns[0].map(toV), 1: map.spawns[1].map(toV), ffa: map.spawns.ffa.map(toV) };
+    this.buildMeshes();
   }
 
   addBox(min, max, color) {
@@ -63,63 +87,7 @@ export class World {
     this.addBox([-max[0], min[1], min[2]], [-min[0], max[1], max[2]], color);
   }
 
-  buildMap() {
-    const W = 34, D = 24, H = 12;
-    const floor = '#8a90a0', wall = '#b8bccb', cover = '#e0a060', dark = '#6a7088', blue = '#6fa0e0', red = '#e07070';
-
-    // Floor and outer walls
-    this.addBox([-W, -1, -D], [W, 0, D], floor);
-    this.addBox([-W - 1, 0, -D], [-W, H, D], wall);
-    this.addBox([W, 0, -D], [W + 1, H, D], wall);
-    this.addBox([-W - 1, 0, -D - 1], [W + 1, H, -D], wall);
-    this.addBox([-W - 1, 0, D], [W + 1, H, D + 1], wall);
-
-    // Centre structure: a raised block with a wall on top
-    this.addBox([-3, 0, -3], [3, 2, 3], dark);
-    this.addBox([-0.5, 2, -2.5], [0.5, 5, 2.5], wall);
-
-    // Steps up to the centre block (step height 0.5 so you can walk up)
-    for (let i = 0; i < 4; i++) {
-      this.addBox([-3 - (4 - i) * 0.8, 0, -1.2], [-3 - (3 - i) * 0.8, 0.5 * (i + 1), 1.2], dark);
-      this.addBox([3 + (3 - i) * 0.8, 0, -1.2], [3 + (4 - i) * 0.8, 0.5 * (i + 1), 1.2], dark);
-    }
-
-    // Tall pillars (great portal walls)
-    for (const z of [-9, 9]) this.mirrorX([9, 0, z - 1], [11, 8, z + 1], wall);
-
-    // Long walls across the middle lanes
-    for (const z of [-16, 16]) this.addBox([-5, 0, z - 0.5], [5, 6, z + 0.5], wall);
-
-    // Low cover walls (crouch-height)
-    for (const z of [-5, 5]) this.mirrorX([16, 0, z - 2], [17, 1.4, z + 2], cover);
-    this.mirrorX([20, 0, -0.6], [24, 1.4, 0.6], cover);
-
-    // Crates
-    this.mirrorX([13, 0, 14], [15, 2, 16], cover);
-    this.mirrorX([13, 0, -16], [15, 2, -14], cover);
-    this.mirrorX([22, 0, 10], [24, 2.5, 12.5], cover);
-    this.mirrorX([22, 0, -12.5], [24, 2.5, -10], cover);
-
-    // Raised side platforms with steps
-    this.mirrorX([26, 0, 15], [33, 3, 23], dark);
-    for (let i = 0; i < 6; i++) this.mirrorX([27, 0, 15 - (6 - i) * 0.7], [32, 0.5 * (i + 1), 15 - (5 - i) * 0.7], dark);
-    this.mirrorX([26, 0, -23], [33, 3, -15], dark);
-    for (let i = 0; i < 6; i++) this.mirrorX([27, 0, -15 + (5 - i) * 0.7], [32, 0.5 * (i + 1), -15 + (6 - i) * 0.7], dark);
-
-    // Spawn walls (colour-coded team sides)
-    this.addBox([-30, 0, -6], [-29, 4, 6], blue);
-    this.addBox([29, 0, -6], [30, 4, 6], red);
-
-    // Spawns
-    this.spawns[0] = [new THREE.Vector3(-27, 0, -3), new THREE.Vector3(-27, 0, 3)];
-    this.spawns[1] = [new THREE.Vector3(27, 0, 3), new THREE.Vector3(27, 0, -3)];
-    this.spawns.ffa = [new THREE.Vector3(-27, 0, -3), new THREE.Vector3(27, 0, 3), new THREE.Vector3(-20, 0, 20), new THREE.Vector3(20, 0, -20)];
-
-    this.buildMeshes();
-  }
-
   buildMeshes() {
-    const tex = gridTexture();
     const byColor = new Map();
     for (const b of this.boxes) {
       const s = new THREE.Vector3().subVectors(b.max, b.min);
@@ -129,8 +97,9 @@ export class World {
       byColor.get(b.color).push(geo);
     }
     for (const [color, geos] of byColor) {
-      const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color, map: tex }));
+      const mesh = new THREE.Mesh(mergeGeometries(geos), new THREE.MeshLambertMaterial({ color, map: this.tex }));
       this.group.add(mesh);
+      for (const g of geos) g.dispose();
     }
   }
 

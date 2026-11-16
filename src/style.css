@@ -65,10 +65,54 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 64vmin; height: 1px; background: #000; transform: translate(-50%, -50%); }
 #scope::after { content: ''; position: absolute; left: 50%; top: 50%; height: 64vmin; width: 1px; background: #000; transform: translate(-50%, -50%); }
 #hud { position: fixed; inset: 0; pointer-events: none; }
-#crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
-#crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 2px #000; }
-#crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
-#crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+#crosshair { --gap: 4px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+#crosshair i { position: absolute; background: #fff; box-shadow: 0 0 2px #000; transition: transform .06s; }
+#crosshair i:nth-child(1) { width: 2px; height: 8px; left: -1px; top: calc(-8px - var(--gap)); }
+#crosshair i:nth-child(2) { width: 2px; height: 8px; left: -1px; top: var(--gap); }
+#crosshair i:nth-child(3) { height: 2px; width: 8px; top: -1px; left: calc(-8px - var(--gap)); }
+#crosshair i:nth-child(4) { height: 2px; width: 8px; top: -1px; left: var(--gap); }
+#crosshair::after { content: ''; position: absolute; left: -1px; top: -1px; width: 2px; height: 2px; background: #fff; }
+#timer { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; text-shadow: 0 0 6px #000; }
+#timer.low { color: #ff6060; }
+#killpop { position: absolute; top: 58%; width: 100%; text-align: center; font-size: 26px; font-weight: 900; color: #ff5050; text-shadow: 0 0 10px #000; opacity: 0; pointer-events: none; }
+#killpop small { display: block; font-size: 13px; letter-spacing: 3px; color: #fff; }
+#killpop.show { animation: kp 1.4s ease-out forwards; }
+@keyframes kp { 0% { opacity: 0; transform: scale(1.6); } 12% { opacity: 1; transform: scale(1); } 75% { opacity: 1; } 100% { opacity: 0; } }
+.modes.wrap { flex-wrap: wrap; }
+.modes.wrap button { min-width: 45%; }
+
+/* Touch controls */
+#touch { position: fixed; inset: 0; touch-action: none; user-select: none; -webkit-user-select: none; }
+.joy-base { position: absolute; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); background: rgba(255,255,255,.08); opacity: 0; pointer-events: none; }
+.joy-base.on { opacity: 1; }
+.joy-knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.45); transform: translate(-50%,-50%); }
+.tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(20,24,40,.45); border: 2px solid rgba(255,255,255,.4); color: #fff; font-weight: 900; font-size: 13px; width: 64px; height: 64px; }
+.tbtn.on { background: rgba(80,160,255,.55); }
+.tbtn.cool { opacity: .45; }
+.tbtn.big { width: 92px; height: 92px; font-size: 16px; right: 28px; bottom: 34px; background: rgba(200,50,50,.45); }
+.tbtn.small { width: 48px; height: 48px; font-size: 18px; }
+#t-jump { right: 132px; bottom: 26px; }
+#t-portal { right: 38px; bottom: 146px; border-width: 3px; font-size: 12px; }
+#t-cancel { right: 112px; bottom: 170px; }
+#t-reload { right: 196px; bottom: 34px; }
+#t-swap { right: 196px; bottom: 96px; }
+#t-heal { right: 138px; bottom: 104px; color: #7f7; }
+#t-scope { right: 112px; bottom: 228px; }
+#t-pause { left: 12px; top: 12px; }
+#rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0b0d14; color: #fff; font-size: 22px; font-weight: 800; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+@media (orientation: portrait) { body.touch.playing #rotate { display: flex; } }
+body.touch #bottom-left { left: auto; right: 12px; top: 12px; bottom: auto; transform: scale(.8); transform-origin: top right; }
+body.touch .hp-wrap { width: 200px; }
+body.touch #bottom-right { right: 12px; top: 76px; bottom: auto; transform: scale(.6); transform-origin: top right; }
+body.touch #portal-info, body.touch #weapon-name { display: none; }
+.lobby-top { gap: 12px; }
+.lobby-top .grow { flex: 1; }
+#btn-start-top { padding: 10px 26px; font-size: 18px; }
+body.touch #killfeed { top: auto; bottom: 12px; right: auto; left: 50%; transform: translateX(-50%); align-items: center; }
+body.touch #score { left: 50%; font-size: 16px; }
+body.touch .hitdir::before { top: -140px; }
+
+/* HUD */
 #hitmarker { position: absolute; left: 50%; top: 50%; width: 34px; height: 34px; transform: translate(-50%,-50%) rotate(45deg); opacity: 0; transition: opacity .15s; }
 #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #f44; }
 #hitmarker::before { left: 16px; top: 0; width: 2px; height: 34px; }

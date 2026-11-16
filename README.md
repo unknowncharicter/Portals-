@@ -17,6 +17,9 @@ Zip the **contents** of `dist/` and upload the zip in the CrazyGames developer p
 ## How it plays
 - **Play**, then the **Lobby**: customize your character (name, shirt, pants, skin, hats bought with coins), buy upgrades, pick your loadout, portal colour, mode (1v1, 2v2, Free for all) and bot difficulty (Hard gives 1.5× coins).
 - Settings (mouse speed, field of view, volume) are in the lobby and the pause menu.
+- **4 maps:** Arena, Sky Islands (fall off and you die), Warehouse (portals on the ceiling too), Village. Or pick Random.
+- **Phones and tablets:** on-screen controls appear automatically (joystick on the left, drag to look on the right, buttons for fire, jump, portal, reload, swap, heal, scope). Add `?touch=1` to the URL to force them on.
+- Rounds last 2 minutes. If time runs out, the team with the most health left wins.
 - Each match is first to 3 rounds. Each round starts with a 3-2-1 countdown, and the last team alive wins it.
 - **E** shows the portal outline, and **E** again places it. **Q** cancels.
 - You keep your 2 newest portals: placing a 3rd removes the oldest.
@@ -29,7 +32,9 @@ Zip the **contents** of `dist/` and upload the zip in the CrazyGames developer p
 | File | What it does |
 |---|---|
 | `src/game/Portals.js` | Portal placement, view rendering (render-to-texture with an oblique near plane), teleporting, shots passing through portals |
-| `src/game/World.js` | Box-only map, raycasts |
+| `src/game/World.js` | Loads a map, raycasts |
+| `src/game/maps.js` | The map layouts |
+| `src/touch.js` | Touch controls |
 | `src/game/Character.js` | Movement, collision, step-up, body model, health |
 | `src/game/Look.js` | Character customization: colours, hats, body model, name tags |
 | `src/game/Models.js` | Loads the GLB gun models |
