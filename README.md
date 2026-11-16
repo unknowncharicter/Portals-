@@ -36,3 +36,11 @@ Zip the **contents** of `dist/` and upload the zip in the CrazyGames developer p
 | `src/game/Bot.js` | Bot AI: chase, strafe, aim, heal, portal flanking |
 | `src/game/Match.js` | Rounds, modes, shooting, player input |
 | `src/main.js` | Menus, lobby, game loop |
+
+## Put it online with Cloudflare Pages (free)
+1. Sign in at dash.cloudflare.com, then open **Workers & Pages → Create → Pages → Connect to Git**.
+2. Pick the repo `Portals-` and the branch `claude/fervent-pascal-3wapmb`.
+3. Build settings: **Build command** `npm run build`, **Build output directory** `dist`.
+4. Click **Save and Deploy**. You get a link like `https://portal-duel.pages.dev`. Every push to the branch updates it.
+
+From a terminal instead: `npm run deploy` (it asks you to log in to Cloudflare the first time).
