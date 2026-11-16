@@ -25,8 +25,13 @@ export class Input {
       if (e.button === 2) this.rightClicked = true;
     });
     addEventListener('mouseup', e => { if (e.button === 0) this.mouseDown = false; });
+    // Browsers can send one huge fake movement right when the mouse gets locked.
+    // Ignore movement briefly after locking, and drop single absurd jumps.
+    this.ignoreUntil = 0;
+    document.addEventListener('pointerlockchange', () => { this.ignoreUntil = performance.now() + 150; });
     addEventListener('mousemove', e => {
-      if (!this.locked) return;
+      if (!this.locked || performance.now() < this.ignoreUntil) return;
+      if (Math.abs(e.movementX) > 400 || Math.abs(e.movementY) > 400) return;
       this.dx += e.movementX; this.dy += e.movementY;
     });
     addEventListener('wheel', e => { if (this.locked) this.wheel += Math.sign(e.deltaY); }, { passive: true });
