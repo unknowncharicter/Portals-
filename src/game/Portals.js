@@ -71,6 +71,7 @@ export class Portal {
     this.plane = new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.pos);
 
     this.rt = null;
+    this.rt2 = null; // view used when this portal is seen through another portal
     this.group = new THREE.Group();
     this.group.matrixAutoUpdate = false;
     const visual = this.matrix.clone().multiply(new THREE.Matrix4().makeTranslation(0, 0, SURFACE_OFFSET));
@@ -81,7 +82,7 @@ export class Portal {
       color: { value: this.color },
       linked: { value: 0 },
       open: { value: 0 },
-      flatMode: portalShared.flat,
+      flatMode: { value: 0 }, // per portal: 1 = show solid colour instead of a view
       time: portalShared.time,
       resolution: portalShared.resolution,
     };
@@ -115,6 +116,7 @@ export class Portal {
     this.surface.material.dispose();
     this.ring.material.dispose();
     if (this.rt) this.rt.dispose();
+    if (this.rt2) this.rt2.dispose();
   }
 }
 
@@ -162,6 +164,9 @@ export class PortalSystem {
     this._sphere = new THREE.Sphere();
     this.vcam = new THREE.PerspectiveCamera();
     this.vcam.matrixAutoUpdate = false;
+    this.vcam2 = new THREE.PerspectiveCamera();
+    this.vcam2.matrixAutoUpdate = false;
+    this.recursive = true; // portals seen through portals show their own view (one extra level)
     this.rtSize = new THREE.Vector2(1, 1);
   }
 
@@ -174,7 +179,7 @@ export class PortalSystem {
   setSize(w, h) {
     this.rtSize.set(w, h);
     portalShared.resolution.value.set(w, h);
-    for (const p of this.portals) if (p.rt) p.rt.setSize(w, h);
+    for (const p of this.portals) { if (p.rt) p.rt.setSize(w, h); if (p.rt2) p.rt2.setSize(w, h); }
   }
 
   // ---------- Placement ----------
@@ -401,46 +406,90 @@ export class PortalSystem {
 
   // ---------- Rendering ----------
 
-  // Render each visible portal's view into its texture.
+  // Set up a camera that looks out of `p.partner` the way `baseWorld` looks into `p`.
+  virtualCam(cam, baseWorld, baseProj, p) {
+    cam.matrixWorld.copy(p.transformTo(p.partner, this._m)).multiply(baseWorld);
+    cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+    cam.projectionMatrix.copy(baseProj);
+    this.obliqueClip(cam, p.partner);
+    cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+  }
+
+  // Linked portals that `cam` can see (facing it and inside its view). `projForCull` is the
+  // plain (non-oblique) projection, used for the frustum test.
+  visibleFrom(cam, projForCull, skip = null) {
+    const pos = new THREE.Vector3().setFromMatrixPosition(cam.matrixWorld);
+    this._frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(projForCull, cam.matrixWorldInverse));
+    const out = [];
+    for (const p of this.portals) {
+      if (!p.partner || p === skip) continue;
+      if (p.local(pos).z < -0.05) continue;
+      this._sphere.set(p.pos, Math.max(PORTAL_W, PORTAL_H) * 0.6);
+      if (!this._frustum.intersectsSphere(this._sphere)) continue;
+      out.push(p);
+    }
+    return out;
+  }
+
+  ensureRT(p, key) {
+    if (!p[key]) {
+      p[key] = new THREE.WebGLRenderTarget(this.rtSize.x, this.rtSize.y, { samples: this.lowQuality ? 0 : 4 });
+      p[key].texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    return p[key];
+  }
+
+  setLook(p, mode, tex) { // mode: 'flat' | 'view'
+    p.uniforms.flatMode.value = mode === 'flat' ? 1 : 0;
+    if (tex) p.uniforms.tex.value = tex;
+  }
+
+  // Render each visible portal's view into its texture. With `recursive`, portals seen
+  // through a portal get their own view too (one extra level), instead of a flat colour.
   renderViews(camera) {
     const r = this.renderer;
     camera.updateMatrixWorld();
-    this._frustum.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
-    const camPos = camera.getWorldPosition(new THREE.Vector3());
-    const visible = [];
-    for (const p of this.portals) {
-      if (!p.partner) continue;
-      if (p.local(camPos).z < -0.05) continue;
-      this._sphere.set(p.pos, Math.max(PORTAL_W, PORTAL_H) * 0.6);
-      if (!this._frustum.intersectsSphere(this._sphere)) continue;
-      visible.push(p);
-    }
+    const proj = camera.projectionMatrix;
+    const visible = this.visibleFrom(camera, proj);
     if (!visible.length) return;
 
-    portalShared.flat.value = 1;
-    const vcam = this.vcam;
-    vcam.layers.enableAll();
-    vcam.layers.disable(3); // layer 3 = aiming ghost, only for the real camera
+    const vcam = this.vcam, vcam2 = this.vcam2;
+    for (const c of [vcam, vcam2]) { c.layers.enableAll(); c.layers.disable(3); } // layer 3 = aiming ghost
+    const deep = this.recursive && !this.lowQuality;
+
     for (const p of visible) {
       const target = p.partner;
-      p.surface.visible = false;
+      this.virtualCam(vcam, camera.matrixWorld, proj, p);
+
+      // Level 2: portals visible inside this portal's view.
+      let inner = [];
+      if (deep) {
+        inner = this.visibleFrom(vcam, proj, target).filter(q => target.local(q.pos).z > -0.05).slice(0, 2);
+        for (const q of inner) {
+          this.virtualCam(vcam2, vcam.matrixWorld, proj, q);
+          for (const o of this.portals) this.setLook(o, 'flat');
+          q.surface.visible = false; q.partner.surface.visible = false;
+          r.setRenderTarget(this.ensureRT(q, 'rt2'));
+          r.clear();
+          r.render(this.scene, vcam2);
+          q.surface.visible = true; q.partner.surface.visible = true;
+        }
+      }
+
+      // Level 1: this portal's view. Portals inside it show their level-2 view (or a flat colour).
+      for (const o of this.portals) this.setLook(o, 'flat');
+      for (const q of inner) this.setLook(q, 'view', q.rt2.texture);
       target.surface.visible = false;
-
-      vcam.matrixWorld.copy(p.transformTo(target, this._m)).multiply(camera.matrixWorld);
-      vcam.matrixWorldInverse.copy(vcam.matrixWorld).invert();
-      vcam.projectionMatrix.copy(camera.projectionMatrix);
-      this.obliqueClip(vcam, target);
-      vcam.projectionMatrixInverse.copy(vcam.projectionMatrix).invert();
-
+      if (!inner.includes(p)) p.surface.visible = false;
       r.setRenderTarget(p.rt);
       r.clear();
       r.render(this.scene, vcam);
-
       p.surface.visible = true;
       target.surface.visible = true;
     }
     r.setRenderTarget(null);
-    portalShared.flat.value = 0;
+    // Back to normal for the main view.
+    for (const o of this.portals) this.setLook(o, o.partner ? 'view' : 'flat', o.rt && o.rt.texture);
   }
 
   // Oblique near plane: hide everything behind the exit portal (e.g. the wall it is on).
