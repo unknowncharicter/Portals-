@@ -7,11 +7,10 @@ import { randomLook } from './Look.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 
-const BOT_PRIMARIES = ['ar', 'ar', 'smg', 'shotgun', 'sniper'];
 export const DIFFICULTIES = {
-  easy:   { label: 'Easy',   skill: 0.3,  coins: 0.75 },
-  normal: { label: 'Normal', skill: 0.6,  coins: 1 },
-  hard:   { label: 'Hard',   skill: 0.9,  coins: 1.5 },
+  easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun'] },
+  normal: { label: 'Normal', skill: 0.5,  coins: 1,    botDamage: 0.75, guns: ['ar', 'ar', 'smg', 'shotgun'] },
+  hard:   { label: 'Hard',   skill: 0.85, coins: 1.5,  botDamage: 0.95, guns: ['ar', 'ar', 'smg', 'shotgun', 'sniper'] },
 };
 const shadowTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -79,9 +78,9 @@ export class Match {
         name, look: isBot ? randomLook(name) : this.save.look,
         team, color: bodyColor,
         portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
-        isBot, stats: buildStats(isBot ? null : this.save),
+        isBot, stats: isBot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(this.save),
         loadout: isBot
-          ? { primary: BOT_PRIMARIES[Math.floor(Math.random() * BOT_PRIMARIES.length)], secondary: 'pistol' }
+          ? { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' }
           : this.save.loadout,
       });
       this.chars.push(c);
@@ -193,6 +192,8 @@ export class Match {
         this.shake = Math.min(1, this.shake + 0.6);
         Sfx.hurt();
       }
+      const tb = t.isBot && this.bots.find(b => b.c === t);
+      if (tb && t !== c) tb.hear(c.pos, true); // getting shot reveals where it came from
       if (t.damage(dmg, c)) this.onKill(c, t);
     }
 
@@ -203,6 +204,10 @@ export class Match {
       this.bloom = Math.min(3, this.bloom + kick * 40);
       c.pitch = Math.min(1.5, c.pitch + kick);
       if (def.zoom) this.setScope(false); // sniper un-scopes after each shot
+    }
+    // Bots hear gunshots nearby.
+    for (const b of this.bots) {
+      if (b.c !== c && b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < 30 && !b.aimDir) b.hear(c.pos);
     }
     const vol = isPlayer ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
     (Sfx[def.sound] || Sfx.rifle)(vol);

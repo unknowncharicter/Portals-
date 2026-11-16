@@ -33,6 +33,14 @@ export class BotBrain {
 
   reset() {
     this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null;
+    this.lastKnown = null; this.searchGoal = null; this.searchT = 0;
+  }
+
+  // Heard a gunshot or got hit: remember roughly where it came from.
+  hear(pos, accurate = false) {
+    const p = pos.clone();
+    if (!accurate) p.add(new THREE.Vector3((Math.random() - 0.5) * 8, 0, (Math.random() - 0.5) * 8));
+    this.lastKnown = p;
   }
 
   // Can we hit `t` — directly or through any linked portal? Returns aim direction or null.
@@ -70,14 +78,24 @@ export class BotBrain {
       this.visCheckT = 0.12;
       enemies.sort((a, b) => a.pos.distanceToSquared(c.pos) - b.pos.distanceToSquared(c.pos));
       let found = null;
+      const look = c.lookDir();
+      const now = performance.now();
       for (const e of enemies) {
+        if (e.pos.distanceTo(c.pos) > 70) continue;
         const dir = this.findShot(e);
-        if (dir) { found = { e, dir }; break; }
+        if (!dir) continue;
+        // Bots only notice you in front of them (about 120° view), unless they are already
+        // fighting you or you just shot them.
+        const tracking = this.target === e && this.seenT > 0;
+        const justHit = c.lastAttacker === e && now - (c.hurtAt || 0) < 2500;
+        if (!tracking && !justHit && dir.dot(look) < 0.5) continue;
+        found = { e, dir }; break;
       }
       if (found) {
         if (this.target !== found.e) this.seenT = 0;
         this.target = found.e;
         this.aimDir = found.dir;
+        this.lastKnown = found.e.pos.clone();
       } else {
         this.aimDir = null;
         this.target = enemies[0];
@@ -114,20 +132,22 @@ export class BotBrain {
   combat(dt) {
     const c = this.c, m = this.m;
     // Aim with a little wobble that settles the longer we track the target.
-    const settle = Math.max(0.15, 1 - this.seenT * this.skill);
-    this.aimNoise.x += (Math.random() - 0.5) * dt * 2; this.aimNoise.y += (Math.random() - 0.5) * dt * 2;
+    // Aim wobbles and only partly settles (easy bots never aim well).
+    const floor = 0.6 - this.skill * 0.45;
+    const settle = Math.max(floor, 1 - this.seenT * this.skill * 0.5);
+    this.aimNoise.x += (Math.random() - 0.5) * dt * 3; this.aimNoise.y += (Math.random() - 0.5) * dt * 3;
     this.aimNoise.clampLength(0, 1);
     const dir = this.aimDir.clone();
-    dir.x += this.aimNoise.x * 0.06 * settle; dir.y += this.aimNoise.y * 0.04 * settle;
+    dir.x += this.aimNoise.x * 0.1 * settle; dir.y += this.aimNoise.y * 0.07 * settle; dir.z += this.aimNoise.x * 0.05 * settle;
     dir.normalize();
-    const err = this.turnToward(dir, dt, 4 + this.skill * 6);
+    const err = this.turnToward(dir, dt, 2 + this.skill * 4);
 
-    // Fire in bursts after a reaction delay.
-    const reaction = 0.55 - this.skill * 0.3;
+    // Fire in short bursts with pauses, after a human-like reaction delay.
+    const reaction = 1.1 - this.skill * 0.75;
     this.burstT -= dt;
-    if (this.seenT > reaction && err < 0.08) {
-      if (this.burstT > -0.5) m.fire(c, Math.random() < 0.3 ? 0.03 : 0.012);
-      if (this.burstT < -0.9) this.burstT = 0.6 + Math.random() * 0.5;
+    if (this.seenT > reaction && err < 0.06) {
+      if (this.burstT > 0) m.fire(c, 0.02 + (1 - this.skill) * 0.03);
+      if (this.burstT < -(0.6 + Math.random() * 0.5)) this.burstT = 0.4 + Math.random() * 0.5;
     }
 
     // Strafe and keep a good distance.
@@ -145,7 +165,20 @@ export class BotBrain {
 
   hunt(dt) {
     const c = this.c, m = this.m;
-    let goal = this.target.pos;
+    // Bots don't know where you are: go to where they last saw/heard you,
+    // otherwise search the area you are probably in (a rough guess, refreshed now and then).
+    let goal;
+    if (this.lastKnown && this.lastKnown.distanceTo(c.pos) > 2) goal = this.lastKnown;
+    else {
+      this.lastKnown = null;
+      this.searchT -= dt;
+      if (!this.searchGoal || this.searchT <= 0 || this.searchGoal.distanceTo(c.pos) < 2) {
+        const r = 14;
+        this.searchGoal = this.target.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * r * 2, 0, (Math.random() - 0.5) * r * 2));
+        this.searchT = 5 + Math.random() * 3;
+      }
+      goal = this.searchGoal;
+    }
 
     // Portal flank: put an exit near the enemy, then an entrance on the floor ahead and walk in.
     if (this.flank) {
@@ -170,11 +203,12 @@ export class BotBrain {
   planFlank() {
     const c = this.c, m = this.m, t = this.target;
     // Exit portal: on a wall near the target, ideally behind it (away from us).
-    const away = t.pos.clone().sub(c.pos).setY(0).normalize();
+    if (!this.lastKnown) return; // only flank someone we know about
+    const away = this.lastKnown.clone().sub(c.pos).setY(0).normalize();
     for (let i = 0; i < 8; i++) {
       const ang = (Math.random() - 0.5) * Math.PI * 1.2;
       const dir = away.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
-      const origin = t.pos.clone();
+      const origin = this.lastKnown.clone().setY(t.pos.y);
       const hit = m.world.raycast(origin, dir, 14);
       if (!hit || Math.abs(hit.normal.y) > 0.5) continue;
       hit.point.y = Math.max(hit.point.y, 1.2);

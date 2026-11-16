@@ -237,6 +237,7 @@ export class Character {
     if (!this.alive) return false;
     this.hp -= amount;
     this.lastAttacker = attacker;
+    this.hurtAt = performance.now();
     if (this.hp <= 0) {
       this.hp = 0;
       this.alive = false;
