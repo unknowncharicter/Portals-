@@ -92,6 +92,9 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 .tbtn.big { width: 92px; height: 92px; font-size: 16px; right: 28px; bottom: 34px; background: rgba(200,50,50,.45); }
 .tbtn.small { width: 48px; height: 48px; font-size: 18px; }
 #t-jump { right: 132px; bottom: 26px; }
+.tbtn.mid { width: 56px; height: 56px; font-size: 11px; }
+#t-dash { right: 262px; bottom: 30px; border-color: #7cf; }
+#t-slide { right: 262px; bottom: 100px; }
 #t-portal { right: 38px; bottom: 146px; border-width: 3px; font-size: 12px; }
 #t-cancel { right: 112px; bottom: 170px; }
 #t-reload { right: 196px; bottom: 34px; }

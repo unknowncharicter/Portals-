@@ -21,7 +21,8 @@ export class Hud {
     this.hp.style.background = pct > 50 ? 'linear-gradient(90deg,#3d6,#8f6)' : pct > 25 ? 'linear-gradient(90deg,#db3,#fd5)' : 'linear-gradient(90deg,#d33,#f66)';
     this.hpText.textContent = Math.ceil(p.hp);
     const hk = document.body.classList.contains('touch') ? 'Heal' : 'F heal';
-    this.heal.textContent = p.healCd > 0 ? `${hk} · ${Math.ceil(p.healCd)}s` : `${hk} · READY (+${p.stats.heal})`;
+    const dk = document.body.classList.contains('touch') ? 'Dash' : 'Shift dash';
+    this.heal.textContent = (p.healCd > 0 ? `${hk} ${Math.ceil(p.healCd)}s` : `${hk} READY`) + ' · ' + (p.dashCd > 0 ? `${dk} ${p.dashCd.toFixed(1)}s` : `${dk} READY`);
     const w = p.weapon;
     this.weapon.textContent = `${w.def.name}  [1/2]`;
     this.ammo.textContent = w.reloading ? 'RELOADING' : `${w.ammo} / ${w.mag}`;

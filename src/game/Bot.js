@@ -67,6 +67,9 @@ export class BotBrain {
     const c = this.c, m = this.m;
     this.wish.set(0, 0, 0);
     this.jump = false;
+    this.dash = false;
+    this.slideHold = Math.max(0, (this.slideHold || 0) - dt);
+    this.crouch = this.slideHold > 0;
     if (!c.alive) return;
 
     const enemies = m.enemiesOf(c).filter(e => e.alive);
@@ -116,6 +119,7 @@ export class BotBrain {
     this.stuckT = c.pos.distanceTo(this.lastPos) < 0.02 && this.wish.lengthSq() > 0 ? this.stuckT + dt : 0;
     this.lastPos.copy(c.pos);
     if (this.stuckT > 0.4) { this.jump = true; this.strafeSign *= -1; this.stuckT = 0; }
+    if (this.jump && !this.groundAhead(this.wish.lengthSq() > 0.01 ? this.wish : new THREE.Vector3(c.vel.x, 0, c.vel.z), [1.5, 3.5], false)) this.jump = false;
   }
 
   turnToward(dir, dt, speed) {
@@ -160,7 +164,10 @@ export class BotBrain {
     const approach = dist > 18 ? 0.7 : dist < 8 ? -0.6 : 0;
     this.wish.copy(side).addScaledVector(to, approach).normalize();
     this.avoid();
-    if (Math.random() < dt * 0.4) this.jump = true;
+    if (Math.random() < dt * 0.5 && this.groundAhead(this.wish, [2, 4, 6.5])) this.jump = true;
+    // Better bots dodge with dashes, especially right after getting hit.
+    const hitRecently = performance.now() - (c.hurtAt || 0) < 400;
+    if (c.dashCd <= 0 && Math.random() < dt * (hitRecently ? 2 : 0.25) * this.skill && this.groundAhead(this.wish, [2.5, 5])) this.dash = true;
   }
 
   hunt(dt) {
@@ -192,8 +199,11 @@ export class BotBrain {
     }
 
     const to = goal.clone().sub(c.pos).setY(0);
+    const far = to.length();
     if (to.lengthSq() > 0.01) this.wish.copy(to.normalize());
     this.avoid();
+    // Slide now and then while running somewhere far.
+    if (far > 10 && c.grounded && !c.crouched && Math.random() < dt * 0.35 && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
     // Look where we are going (slightly toward the target height).
     const look = this.wish.lengthSq() > 0 ? this.wish.clone() : to;
     look.y = 0;
@@ -242,6 +252,17 @@ export class BotBrain {
     this.flank = null;
   }
 
+  // Is there floor along this direction at these distances? (so slides/dashes don't fly off edges)
+  groundAhead(dir, dists, clearPath = true) {
+    if (dir.lengthSq() < 0.01) return false;
+    const d = dir.clone().setY(0).normalize(), down = new THREE.Vector3(0, -1, 0);
+    for (const k of dists) {
+      const p = this.c.pos.clone().addScaledVector(d, k);
+      if (!this.m.world.raycast(p, down, 4)) return false;
+    }
+    return !clearPath || !this.m.world.raycast(this.c.pos, d, dists[dists.length - 1]);
+  }
+
   wantsPortalDrop(p) {
     return !!(this.flank && this.flank.stage === 2 && this.flank.entry && this.flank.entry.distanceTo(p) < 2.5);
   }
@@ -249,6 +270,15 @@ export class BotBrain {
   // Steer around obstacles and edges in front of us.
   avoid() {
     const c = this.c, w = this.m.world;
+    if (!c.grounded) {
+      // In the air over nothing? Steer back the way we came.
+      const hv = new THREE.Vector3(c.vel.x, 0, c.vel.z);
+      const land = c.pos.clone().addScaledVector(hv, 0.35);
+      if (hv.lengthSq() > 1 && !w.raycast(land, new THREE.Vector3(0, -1, 0), 30) && !this.wantsPortalDrop(land)) {
+        this.wish.copy(hv.normalize().negate());
+        return;
+      }
+    }
     if (this.wish.lengthSq() === 0) return;
     const origin = c.pos.clone().setY(c.pos.y - 0.3);
     const ignored = this.m.portals.ignoredBoxes(c);
@@ -270,6 +300,6 @@ export class BotBrain {
       if (!blocked(d)) { this.wish.copy(d); return; }
     }
     if (ledge) this.wish.set(0, 0, 0); // stand still instead of jumping off
-    else this.jump = true;
+    else if (this.groundAhead(this.wish, [2, 4], false)) this.jump = true;
   }
 }

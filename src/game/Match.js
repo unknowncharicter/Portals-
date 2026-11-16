@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Character } from './Character.js';
+import { Character, SWITCH_TIME } from './Character.js';
 import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats } from './Weapons.js';
@@ -55,7 +55,7 @@ export class Match {
     this.scoped = false;
     this.baseFov = this.camera.fov;
     this.jumpBuf = 0; this.bobT = 0; this.dip = 0; this.dipV = 0; this.shake = 0; this.bloom = 0;
-    this.sprinting = false; this.roundT = ROUND_TIME;
+    this.fovKick = 0; this.eyeSmooth = 1.6; this.roundT = ROUND_TIME;
 
     this.portals.onEvent = (type, c) => {
       if (type === 'teleport') {
@@ -155,7 +155,7 @@ export class Match {
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
     const scoped = c === this.player && this.scoped;
     const base = scoped ? def.scopedSpread : def.spread;
-    const spread = base * (moving ? 1.8 : 1) * (c.grounded ? 1 : 2.2) + extraSpread;
+    const spread = base * (moving ? 1.35 : 1) * (c.grounded ? 1 : 1.7) + extraSpread;
     const origin = c.eyePos();
     const pellets = def.pellets || 1;
     const isPlayer = c === this.player;
@@ -321,8 +321,10 @@ export class Match {
     this.jumpBuf = Math.max(0, this.jumpBuf - dt);
     if (inp.hit('Space')) this.jumpBuf = 0.15; // pressing jump just before landing still counts
     const jump = fighting && (this.jumpBuf > 0 || inp.down('Space'));
-    const sprint = inp.down('ShiftLeft') || inp.down('ShiftRight') || inp.touchSprint;
-    this.sprinting = sprint && wish.lengthSq() > 0.5;
+    const act = {
+      crouch: fighting && inp.down('KeyC'), // not Ctrl: Ctrl+W would close the browser tab
+      dash: fighting && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')),
+    };
 
     for (const b of this.bots) { if (fighting) b.update(dt); else { b.wish.set(0, 0, 0); b.jump = false; } }
 
@@ -331,8 +333,13 @@ export class Match {
       const brain = this.bots.find(b => b.c === c);
       const w = brain ? brain.wish : wish;
       const j = brain ? brain.jump && c.grounded : jump;
-      c.move(dt, w, j, brain ? false : sprint, this.world, this.portals.ignoredBoxes(c));
-      if (c === p && c.jumped) this.jumpBuf = 0;
+      const a = brain ? { crouch: brain.crouch, dash: brain.dash } : act;
+      c.move(dt, w, j, a, this.world, this.portals.ignoredBoxes(c));
+      if (c === p) {
+        if (c.jumped) this.jumpBuf = 0;
+        if (c.dashed) { Sfx.dash(); this.fovKick = 10; }
+        if (c.slid) Sfx.slide();
+      }
       this.portals.checkTeleport(c);
       if (c.pos.y < this.world.killY) { c.damage(9999, c.lastAttacker || c); this.onKill(c.lastAttacker || c, c); }
     }
@@ -353,13 +360,13 @@ export class Match {
     this.effects.update(dt);
     this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id);
-    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / 0.3, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
+    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / SWITCH_TIME, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
     this.hud.update(p, this.portals.ownerCount(p));
     // Crosshair opens up while moving, jumping and shooting.
     this.bloom = Math.max(0, this.bloom - dt * 3);
     const def = p.weapon.def;
-    const mv = Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.8 : 1;
-    this.hud.setSpread((def.pellets ? 0.6 : 1) * (def.spread * mv * (p.grounded ? 1 : 2.2) * 500 + this.bloom * 10));
+    const mv = Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.35 : 1;
+    this.hud.setSpread((def.pellets ? 0.6 : 1) * (def.spread * mv * (p.grounded ? 1 : 1.7) * 500 + this.bloom * 10));
 
     this.stateT -= dt;
     if (this.state === 'countdown') {
@@ -410,7 +417,11 @@ export class Match {
   updateCamera(dt = 0) {
     const cam = this.camera, p = this.player;
     if (p.alive) {
-      p.eyePos(cam.position);
+      // Smooth the eye height so crouching/sliding glides instead of snapping.
+      const feet = p.pos.y - p.halfHeight;
+      const eyeH = p.halfHeight + p.eyeOffset; // 1.6 standing, 0.95 crouched/sliding
+      this.eyeSmooth += (eyeH - this.eyeSmooth) * Math.min(1, dt * 14);
+      cam.position.set(p.pos.x, feet + this.eyeSmooth, p.pos.z);
       // Head bob, landing dip and a little shake when hit.
       const hs = Math.hypot(p.vel.x, p.vel.z);
       if (p.grounded && hs > 1) this.bobT += dt * hs * 1.5;
@@ -422,10 +433,13 @@ export class Match {
       cam.position.y += bob + this.dip;
       this.shake = Math.max(0, this.shake - dt * 3);
       const sh = this.shake * 0.015;
-      cam.rotation.set(p.pitch + (Math.random() - 0.5) * sh, p.yaw + (Math.random() - 0.5) * sh, Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, hs / 7), 'YXZ');
-      // Field of view widens a little while sprinting.
+      const tilt = p.slideT > 0 ? 0.05 : 0; // slight camera roll while sliding
+      this.roll = (this.roll || 0) + (tilt - (this.roll || 0)) * Math.min(1, dt * 10);
+      cam.rotation.set(p.pitch + (Math.random() - 0.5) * sh, p.yaw + (Math.random() - 0.5) * sh, this.roll + Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, hs / 7), 'YXZ');
       if (!this.scoped) {
-        const target = this.baseFov + (this.sprinting && hs > 7.5 ? 7 : 0);
+        // Field of view widens with speed (and kicks on a dash).
+        this.fovKick = Math.max(0, this.fovKick - dt * 30);
+        const target = this.baseFov + THREE.MathUtils.clamp((hs - 7) * 0.9, 0, 12) + this.fovKick;
         if (Math.abs(cam.fov - target) > 0.01) {
           cam.fov += (target - cam.fov) * Math.min(1, dt * 8);
           cam.updateProjectionMatrix();

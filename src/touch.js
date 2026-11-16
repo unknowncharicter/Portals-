@@ -9,6 +9,8 @@ export function isTouchDevice() {
 const BUTTONS = [
   { id: 'fire',   label: 'FIRE',   cls: 'big' },
   { id: 'jump',   label: 'JUMP' },
+  { id: 'dash',   label: 'DASH',   cls: 'mid' },
+  { id: 'slide',  label: 'SLIDE',  cls: 'mid' },
   { id: 'portal', label: 'PORTAL', cls: 'portal' },
   { id: 'cancel', label: '✕',      cls: 'small' },
   { id: 'reload', label: 'R',      cls: 'small' },
@@ -68,6 +70,8 @@ export class TouchControls {
       switch (act) {
         case 'fire': inp.mouseDown = true; inp.mouseClicked = true; break;
         case 'jump': inp.press('Space'); break;
+        case 'dash': inp.tap('ShiftLeft'); break;
+        case 'slide': inp.press('KeyC'); break;
         case 'portal': inp.tap('KeyE'); break;
         case 'cancel': inp.tap('KeyQ'); break;
         case 'reload': inp.tap('KeyR'); break;
@@ -101,7 +105,6 @@ export class TouchControls {
       if (len > R) { dx *= R / len; dy *= R / len; }
       inp.moveX = dx / R;
       inp.moveY = dy / R;
-      inp.touchSprint = len > R * 0.95 && dy < -R * 0.7; // push all the way forward to sprint
       this.joyKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
     } else if (p.act === 'look' || p.act === 'fire') {
       inp.dx += (e.clientX - p.x) * this.lookScale;
@@ -121,6 +124,7 @@ export class TouchControls {
       this.joyBase.classList.remove('on');
     } else if (p.act === 'fire') inp.mouseDown = false;
     else if (p.act === 'jump') inp.release('Space');
+    else if (p.act === 'slide') inp.release('KeyC');
   }
 
   releaseAll() {
@@ -137,5 +141,6 @@ export class TouchControls {
     this.btn.portal.classList.toggle('cool', p.portalCd > 0);
     this.btn.portal.style.borderColor = p.portalColor;
     this.btn.heal.classList.toggle('cool', p.healCd > 0);
+    this.btn.dash.classList.toggle('cool', p.dashCd > 0);
   }
 }

@@ -57,6 +57,8 @@ export const Sfx = {
   portalPlace: () => { tone(300, 0.35, 'sawtooth', 0.15, 1200); tone(450, 0.35, 'sine', 0.2, 1500); },
   portalDeny: () => tone(160, 0.2, 'square', 0.2, 100),
   teleport: () => tone(900, 0.25, 'sine', 0.25, 200),
+  dash: () => { noise(0.18, 0.35, 900); tone(300, 0.15, 'sine', 0.15, 700); },
+  slide: () => noise(0.4, 0.25, 600),
   hit: () => tone(1200, 0.06, 'square', 0.2),
   kill: () => { tone(880, 0.12, 'triangle', 0.3); setTimeout(() => tone(1320, 0.2, 'triangle', 0.3), 90); },
   hurt: () => tone(180, 0.2, 'sawtooth', 0.3, 80),

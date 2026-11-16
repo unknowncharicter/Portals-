@@ -4,9 +4,18 @@ import { WEAPONS, WeaponState, HEAL_COOLDOWN } from './Weapons.js';
 import { gunModel } from './Models.js';
 import { buildCharacterMesh } from './Look.js';
 
-const GRAVITY = 24;
-const JUMP_SPEED = 8.2;
-const WALK = 6.5, SPRINT = 9.5;
+// Movement tuning: fast and snappy.
+const GRAVITY = 27;
+const JUMP_SPEED = 9.0;
+const RUN = 8.8;              // always running
+const CROUCH = 4.2;
+const AIR_ACCEL = 45;         // air strafing
+const BHOP_WINDOW = 0.09;     // jump within this time after landing and you keep your speed
+const SLIDE_BOOST = 4.5, SLIDE_MAX = 16, SLIDE_TIME = 0.8, SLIDE_FRICTION = 1.1;
+const DASH_SPEED = 17;
+export const DASH_COOLDOWN = 2.2;
+export const SWITCH_TIME = 0.18;
+const FULL_HALF = 0.9, CROUCH_HALF = 0.6;
 const STEP_HEIGHT = 0.55;
 const EPS = 0.001;
 
@@ -32,6 +41,8 @@ export class Character {
     this.airT = 0;
     this.landImpact = 0;
     this.jumped = false;
+    this.groundT = 1; this.crouched = false; this.slideT = 0; this.slideCd = 0;
+    this.dashT = 0; this.dashCd = 0; this.dashed = false; this.slid = false;
 
     this.maxHp = stats.maxHp;
     this.hp = this.maxHp;
@@ -78,6 +89,8 @@ export class Character {
   setBodyLayer(layer) { this.bodyLayer = layer; this.mesh.traverse(o => o.layers.set(layer)); }
 
   spawn(at, yaw) {
+    this.crouched = false; this.halfHeight = FULL_HALF; this.eyeOffset = 0.7;
+    this.slideT = 0; this.slideCd = 0; this.dashT = 0; this.dashCd = 0; this.groundT = 1;
     this.pos.set(at.x, at.y + this.halfHeight + 0.02, at.z);
     this.vel.set(0, 0, 0);
     this.yaw = yaw; this.pitch = 0;
@@ -114,31 +127,77 @@ export class Character {
   }
 
   // wish: horizontal direction (length 0..1)
-  move(dt, wish, jump, sprint, world, ignored) {
+  // act: { crouch: held, dash: pressed this frame }
+  move(dt, wish, jump, act, world, ignored) {
     this.teleportCooldown = Math.max(0, this.teleportCooldown - dt);
-    const speed = sprint ? SPRINT : WALK;
     this.jumped = false;
-    if (this.grounded) {
-      const k = Math.min(1, 14 * dt);
+    this.dashed = false;
+    this.slid = false;
+    const solid = world.boxes.filter(b => !ignored.has(b));
+    this._solid = solid;
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+
+    // ----- Crouch / slide -----
+    if (act.crouch && !this.crouched) {
+      this.setCrouch(true);
+      // Crouching while running fast starts a slide with a speed boost.
+      if (this.grounded && hs > RUN * 0.7 && this.slideCd <= 0) {
+        const boost = Math.min(SLIDE_MAX, Math.max(hs, RUN) + SLIDE_BOOST);
+        this.vel.x *= boost / hs; this.vel.z *= boost / hs;
+        this.slideT = SLIDE_TIME;
+        this.slideCd = 0.7;
+        this.slid = true;
+      }
+    }
+    if (!act.crouch && this.crouched && this.slideT <= 0) this.setCrouch(false);
+
+    // ----- Dash -----
+    if (act.dash && this.dashCd <= 0) {
+      const d = wish.lengthSq() > 0.01 ? wish.clone().setY(0).normalize()
+        : new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+      const keep = Math.max(0, this.vel.x * d.x + this.vel.z * d.z);
+      const sp = Math.max(DASH_SPEED, keep + 4);
+      this.vel.x = d.x * sp; this.vel.z = d.z * sp;
+      if (!this.grounded) this.vel.y = Math.max(this.vel.y, 2.5);
+      this.dashT = 0.16;
+      this.dashCd = DASH_COOLDOWN;
+      this.dashed = true;
+    }
+
+    // ----- Horizontal movement -----
+    const speed = this.crouched && this.slideT <= 0 ? CROUCH : RUN;
+    if (this.grounded && this.slideT > 0) {
+      // Sliding: very little friction, a bit of steering.
+      this.slideT -= dt;
+      const f = Math.max(0, 1 - SLIDE_FRICTION * dt);
+      this.vel.x *= f; this.vel.z *= f;
+      this.vel.x += wish.x * 6 * dt; this.vel.z += wish.z * 6 * dt;
+      if (Math.hypot(this.vel.x, this.vel.z) < CROUCH) this.slideT = 0;
+    } else if (this.grounded && this.groundT > BHOP_WINDOW && this.dashT <= 0) {
+      // Normal running: snappy acceleration and stopping.
+      const k = Math.min(1, 16 * dt);
       this.vel.x += (wish.x * speed - this.vel.x) * k;
       this.vel.z += (wish.z * speed - this.vel.z) * k;
     } else if (wish.lengthSq() > 0) {
-      // Air control that never cancels momentum (portal flings stay fun).
+      // In the air (or just landed, so bunny hops keep speed): air strafing that never kills momentum.
       const cur = this.vel.x * wish.x + this.vel.z * wish.z;
       const add = speed - cur;
       if (add > 0) {
-        const a = Math.min(add, 25 * dt);
+        const a = Math.min(add, AIR_ACCEL * dt);
         this.vel.x += wish.x * a; this.vel.z += wish.z * a;
       }
     }
-    // Jump, with a little "coyote time" so jumping just after a ledge still works.
+    if (this.dashT > 0) this.dashT -= dt;
+
+    // ----- Jump (with coyote time); jumping out of a slide keeps its speed -----
     if (jump && (this.grounded || this.airT < 0.12) && this.vel.y <= 1) {
       this.vel.y = JUMP_SPEED; this.grounded = false; this.airT = 1; this.jumped = true;
+      if (this.slideT > 0) { this.slideT = 0; this.setCrouch(false); }
     }
-    this.vel.y = Math.max(this.vel.y - GRAVITY * dt, -55);
+    const g = this.dashT > 0 ? GRAVITY * 0.3 : GRAVITY;
+    this.vel.y = Math.max(this.vel.y - g * dt, -55);
     const vyBefore = this.vel.y;
 
-    const solid = world.boxes.filter(b => !ignored.has(b));
     this.unstick(solid);
 
     const dist = this.vel.length() * dt;
@@ -152,10 +211,38 @@ export class Character {
       this.moveAxis(1, this.vel.y * sdt, solid, wasGrounded);
     }
     if (this.grounded) {
-      if (!wasGrounded) this.landImpact = -vyBefore;
+      if (!wasGrounded) { this.landImpact = -vyBefore; this.groundT = 0; }
+      this.groundT += dt;
       this.airT = 0;
-    } else this.airT += dt;
+    } else { this.airT += dt; this.groundT = 0; }
     this.animate(dt);
+  }
+
+  // Crouching shrinks the body (feet stay put). Standing up needs room above.
+  setCrouch(on) {
+    if (on === this.crouched) return true;
+    const d = FULL_HALF - CROUCH_HALF;
+    if (on) {
+      this.pos.y -= d;
+      this.halfHeight = CROUCH_HALF;
+      this.eyeOffset = 0.35;
+    } else {
+      if (this._solid && !this.freeAtSize(this.pos.x, this.pos.y + d, this.pos.z, FULL_HALF, this._solid)) return false;
+      this.pos.y += d;
+      this.halfHeight = FULL_HALF;
+      this.eyeOffset = 0.7;
+      this.slideT = 0;
+    }
+    this.crouched = on;
+    return true;
+  }
+
+  freeAtSize(x, y, z, half, solid) {
+    const oldP = this.pos.clone(), oldH = this.halfHeight;
+    this.pos.set(x, y, z); this.halfHeight = half;
+    const free = !solid.some(b => this.overlaps(b));
+    this.pos.copy(oldP); this.halfHeight = oldH;
+    return free;
   }
 
   moveAxis(axis, amount, solid, canStep) {
@@ -214,15 +301,16 @@ export class Character {
     this.legL.rotation.x = swing;
     this.legR.rotation.x = -swing;
     this.mesh.position.copy(this.pos);
-    this.mesh.rotation.set(0, this.yaw, 0);
+    this.mesh.scale.y = this.halfHeight / FULL_HALF;
+    this.mesh.rotation.set(this.slideT > 0 ? 0.35 : 0, this.yaw, 0, 'YXZ');
   }
 
   // ---------- Combat ----------
 
   rayHit(o, d) {
-    const p = this.pos;
-    const headMin = new THREE.Vector3(p.x - 0.23, p.y + 0.5, p.z - 0.23), headMax = new THREE.Vector3(p.x + 0.23, p.y + 0.95, p.z + 0.23);
-    const bodyMin = new THREE.Vector3(p.x - 0.36, p.y - 0.9, p.z - 0.36), bodyMax = new THREE.Vector3(p.x + 0.36, p.y + 0.5, p.z + 0.36);
+    const p = this.pos, hh = this.halfHeight, neck = p.y + hh - 0.4;
+    const headMin = new THREE.Vector3(p.x - 0.23, neck, p.z - 0.23), headMax = new THREE.Vector3(p.x + 0.23, p.y + hh + 0.05, p.z + 0.23);
+    const bodyMin = new THREE.Vector3(p.x - 0.36, p.y - hh, p.z - 0.36), bodyMax = new THREE.Vector3(p.x + 0.36, neck, p.z + 0.36);
     const h = rayBox(o, d, headMin, headMax);
     const b = rayBox(o, d, bodyMin, bodyMax);
     let best = null;
@@ -257,7 +345,7 @@ export class Character {
   switchTo(slot) {
     if (slot === this.slot || slot < 0 || slot >= this.weapons.length) return false;
     this.slot = slot;
-    this.switchT = 0.3;
+    this.switchT = SWITCH_TIME;
     this.updateGun();
     return true;
   }
@@ -266,6 +354,8 @@ export class Character {
     this.healCd = Math.max(0, this.healCd - dt);
     this.portalCd = Math.max(0, this.portalCd - dt);
     this.switchT = Math.max(0, this.switchT - dt);
+    this.dashCd = Math.max(0, this.dashCd - dt);
+    this.slideCd = Math.max(0, this.slideCd - dt);
     for (const w of this.weapons) w.update(dt);
   }
 }
