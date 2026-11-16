@@ -19,20 +19,42 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('game');
 
 // ---------- Renderer & shared objects ----------
-// Some computers only give the browser a 16-bit depth buffer. Then far-away walls and boxes
-// "fight" and show through each other. On those, use a logarithmic depth buffer instead.
+// Ask for a stencil buffer too: without one, some Windows graphics drivers hand out a
+// 16-bit depth buffer, and then walls and boxes flicker through each other. With it they
+// give the normal 24-bit depth buffer. If depth is still low, use a logarithmic depth buffer.
+const GL_OPTS = { antialias: true, depth: true, stencil: true, powerPreference: 'high-performance' };
 function depthBits() {
   try {
     const c = document.createElement('canvas');
-    const gl = c.getContext('webgl2', { antialias: true, powerPreference: 'high-performance' }) || c.getContext('webgl', { antialias: true });
+    const gl = c.getContext('webgl2', GL_OPTS) || c.getContext('webgl', GL_OPTS);
     if (!gl) return 24;
     const bits = gl.getParameter(gl.DEPTH_BITS);
     gl.getExtension('WEBGL_lose_context')?.loseContext();
     return bits || 24;
   } catch (e) { return 24; }
 }
-const LOW_DEPTH = new URLSearchParams(location.search).has('logdepth') || depthBits() < 24;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: LOW_DEPTH });
+const PARAMS = new URLSearchParams(location.search);
+const LOW_DEPTH = PARAMS.has('logdepth') || depthBits() < 24;
+const renderer = new THREE.WebGLRenderer({ canvas, ...GL_OPTS, logarithmicDepthBuffer: LOW_DEPTH });
+
+// ?debug shows graphics info (useful if something looks wrong on a computer).
+if (PARAMS.has('debug')) {
+  const gl = renderer.getContext();
+  const ext = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpu = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:8px;top:8px;z-index:99;background:rgba(0,0,0,.7);color:#0f0;font:12px monospace;padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre';
+  document.body.appendChild(box);
+  let frames = 0, last = performance.now(), fps = 0;
+  (function tick() {
+    frames++;
+    const now = performance.now();
+    if (now - last > 500) { fps = Math.round(frames * 1000 / (now - last)); frames = 0; last = now; }
+    box.textContent = `GPU: ${gpu}\nDepth bits: ${gl.getParameter(gl.DEPTH_BITS)}  Stencil bits: ${gl.getParameter(gl.STENCIL_BITS)}\nLog depth: ${LOW_DEPTH}  FPS: ${fps}`;
+    requestAnimationFrame(tick);
+  })();
+}
+
 let touchMode = isTouchDevice();
 document.body.classList.toggle('touch', touchMode);
 // Phones: render at a lower resolution so it stays smooth.
