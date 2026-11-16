@@ -6,6 +6,7 @@ const V = (x, y, z) => ({ x, y, z });
 export const MAPS = {
   arena: {
     name: 'Arena',
+    hill: { x: 0, y: 0, z: 9.5, r: 4 },
     theme: { sky: '#8fb8e8', fog: [60, 160], hemi: 1.6, sun: 1.8 },
     view: { r: 30, h: 14 },
     spawns: {
@@ -46,6 +47,7 @@ export const MAPS = {
 
   islands: {
     name: 'Sky Islands',
+    hill: { x: 0, y: 0, z: 0, r: 5 },
     theme: { sky: '#a8d4ff', fog: [70, 200], hemi: 1.8, sun: 2.0 },
     view: { r: 34, h: 16 },
     killY: -25,
@@ -84,6 +86,7 @@ export const MAPS = {
 
   warehouse: {
     name: 'Warehouse',
+    hill: { x: 0, y: 0, z: 6, r: 4 },
     theme: { sky: '#1c1f28', fog: [30, 90], hemi: 1.3, sun: 1.0 },
     view: { r: 18, h: 6 },
     spawns: {
@@ -125,6 +128,7 @@ export const MAPS = {
 
   village: {
     name: 'Village',
+    hill: { x: 0, y: 0.8, z: 0, r: 4 },
     theme: { sky: '#f2c890', fog: [60, 170], hemi: 1.6, sun: 2.0 },
     view: { r: 30, h: 13 },
     spawns: {

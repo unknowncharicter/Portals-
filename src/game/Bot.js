@@ -47,7 +47,8 @@ export class BotBrain {
   findShot(t) {
     const eye = this.c.eyePos();
     const chest = t.pos.clone().setY(t.pos.y + 0.25);
-    const candidates = [chest];
+    // In Portal Only, a direct shot does nothing, so only look for shots through portals.
+    const candidates = this.m.mode.portalOnly ? [] : [chest];
     for (const p of this.m.portals.portals) {
       if (!p.partner) continue;
       // Where the target appears if seen through portal p (it is really in front of p.partner).
@@ -175,7 +176,16 @@ export class BotBrain {
     // Bots don't know where you are: go to where they last saw/heard you,
     // otherwise search the area you are probably in (a rough guess, refreshed now and then).
     let goal;
-    if (this.lastKnown && this.lastKnown.distanceTo(c.pos) > 2) goal = this.lastKnown;
+    if (m.mode.koth && m.hill) {
+      // King of the Hill: head for the zone.
+      this.searchT -= dt;
+      if (!this.hillGoal || this.searchT <= 0) {
+        const a = Math.random() * Math.PI * 2, r = Math.random() * m.hill.r * 0.6;
+        this.hillGoal = new THREE.Vector3(m.hill.x + Math.cos(a) * r, m.hill.y + 1, m.hill.z + Math.sin(a) * r);
+        this.searchT = 3 + Math.random() * 3;
+      }
+      goal = this.hillGoal;
+    } else if (this.lastKnown && this.lastKnown.distanceTo(c.pos) > 2) goal = this.lastKnown;
     else {
       this.lastKnown = null;
       this.searchT -= dt;
@@ -192,7 +202,24 @@ export class BotBrain {
       this.flank.t += dt;
       if (this.flank.t > 9 || m.portals.ownerCount(c) === 0) this.flank = null;
     }
-    if (!this.flank && this.hiddenT > 2.5 && c.portalCd <= 0 && Math.random() < dt * 0.6) this.planFlank();
+    if (m.mode.portalOnly) {
+      // Set up a portal shot: exit near the enemy, entrance on a wall we can see.
+      if (c.portalCd <= 0 && Math.random() < dt * 1.5) this.planPortalShot();
+      const spot = this.portalShotSpot();
+      const mine = m.portals.byOwner.get(c) || [];
+      this.noSpotT = spot || mine.length < 2 ? 0 : (this.noSpotT || 0) + dt;
+      if (this.noSpotT > 3 && c.portalCd <= 0) { this.placeShotEntrance(); this.noSpotT = 0; }
+      if (spot) {
+        goal = spot;
+        // There: face the entrance portal so we can spot the target through it.
+        if (Math.hypot(spot.x - c.pos.x, spot.z - c.pos.z) < 0.7) {
+          const dir = this.shotEntry.pos.clone().sub(c.eyePos()).normalize();
+          this.turnToward(dir, dt, 5);
+          this.wish.set(0, 0, 0);
+          return;
+        }
+      }
+    } else if (!this.flank && this.hiddenT > 2.5 && c.portalCd <= 0 && Math.random() < dt * 0.6) this.planFlank();
     if (this.flank) {
       if (this.flank.stage === 1 && c.portalCd <= 0) this.placeEntrance();
       if (this.flank && this.flank.stage === 2) goal = this.flank.entry;
@@ -236,6 +263,70 @@ export class BotBrain {
       m.placePortal(c, pose);
       this.flank = { stage: 1, t: 0 };
       return;
+    }
+  }
+
+  // Where to stand so a shot into our entrance portal comes out of our exit portal at the target.
+  portalShotSpot() {
+    const m = this.m, mine = m.portals.byOwner.get(this.c) || [];
+    if (mine.length < 2) return null;
+    const t = this.target, chest = t.pos.clone().setY(t.pos.y + 0.25);
+    const exit = mine.reduce((a, b) => (a.pos.distanceTo(t.pos) < b.pos.distanceTo(t.pos) ? a : b));
+    const entry = exit.partner;
+    if (!entry || exit.local(chest).z <= 0) return null;
+    // The target "seen through" the entrance portal:
+    const img = chest.clone().applyMatrix4(exit.transformTo(entry, new THREE.Matrix4()));
+    const out = entry.pos.clone().sub(img).setY(0);
+    if (out.lengthSq() < 0.01) return null;
+    out.normalize();
+    this.shotEntry = entry;
+    // Try a few distances along the line; pick one with floor and a clear view of the portal.
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const d of [4, 5, 6, 3, 7, 8, 9]) {
+      const s = entry.pos.clone().addScaledVector(out, d);
+      if (entry.local(s).z < 1) continue;
+      const floor = m.world.raycast(new THREE.Vector3(s.x, s.y + 2, s.z), down, 8);
+      if (!floor || floor.normal.y < 0.7) continue;
+      s.y = floor.point.y + this.c.halfHeight;
+      const eye = s.clone().setY(s.y + this.c.eyeOffset);
+      const toEntry = entry.pos.clone().sub(eye);
+      if (m.world.raycast(eye, toEntry.clone().normalize(), toEntry.length() - 0.1)) continue;
+      return s;
+    }
+    return null;
+  }
+
+  planPortalShot() {
+    const c = this.c, m = this.m, t = this.target;
+    const mine = m.portals.byOwner.get(c) || [];
+    const up = new THREE.Vector3(0, 1, 0);
+    // Step 1: exit portal on a wall near the target, facing the target.
+    const exitOk = mine.length && mine[mine.length - 1].pos.distanceTo(t.pos) < 16 && mine.length === 1;
+    if (!mine.length || (mine.length === 2 && !mine.some(p => p.pos.distanceTo(t.pos) < 16))) {
+      for (let i = 0; i < 10; i++) {
+        const dir = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, Math.random() * Math.PI * 2);
+        const hit = m.world.raycast(t.pos, dir, 14);
+        if (!hit || Math.abs(hit.normal.y) > 0.5) continue;
+        hit.point.y = Math.max(hit.point.y, 1.3);
+        const pose = m.portals.poseFromHit(hit, dir);
+        if (pose && pose.valid && m.placePortal(c, pose)) return;
+      }
+      return;
+    }
+    if (!exitOk) return;
+    this.placeShotEntrance();
+  }
+
+  // Entrance portal on a wall near us that we can see.
+  placeShotEntrance() {
+    const c = this.c, m = this.m, up = new THREE.Vector3(0, 1, 0);
+    for (let i = 0; i < 10; i++) {
+      const dir = new THREE.Vector3(1, 0, 0).applyAxisAngle(up, Math.random() * Math.PI * 2);
+      const hit = m.world.raycast(c.eyePos(), dir, 15);
+      if (!hit || Math.abs(hit.normal.y) > 0.5 || hit.t < 3) continue;
+      hit.point.y = Math.max(hit.point.y, 1.3);
+      const pose = m.portals.poseFromHit(hit, dir);
+      if (pose && pose.valid && m.placePortal(c, pose)) return;
     }
   }
 

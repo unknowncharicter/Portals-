@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Character, SWITCH_TIME } from './Character.js';
 import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
-import { buildStats } from './Weapons.js';
+import { buildStats, WEAPONS, WeaponState } from './Weapons.js';
 import { randomLook } from './Look.js';
 import { Projectiles } from './Projectiles.js';
 import { GUN_SKINS } from '../progress.js';
@@ -32,10 +32,17 @@ const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
 const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
 
 export const MODES = {
-  '1v1': { label: '1v1', teams: [[0], [1]] },
-  '2v2': { label: '2v2', teams: [[0, 1], [2, 3]] },
-  'ffa': { label: 'Free for all', ffa: true, count: 4 },
+  '1v1': { label: '1v1', teams: [[0], [1]], desc: 'Duel one bot. Last one standing wins the round. First to 3 rounds.' },
+  '2v2': { label: '2v2', teams: [[0, 1], [2, 3]], desc: 'You and a bot teammate vs two bots. First to 3 rounds.' },
+  'ffa': { label: 'Free for all', ffa: true, count: 4, desc: 'Everyone for themselves. Last one standing wins the round.' },
+  'koth': { label: 'King of the Hill', teams: [[0, 1], [2, 3]], respawn: true, koth: true, target: 100, time: 240,
+    desc: '2v2 with respawns. Stand in the glowing zone to score. First team to 100 wins.' },
+  'gungame': { label: 'Gun Game', ffa: true, count: 4, respawn: true, gungame: true, time: 300,
+    desc: 'Free for all with respawns. Every kill gives you the next gun. Get a kill with the last one to win.' },
+  'portalonly': { label: 'Portal Only', teams: [[0], [1]], portalOnly: true,
+    desc: 'Damage only counts if the shot went through a portal. Bounce your shots! First to 3 rounds.' },
 };
+export const GUN_LADDER = ['smg', 'shotgun', 'burst', 'ar', 'crossbow', 'sniper', 'revolver', 'pistol'];
 
 export class Match {
   constructor(ctx, modeId, save, onEnd) {
@@ -106,6 +113,8 @@ export class Match {
     }
     this.player = this.chars.find(c => !c.isBot);
     this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
+    if (this.mode.gungame) for (const c of this.chars) { c.gunLevel = 0; this.setGunGameWeapon(c); }
+    if (this.mode.koth) this.setupHill();
     this.viewmodel.setSkin(this.player.skin, this.player.portalColor);
     for (const c of this.chars) this.wins[c.team] = 0;
   }
@@ -138,13 +147,94 @@ export class Match {
     for (const b of this.bots) b.reset();
     this.state = 'countdown';
     this.stateT = COUNTDOWN;
-    this.roundT = ROUND_TIME;
+    this.roundT = this.mode.time || ROUND_TIME;
     this.lastBeep = null;
+    this.scores = {};
+    for (const c of this.chars) { this.scores[c.team] = 0; c.respawnT = 0; }
     this.updateScore();
   }
 
+  // ---------- Respawn modes ----------
+
+  // Spawn point farthest from living enemies.
+  respawn(c) {
+    const enemies = this.enemiesOf(c).filter(e => e.alive);
+    const all = [...this.world.spawns[0], ...this.world.spawns[1], ...this.world.spawns.ffa];
+    let best = all[0], bestD = -1;
+    for (const s of all) {
+      const d = enemies.length ? Math.min(...enemies.map(e => e.pos.distanceTo(s))) : Math.random();
+      if (d > bestD) { bestD = d; best = s; }
+    }
+    c.spawn(best, Math.atan2(best.x, best.z));
+    if (this.mode.gungame) this.setGunGameWeapon(c);
+    c.animate(0);
+    const brain = this.bots.find(b => b.c === c);
+    if (brain) brain.reset();
+    if (c === this.player) { this.endKillcam(); this.deathCam = null; this.hud.centerText(''); }
+  }
+
+  setGunGameWeapon(c) {
+    const def = WEAPONS[GUN_LADDER[Math.min(c.gunLevel, GUN_LADDER.length - 1)]];
+    c.weapons = [new WeaponState(def, c.stats)];
+    c.slot = 0; c.gunId = null; c.updateGun();
+  }
+
+  setupHill() {
+    const h = this.world.map.hill || { x: 0, y: 0, z: 0, r: 4 };
+    this.hill = h;
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(new THREE.CylinderGeometry(h.r, h.r, 2.2, 48, 1, true), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false }));
+    ring.position.y = 1.1;
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(h.r, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, depthWrite: false }));
+    disc.position.y = 0.03;
+    g.add(ring, disc);
+    g.position.set(h.x, h.y, h.z);
+    this.scene.add(g);
+    this.hillMesh = g; this.hillMats = [ring.material, disc.material];
+  }
+
+  inHill(c) {
+    const h = this.hill;
+    return c.alive && Math.hypot(c.pos.x - h.x, c.pos.z - h.z) < h.r && Math.abs(c.pos.y - c.halfHeight - h.y) < 2.5;
+  }
+
+  updateRespawnMode(dt) {
+    const p = this.player;
+    for (const c of this.chars) {
+      if (c.alive) continue;
+      c.respawnT -= dt;
+      if (c === p) this.hud.centerText(c.respawnT > 0 ? `Respawning in ${Math.ceil(c.respawnT)}` : '', 0, '#fff');
+      if (c.respawnT <= 0) this.respawn(c);
+    }
+    if (this.mode.koth) {
+      const teams = new Set(this.chars.filter(c => this.inHill(c)).map(c => c.team));
+      const holder = teams.size === 1 ? [...teams][0] : null;
+      const color = teams.size > 1 ? '#ffd040' : holder === null ? '#ffffff' : TEAM_COLORS[holder];
+      for (const m of this.hillMats) m.color.set(color);
+      this.hillMesh.children[0].rotation.y += dt;
+      if (holder !== null) {
+        this.scores[holder] += dt * 2;
+        if (this.scores[holder] >= this.mode.target) return this.finish(holder);
+      }
+      this.hillText = teams.size > 1 ? 'CONTESTED' : holder === null ? 'EMPTY' : holder === p.team ? 'YOURS' : 'ENEMY';
+    }
+    this.updateScore();
+    if (this.roundT <= 0) {
+      // Time up: best score wins.
+      const val = (t) => this.mode.gungame ? Math.max(...this.chars.filter(c => c.team === t).map(c => c.gunLevel)) : this.scores[t];
+      const best = Object.keys(this.scores).map(Number).sort((a, b) => val(b) - val(a))[0];
+      this.finish(best);
+    }
+  }
+
   updateScore() {
-    if (this.mode.ffa) {
+    if (this.mode.koth) {
+      const my = this.player.team, other = 1 - my, s = this.scores || {};
+      this.hud.setScore(`<span style="color:${TEAM_COLORS[my]}">YOU ${Math.floor(s[my] || 0)}</span> — <span style="color:${TEAM_COLORS[other]}">${Math.floor(s[other] || 0)} ENEMY</span> <span style="opacity:.7;font-size:14px">/ ${this.mode.target} · Hill: ${this.hillText || 'EMPTY'}</span>`);
+    } else if (this.mode.gungame) {
+      const n = GUN_LADDER.length;
+      this.hud.setScore(this.chars.map(c => `<span style="color:${c.color}">${c.name} ${Math.min(c.gunLevel, n - 1) + 1}/${n}</span>`).join(' · '));
+    } else if (this.mode.ffa) {
       this.hud.setScore(this.chars.map(c => `<span style="color:${c.color}">${c.name} ${this.wins[c.team]}</span>`).join(' · '));
     } else {
       const my = this.player.team, other = 1 - my;
@@ -294,6 +384,15 @@ export class Match {
       else { this.hud.killPop(victim.name, info.head ? 'HEADSHOT' : 'ELIMINATED'); Sfx.kill(); }
     }
     if (this.onKillHook) this.onKillHook(killer, victim, info);
+    if (this.mode.respawn) victim.respawnT = victim === this.player ? 4.5 : 3;
+    if (this.mode.gungame && !self && killer.alive && this.state === 'fight') {
+      killer.gunLevel++;
+      if (killer.gunLevel >= GUN_LADDER.length) { this.finish(killer.team); }
+      else {
+        this.setGunGameWeapon(killer);
+        if (killer === this.player) { this.hud.toast(`Next gun: ${WEAPONS[GUN_LADDER[killer.gunLevel]].name}`, '#7cf'); Sfx.swap(); }
+      }
+    }
     const fx = killer === this.player && !self ? (this.save.killFx || 'sparks') : 'sparks';
     this.effects.killFx(fx, victim.pos.clone(), killer.portalColor);
     this.portals.removeOwner(victim);
@@ -474,6 +573,10 @@ export class Match {
       const n = Math.ceil(this.stateT);
       if (n !== this.lastBeep && n > 0) { this.lastBeep = n; this.hud.centerText(String(n)); Sfx.beep(false); }
       if (this.stateT <= 0) { this.state = 'fight'; this.hud.centerText('FIGHT!', 700, '#7cf'); Sfx.beep(true); }
+    } else if (this.state === 'fight' && this.mode.respawn) {
+      this.roundT -= dt;
+      this.hud.setTimer(this.roundT);
+      this.updateRespawnMode(dt);
     } else if (this.state === 'fight') {
       this.roundT -= dt;
       this.hud.setTimer(this.roundT);
@@ -508,7 +611,9 @@ export class Match {
   }
 
   finish(winnerTeam) {
+    if (this.state === 'done') return;
     this.state = 'done';
+    this.hud.setTimer(null);
     const won = winnerTeam === this.player.team;
     const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
     const e = this.earned;
@@ -580,6 +685,7 @@ export class Match {
   }
 
   dispose() {
+    if (this.hillMesh) this.scene.remove(this.hillMesh);
     this.endKillcam();
     this.projectiles.clear();
     this.setScope(false);
