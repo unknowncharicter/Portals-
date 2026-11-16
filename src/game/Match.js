@@ -288,8 +288,12 @@ export class Match {
       if (this.scoped && p.weapon.reloading) this.setScope(false);
       if (inp.hit('KeyF')) this.heal(p);
 
+      // Left click shoots. Right click aims guns that have a scope, and shoots with every other gun.
       const w = p.weapon;
-      if (w.def.auto ? inp.mouseDown : inp.mouseClicked) this.fire(p);
+      const rightFires = !w.def.zoom;
+      const held = inp.mouseDown || (rightFires && inp.rightDown);
+      const clicked = inp.mouseClicked || (rightFires && inp.rightClicked);
+      if (w.def.auto ? held : clicked) this.fire(p);
 
       // Portals: E shows the outline, E again places it. Q cancels.
       if (inp.hit('KeyQ') && this.ghostMode) { this.ghostMode = false; }

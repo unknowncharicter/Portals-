@@ -7,6 +7,7 @@ export class Input {
     this.mouseDown = false;
     this.mouseClicked = false;
     this.rightClicked = false;
+    this.rightDown = false;
     this.dx = 0; this.dy = 0;
     this.wheel = 0;
     this.moveX = 0; this.moveY = 0; this.touchSprint = false; // touch joystick
@@ -23,9 +24,9 @@ export class Input {
     addEventListener('mousedown', e => {
       if (!this.enabled || !this.locked) return;
       if (e.button === 0) { this.mouseDown = true; this.mouseClicked = true; }
-      if (e.button === 2) this.rightClicked = true;
+      if (e.button === 2) { this.rightDown = true; this.rightClicked = true; }
     });
-    addEventListener('mouseup', e => { if (e.button === 0) this.mouseDown = false; });
+    addEventListener('mouseup', e => { if (e.button === 0) this.mouseDown = false; if (e.button === 2) this.rightDown = false; });
     // Browsers can send one huge fake movement right when the mouse gets locked.
     // Ignore movement briefly after locking, and drop single absurd jumps.
     this.ignoreUntil = 0;
@@ -37,7 +38,7 @@ export class Input {
     });
     addEventListener('wheel', e => { if (this.locked) this.wheel += Math.sign(e.deltaY); }, { passive: true });
     addEventListener('contextmenu', e => e.preventDefault());
-    addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });
+    addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; this.rightDown = false; });
   }
 
   get locked() { return document.pointerLockElement === this.canvas; }
@@ -69,7 +70,7 @@ export class Input {
   }
 
   reset() {
-    this.keys.clear(); this.pressed.clear(); this.mouseDown = false; this.dx = this.dy = 0;
+    this.keys.clear(); this.pressed.clear(); this.mouseDown = false; this.rightDown = false; this.dx = this.dy = 0;
     this.moveX = this.moveY = 0; this.touchSprint = false;
   }
 }
