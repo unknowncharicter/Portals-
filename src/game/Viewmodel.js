@@ -7,6 +7,9 @@ const HOLD = {
   smg:      new THREE.Vector3(0.17, -0.18, -0.3),
   shotgun:  new THREE.Vector3(0.17, -0.2, -0.32),
   sniper:   new THREE.Vector3(0.17, -0.2, -0.3),
+  burst:    new THREE.Vector3(0.17, -0.2, -0.3),
+  crossbow: new THREE.Vector3(0.16, -0.19, -0.32),
+  rocket:   new THREE.Vector3(0.24, -0.25, -0.5),
   pistol:   new THREE.Vector3(0.15, -0.16, -0.32),
   revolver: new THREE.Vector3(0.15, -0.16, -0.32),
 };

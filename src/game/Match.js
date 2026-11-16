@@ -4,13 +4,14 @@ import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats } from './Weapons.js';
 import { randomLook } from './Look.js';
+import { Projectiles } from './Projectiles.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 
 export const DIFFICULTIES = {
-  easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun'] },
-  normal: { label: 'Normal', skill: 0.5,  coins: 1,    botDamage: 0.75, guns: ['ar', 'ar', 'smg', 'shotgun'] },
-  hard:   { label: 'Hard',   skill: 0.85, coins: 1.5,  botDamage: 0.95, guns: ['ar', 'ar', 'smg', 'shotgun', 'sniper'] },
+  easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun', 'burst'] },
+  normal: { label: 'Normal', skill: 0.5,  coins: 1,    botDamage: 0.75, guns: ['ar', 'ar', 'smg', 'shotgun', 'burst'] },
+  hard:   { label: 'Hard',   skill: 0.85, coins: 1.5,  botDamage: 0.95, guns: ['ar', 'ar', 'smg', 'shotgun', 'sniper', 'burst', 'crossbow'] },
 };
 const shadowTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -51,6 +52,7 @@ export class Match {
     // Everything the player did this match (used for coins, XP, challenges and stats).
     this.earned = { kills: 0, rounds: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, deaths: 0, grenadeKills: 0 };
     this.killcam = null;
+    this.projectiles = new Projectiles(this);
     this.ghostMode = false;
     this.ghost = new PortalGhost(this.scene);
     this.deathCam = null;
@@ -115,6 +117,7 @@ export class Match {
     this.ghost.hide();
     this.setScope(false);
     this.endKillcam();
+    this.projectiles.clear();
     this.deathCam = null;
     const teamIdx = {};
     for (const c of this.chars) {
@@ -148,14 +151,20 @@ export class Match {
 
   // ---------- Actions shared by player and bots ----------
 
-  fire(c, extraSpread = 0) {
+  fire(c, extraSpread = 0, burstCont = false) {
     const w = c.weapon;
     if (c.switchT > 0 || !c.alive) return false;
     if (w.ammo === 0) { this.reload(c); return false; }
-    if (!w.canFire()) return false;
+    if (!burstCont && !w.canFire()) return false;
+    if (burstCont && (w.reloading || w.ammo === 0)) { w.burstLeft = 0; return false; }
     w.consume();
 
     const def = w.def;
+    // Burst rifle: one click fires a quick burst of shots.
+    if (def.burst) {
+      w.burstLeft = burstCont ? w.burstLeft - 1 : def.burst - 1;
+      w.cooldown = w.burstLeft > 0 ? def.burstGap : w.interval;
+    }
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
     const scoped = c === this.player && this.scoped;
     const base = scoped ? def.scopedSpread : def.spread;
@@ -168,48 +177,45 @@ export class Match {
       : c.pos.clone().add(new THREE.Vector3(0.3, 0.38, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.yaw)).addScaledVector(c.lookDir(), 0.9);
 
     let anyHit = false, anyHead = false;
-    for (let i = 0; i < pellets; i++) {
+    if (def.projectile) {
+      // Rockets and crossbow bolts fly (and go through portals).
       const dir = c.lookDir();
-      dir.x += (Math.random() - 0.5) * 2 * spread;
-      dir.y += (Math.random() - 0.5) * 2 * spread;
-      dir.z += (Math.random() - 0.5) * 2 * spread;
-      dir.normalize();
-      const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
-      tr.segments[0].from = muzzle.clone();
-      this.effects.tracer(tr.segments, c.portalColor);
+      const start = origin.clone().addScaledVector(dir, 0.5);
+      this.projectiles.spawn(def.projectile, c, start, dir.multiplyScalar(def.speed));
+    } else {
+      for (let i = 0; i < pellets; i++) {
+        const dir = c.lookDir();
+        dir.x += (Math.random() - 0.5) * 2 * spread;
+        dir.y += (Math.random() - 0.5) * 2 * spread;
+        dir.z += (Math.random() - 0.5) * 2 * spread;
+        dir.normalize();
+        const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
+        tr.segments[0].from = muzzle.clone();
+        this.effects.tracer(tr.segments, c.portalColor);
 
-      const hit = tr.hit;
-      if (!hit) continue;
-      if (hit.type === 'world') {
-        if (i < 3) this.effects.spark(hit.point);
-        if (i === 0 && hit.point.distanceTo(this.player.pos) < 25) Sfx.impact(isPlayer ? 1 : 0.6);
-        continue;
+        const hit = tr.hit;
+        if (!hit) continue;
+        if (hit.type === 'world') {
+          if (i < 3) this.effects.spark(hit.point);
+          if (i === 0 && hit.point.distanceTo(this.player.pos) < 25) Sfx.impact(isPlayer ? 1 : 0.6);
+          continue;
+        }
+        const t = hit.character;
+        const dmg = w.damage * (hit.head ? def.headMult : 1);
+        if (this.applyDamage(c, t, dmg, { portal: tr.segments.length > 1, head: hit.head, segs: tr.segments })) {
+          this.effects.spark(hit.point, '#ff4040');
+          if (t !== c) { anyHit = true; anyHead = anyHead || hit.head; }
+        }
       }
-      const t = hit.character;
-      if (t !== c && t.team === c.team) continue; // no friendly fire (you CAN hit yourself)
-      const dmg = w.damage * (hit.head ? def.headMult : 1);
-      this.effects.spark(hit.point, '#ff4040');
-      anyHit = true; anyHead = anyHead || hit.head;
-      if (t === this.player) {
-        // Point the hit arrow along the last bit of the bullet's path (works through portals).
-        const seg = tr.segments[tr.segments.length - 1];
-        const d = seg.from.clone().sub(seg.to);
-        const fx = -Math.sin(t.yaw) * d.x - Math.cos(t.yaw) * d.z;
-        const rx = Math.cos(t.yaw) * d.x - Math.sin(t.yaw) * d.z;
-        this.hud.hurt(Math.atan2(rx, fx));
-        this.shake = Math.min(1, this.shake + 0.6);
-        Sfx.hurt();
-      }
-      const tb = t.isBot && this.bots.find(b => b.c === t);
-      if (tb && t !== c) tb.hear(c.pos, true); // getting shot reveals where it came from
-      if (t.damage(dmg, c)) this.onKill(c, t, { portal: tr.segments.length > 1, head: hit.head, segs: tr.segments });
     }
+    // Empty? Reload straight away.
+    if (w.ammo === 0) { w.burstLeft = 0; this.reload(c); }
 
     if (isPlayer) {
       this.earned.shots++;
       if (anyHit) this.earned.hits++;
       if (anyHit) { this.hud.hit(anyHead); anyHead ? Sfx.headshot() : Sfx.hit(); }
-      const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045 }[def.id] || 0.02;
+      const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045, burst: 0.012, crossbow: 0.03, rocket: 0.07 }[def.id] || 0.02;
       this.viewmodel.fire(Math.min(1.5, kick * 30));
       this.bloom = Math.min(3, this.bloom + kick * 40);
       c.pitch = Math.min(1.5, c.pitch + kick);
@@ -221,6 +227,43 @@ export class Match {
     }
     const vol = isPlayer ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
     (Sfx[def.sound] || Sfx.rifle)(vol);
+    return true;
+  }
+
+  // All damage goes through here (bullets, bolts, explosions). Returns true if it counted.
+  // info: { portal, head, segs (bullet path), from (explosion/projectile position), grenade, explosion }
+  applyDamage(attacker, t, dmg, info = {}) {
+    if (!t.alive) return false;
+    if (t !== attacker && t.team === attacker.team) return false; // no friendly fire (you CAN hit yourself)
+    if (this.mode.portalOnly && !info.portal) return false;        // Portal Only mode
+    if (t === this.player) {
+      // Point the hit arrow toward where the damage came from (through portals too).
+      let d;
+      if (info.segs) { const seg = info.segs[info.segs.length - 1]; d = seg.from.clone().sub(seg.to); }
+      else if (info.from) d = info.from.clone().sub(t.pos);
+      if (d) {
+        const fx = -Math.sin(t.yaw) * d.x - Math.cos(t.yaw) * d.z;
+        const rx = Math.cos(t.yaw) * d.x - Math.sin(t.yaw) * d.z;
+        this.hud.hurt(Math.atan2(rx, fx));
+      } else this.hud.hurt();
+      this.shake = Math.min(1, this.shake + 0.6);
+      Sfx.hurt();
+    }
+    const tb = t.isBot && this.bots.find(b => b.c === t);
+    if (tb && t !== attacker) tb.hear(attacker.pos, true); // getting hit reveals where it came from
+    if (attacker === this.player && t !== attacker && info.explosion) { this.hud.hit(false); Sfx.hit(); }
+    if (t.damage(dmg, attacker)) this.onKill(attacker, t, info);
+    return true;
+  }
+
+  throwGrenade(c) {
+    if (!c.alive || c.grenades <= 0 || c.grenadeCd > 0 || c.switchT > 0) return false;
+    c.grenades--;
+    c.grenadeCd = 0.8;
+    const dir = c.lookDir();
+    const vel = dir.clone().multiplyScalar(17).add(new THREE.Vector3(0, 3.5, 0)).addScaledVector(c.vel, 0.5);
+    this.projectiles.spawn('grenade', c, c.eyePos().addScaledVector(dir, 0.6), vel);
+    if (c === this.player) { Sfx.pin(); setTimeout(() => Sfx.throw(), 80); this.viewmodel.fire(0.6); }
     return true;
   }
 
@@ -328,6 +371,7 @@ export class Match {
       if (inp.rightClicked && p.weapon.def.zoom) this.setScope(!this.scoped);
       if (this.scoped && p.weapon.reloading) this.setScope(false);
       if (inp.hit('KeyF')) this.heal(p);
+      if (inp.hit('KeyG')) this.throwGrenade(p);
 
       // Left click shoots. Right click aims guns that have a scope, and shoots with every other gun.
       const w = p.weapon;
@@ -402,6 +446,12 @@ export class Match {
       } else c.shadow.visible = false;
     }
 
+    // Burst rifle: keep firing the rest of a burst.
+    for (const c of this.chars) {
+      const w = c.weapon;
+      if (c.alive && w.burstLeft > 0 && w.cooldown <= 0) this.fire(c, c.isBot ? 0.02 : 0, true);
+    }
+    this.projectiles.update(dt);
     this.portals.update(dt);
     this.effects.update(dt);
     this.updateCamera(dt);
@@ -525,6 +575,7 @@ export class Match {
 
   dispose() {
     this.endKillcam();
+    this.projectiles.clear();
     this.setScope(false);
     this.portals.clear();
     this.effects.clear();

@@ -22,7 +22,8 @@ export class Hud {
     this.hpText.textContent = Math.ceil(p.hp);
     const hk = document.body.classList.contains('touch') ? 'Heal' : 'F heal';
     const dk = document.body.classList.contains('touch') ? 'Dash' : 'Shift dash';
-    this.heal.textContent = (p.healCd > 0 ? `${hk} ${Math.ceil(p.healCd)}s` : `${hk} READY`) + ' · ' + (p.dashCd > 0 ? `${dk} ${p.dashCd.toFixed(1)}s` : `${dk} READY`);
+    const gk = document.body.classList.contains('touch') ? '💣' : 'G 💣';
+    this.heal.textContent = (p.healCd > 0 ? `${hk} ${Math.ceil(p.healCd)}s` : `${hk} READY`) + ' · ' + (p.dashCd > 0 ? `${dk} ${p.dashCd.toFixed(1)}s` : `${dk} READY`) + ` · ${gk} ${p.grenades}`;
     const w = p.weapon;
     this.weapon.textContent = `${w.def.name}  [1/2]`;
     this.ammo.textContent = w.reloading ? 'RELOADING' : `${w.ammo} / ${w.mag}`;

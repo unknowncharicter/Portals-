@@ -8,6 +8,7 @@ const GUNS = {
   smg:      { file: 'smg.glb',      length: 0.6,  hold: 0.45 },
   shotgun:  { file: 'shotgun.glb',  length: 0.95, hold: 0.38 },
   sniper:   { file: 'sniper.glb',   length: 1.15, hold: 0.33 },
+  burst:    { file: 'burst.glb',    length: 0.8,  hold: 0.55 },
   pistol:   { file: 'pistol.glb',   length: 0.24, hold: 0.62 },
   revolver: { file: 'revolver.glb', length: 0.3,  hold: 0.62 },
 };
@@ -26,7 +27,44 @@ export function loadModels() {
       console.warn('Could not load gun model', id, e);
     }
   }));
+  // Blocky guns built in code (no model file needed).
+  templates.crossbow = makeCrossbow();
+  templates.rocket = makeRocket();
   return loading;
+}
+
+function box(g, w, h, d, color, x, y, z, emissive) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color, emissive: emissive || '#000000' }));
+  m.position.set(x, y, z); g.add(m); return m;
+}
+
+function makeCrossbow() {
+  const g = new THREE.Group();
+  box(g, 0.06, 0.07, 0.62, '#6b4a2c', 0, 0, -0.12);           // stock
+  box(g, 0.05, 0.12, 0.06, '#3a2a1c', 0, -0.08, 0.05);        // grip
+  box(g, 0.62, 0.035, 0.04, '#2a2c34', 0, 0.02, -0.4);        // bow limbs
+  box(g, 0.04, 0.05, 0.08, '#2a2c34', 0.3, 0.02, -0.37);
+  box(g, 0.04, 0.05, 0.08, '#2a2c34', -0.3, 0.02, -0.37);
+  box(g, 0.6, 0.006, 0.006, '#dddddd', 0, 0.03, -0.32);       // string
+  box(g, 0.012, 0.012, 0.5, '#7cf', 0, 0.05, -0.25, '#1a3a55'); // loaded bolt
+  box(g, 0.02, 0.05, 0.05, '#2a2c34', 0, 0.07, -0.05);        // sight
+  g.userData.muzzle = new THREE.Vector3(0, 0.05, -0.5);
+  return g;
+}
+
+function makeRocket() {
+  const g = new THREE.Group();
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.95, 12).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#4a5a3a' }));
+  tube.position.set(0, 0.05, -0.2); g.add(tube);
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: '#2a2c34' }));
+  rim.position.set(0, 0.05, -0.66); g.add(rim);
+  const back = rim.clone(); back.position.z = 0.26; g.add(back);
+  box(g, 0.05, 0.13, 0.06, '#2a2c34', 0, -0.07, 0);           // grip
+  box(g, 0.05, 0.11, 0.06, '#2a2c34', 0, -0.06, -0.3);        // front grip
+  box(g, 0.04, 0.06, 0.12, '#2a2c34', 0.07, 0.12, -0.15);     // sight
+  box(g, 0.03, 0.03, 0.03, '#ff4422', 0.07, 0.16, -0.2, '#661100');
+  g.userData.muzzle = new THREE.Vector3(0, 0.05, -0.7);
+  return g;
 }
 
 function normalize(scene, cfg) {

@@ -202,6 +202,15 @@ export class BotBrain {
     const far = to.length();
     if (to.lengthSq() > 0.01) this.wish.copy(to.normalize());
     this.avoid();
+    // Lob a grenade toward where we think the enemy is.
+    if (this.lastKnown && c.grenades > 0 && c.grenadeCd <= 0 && Math.random() < dt * 0.12 * (0.5 + this.skill)) {
+      const to = this.lastKnown.clone().sub(c.pos); const d = Math.hypot(to.x, to.z);
+      if (d > 7 && d < 24) {
+        c.yaw = Math.atan2(-to.x, -to.z);
+        c.pitch = 0.2 + d * 0.012;
+        m.throwGrenade(c);
+      }
+    }
     // Slide now and then while running somewhere far.
     if (far > 10 && c.grounded && !c.crouched && Math.random() < dt * 0.35 && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
     // Look where we are going (slightly toward the target height).

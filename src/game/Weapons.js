@@ -6,6 +6,9 @@ export const WEAPONS = {
   smg:      { id: 'smg',      slot: 'primary',   name: 'SMG',           damage: 12, headMult: 1.6, interval: 0.065, mag: 35, reload: 1.5, spread: 0.022, auto: true,  sound: 'smg' },
   shotgun:  { id: 'shotgun',  slot: 'primary',   name: 'Shotgun',       damage: 11, headMult: 1.4, interval: 0.85,  mag: 6,  reload: 2.2, spread: 0.065, auto: false, sound: 'shotgun', pellets: 9 },
   sniper:   { id: 'sniper',   slot: 'primary',   name: 'Sniper',        damage: 85, headMult: 2.0, interval: 1.3,   mag: 5,  reload: 2.5, spread: 0.05,  auto: false, sound: 'sniper', zoom: 22, scopedSpread: 0.0005 },
+  burst:    { id: 'burst',    slot: 'primary',   name: 'Burst Rifle',   damage: 21, headMult: 1.8, interval: 0.4,   mag: 24, reload: 2.0, spread: 0.007, auto: false, sound: 'burst', burst: 3, burstGap: 0.07 },
+  crossbow: { id: 'crossbow', slot: 'primary',   name: 'Crossbow',      damage: 95, headMult: 1.6, interval: 0.3,   mag: 1,  reload: 1.1, spread: 0,     auto: false, sound: 'crossbow', projectile: 'bolt', speed: 62 },
+  rocket:   { id: 'rocket',   slot: 'primary',   name: 'Rocket Launcher', damage: 0, headMult: 1, interval: 0.9,   mag: 2,  reload: 2.6, spread: 0,     auto: false, sound: 'rocket', projectile: 'rocket', speed: 30 },
   pistol:   { id: 'pistol',   slot: 'secondary', name: 'Pistol',        damage: 26, headMult: 2.0, interval: 0.22,  mag: 12, reload: 1.3, spread: 0.006, auto: false, sound: 'pistol' },
   revolver: { id: 'revolver', slot: 'secondary', name: 'Revolver',      damage: 48, headMult: 2.0, interval: 0.5,   mag: 6,  reload: 2.0, spread: 0.004, auto: false, sound: 'revolver' },
 };
@@ -37,6 +40,7 @@ export class WeaponState {
     this.ammo = this.mag;
     this.reloadT = 0;
     this.cooldown = 0;
+    this.burstLeft = 0;
   }
   get mag() { return Math.round(this.def.mag * this.stats.magMult); }
   get interval() { return this.def.interval / this.stats.rateMult; }
@@ -57,5 +61,5 @@ export class WeaponState {
   }
   canFire() { return !this.reloading && this.cooldown <= 0 && this.ammo > 0; }
   consume() { this.ammo--; this.cooldown = this.interval; }
-  refill() { this.ammo = this.mag; this.reloadT = 0; this.cooldown = 0; }
+  refill() { this.ammo = this.mag; this.reloadT = 0; this.cooldown = 0; this.burstLeft = 0; }
 }

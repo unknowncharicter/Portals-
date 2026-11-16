@@ -54,6 +54,7 @@ export class Character {
     this.switchT = 0;
     this.healCd = 0;
     this.portalCd = 0;
+    this.grenades = 2; this.grenadeCd = 0;
     this.lastAttacker = null;
 
     this.walkT = 0;
@@ -97,7 +98,7 @@ export class Character {
     this.hp = this.maxHp;
     this.alive = true;
     this.mesh.visible = true;
-    this.healCd = 0; this.portalCd = 0;
+    this.healCd = 0; this.portalCd = 0; this.grenades = 2; this.grenadeCd = 0;
     this.slot = 0; this.switchT = 0;
     this.updateGun();
     this.lastAttacker = null;
@@ -355,6 +356,7 @@ export class Character {
     this.portalCd = Math.max(0, this.portalCd - dt);
     this.switchT = Math.max(0, this.switchT - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
+    this.grenadeCd = Math.max(0, this.grenadeCd - dt);
     this.slideCd = Math.max(0, this.slideCd - dt);
     for (const w of this.weapons) w.update(dt);
   }

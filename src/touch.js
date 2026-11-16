@@ -17,6 +17,7 @@ const BUTTONS = [
   { id: 'portal', label: 'PORTAL', cls: 'portal' },
   { id: 'cancel', label: '✕',      cls: 'small' },
   { id: 'reload', label: 'R',      cls: 'small' },
+  { id: 'nade',   label: '💣',     cls: 'small' },
   { id: 'swap',   label: '⇄',      cls: 'small' },
   { id: 'heal',   label: '+',      cls: 'small heal' },
   { id: 'scope',  label: '◎',      cls: 'small' },
@@ -78,6 +79,7 @@ export class TouchControls {
         case 'portal': inp.tap('KeyE'); break;
         case 'cancel': inp.tap('KeyQ'); break;
         case 'reload': inp.tap('KeyR'); break;
+        case 'nade': inp.tap('KeyG'); break;
         case 'heal': inp.tap('KeyF'); break;
         case 'swap': inp.wheel += 1; break;
         case 'scope': inp.rightClicked = true; break;
@@ -145,5 +147,6 @@ export class TouchControls {
     this.btn.portal.style.borderColor = p.portalColor;
     this.btn.heal.classList.toggle('cool', p.healCd > 0);
     this.btn.dash.classList.toggle('cool', p.dashCd > 0);
+    this.btn.nade.classList.toggle('cool', p.grenades <= 0);
   }
 }

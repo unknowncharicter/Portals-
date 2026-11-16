@@ -111,6 +111,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #t-portal { right: 38px; bottom: 146px; border-width: 3px; font-size: 12px; }
 #t-cancel { right: 112px; bottom: 170px; }
 #t-reload { right: 196px; bottom: 34px; }
+#t-nade { right: 196px; bottom: 158px; }
 #t-swap { right: 196px; bottom: 96px; }
 #t-heal { right: 138px; bottom: 104px; color: #7f7; }
 #t-scope { right: 112px; bottom: 228px; }
