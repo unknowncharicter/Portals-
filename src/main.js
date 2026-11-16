@@ -20,10 +20,10 @@ const canvas = $('game');
 
 // ---------- Renderer & shared objects ----------
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-const IS_TOUCH = isTouchDevice();
-if (IS_TOUCH) document.body.classList.add('touch');
+let touchMode = isTouchDevice();
+document.body.classList.toggle('touch', touchMode);
 // Phones: render at a lower resolution so it stays smooth.
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1 : 1.5));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, touchMode ? 1 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
@@ -37,7 +37,7 @@ const effects = new Effects(scene);
 const viewmodel = new Viewmodel();
 const hud = new Hud();
 const input = new Input(canvas);
-portals.lowQuality = IS_TOUCH;
+portals.lowQuality = touchMode;
 const touch = new TouchControls(input, { onPause: () => pause() });
 
 let save = loadSave();
@@ -175,7 +175,8 @@ function showScreen(id) {
   for (const s of ['menu', 'lobby', 'pause', 'results']) $(s).classList.toggle('hidden', s !== id);
   hud.show(id === null);
   document.body.classList.toggle('playing', id === null);
-  touch.show(IS_TOUCH && id === null);
+  touch.show(touchMode && id === null);
+  if (id !== null) $('lockprompt').classList.add('hidden');
 }
 
 function buildLobby() {
@@ -287,7 +288,7 @@ function startMatch() {
   input.enabled = true;
   input.reset();
   showScreen(null);
-  if (!IS_TOUCH) input.lock();
+  if (!touchMode) input.lock();
   SDK.gameplayStart();
 }
 
@@ -319,19 +320,36 @@ function resume() {
   state = 'playing';
   input.enabled = true;
   showScreen(null);
-  if (!IS_TOUCH) input.lock();
+  if (!touchMode) input.lock();
   SDK.gameplayStart();
 }
 
 document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement && state === 'playing') pause();
+  if (!document.pointerLockElement && state === 'playing' && !touchMode) pause();
 });
 // Clicking the game while playing re-grabs the mouse (e.g. after a failed lock).
-canvas.addEventListener('click', () => { if (!IS_TOUCH && state === 'playing' && !input.locked) input.lock(); });
+canvas.addEventListener('click', () => { if (!touchMode && state === 'playing' && !input.locked) input.lock(); });
+$('lockprompt').addEventListener('click', () => input.lock());
+
+// Switch between mouse and touch controls based on what the player actually uses.
+function setTouchMode(on) {
+  if (on === touchMode) return;
+  touchMode = on;
+  document.body.classList.toggle('touch', on);
+  touch.show(on && state === 'playing');
+  if (on) input.unlock();
+}
+addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch') setTouchMode(true);
+  else if (e.pointerType === 'mouse' && touchMode) {
+    setTouchMode(false);
+    if (state === 'playing') input.lock();
+  }
+}, true);
 
 $('btn-play').onclick = () => {
   Sfx.unlock();
-  if (IS_TOUCH) {
+  if (touchMode) {
     // Full screen + landscape where the browser allows it.
     const el = document.documentElement;
     try { (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {}); } catch (e) { /* ignore */ }
@@ -366,7 +384,9 @@ function frame() {
 
   if (state === 'playing' && match) {
     match.update(dt);
-    if (IS_TOUCH) touch.update(match);
+    if (touchMode) touch.update(match);
+    // Mouse players: if the game doesn't have the mouse yet, ask for a click.
+    $('lockprompt').classList.toggle('hidden', touchMode || input.locked);
     if (match && match.state !== 'done') match.render();
   } else if (match && (state === 'paused' || state === 'results')) {
     match.render();

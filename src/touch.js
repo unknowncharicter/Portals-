@@ -3,7 +3,10 @@
 // The FIRE button can also be dragged to aim while shooting.
 export function isTouchDevice() {
   if (new URLSearchParams(location.search).has('touch')) return true;
-  return (window.matchMedia && matchMedia('(pointer: coarse)').matches) || navigator.maxTouchPoints > 1;
+  // Only phones/tablets: a touchscreen laptop still has a mouse, so it starts in mouse mode.
+  // (The game also switches automatically when it sees a real touch or a real mouse.)
+  const mm = (q) => window.matchMedia && matchMedia(q).matches;
+  return mm('(pointer: coarse)') && !mm('(any-pointer: fine)');
 }
 
 const BUTTONS = [
@@ -60,7 +63,7 @@ export class TouchControls {
   down(e) {
     e.preventDefault();
     if (!this.input.enabled) return;
-    this.el.setPointerCapture?.(e.pointerId);
+    try { this.el.setPointerCapture(e.pointerId); } catch (err) { /* pointer already gone */ }
     const act = e.target.dataset && e.target.dataset.act;
     const p = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, act };
     this.ptrs.set(e.pointerId, p);

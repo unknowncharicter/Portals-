@@ -43,10 +43,13 @@ export class Input {
   get locked() { return document.pointerLockElement === this.canvas; }
 
   lock() {
+    // Some systems refuse "raw" mouse input, so fall back to a normal lock. Never throw:
+    // if the browser refuses, the game shows a "Click to play" prompt instead.
+    const plain = () => { try { const q = this.canvas.requestPointerLock(); if (q && q.catch) q.catch(() => {}); } catch (e) { /* ignore */ } };
     try {
       const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
-      if (p && p.catch) p.catch(() => this.canvas.requestPointerLock());
-    } catch (e) { this.canvas.requestPointerLock(); }
+      if (p && p.catch) p.catch(plain);
+    } catch (e) { plain(); }
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
