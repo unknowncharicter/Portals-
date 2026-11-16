@@ -39,7 +39,28 @@ button:disabled { opacity: .4; cursor: default; }
 .loadout button { flex: 1; padding: 8px 6px; font-size: 13px; min-width: 70px; }
 .loadout button.sel { background: #39f; }
 
+.char-panel { align-items: stretch; }
+#preview { width: 100%; height: 220px; border-radius: 10px; background: radial-gradient(circle at 50% 40%, #2c3358, #12142a); display: block; }
+.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.field > span { opacity: .7; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatches button { width: 28px; height: 28px; padding: 0; border-radius: 7px; border: 3px solid transparent; }
+.swatches button.sel { border-color: #fff; }
+.hats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.hats button { padding: 7px 4px; font-size: 12px; }
+.hats button.sel { background: #39f; }
+.hats button.locked { background: #22253a; color: #ffd75e; }
+input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border: 1px solid #3a4060; background: #12142a; color: #eef; }
+.settings { display: flex; flex-direction: column; gap: 10px; width: min(360px, 100%); }
+.settings label { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.settings label span { width: 110px; opacity: .8; }
+.settings input[type=range] { flex: 1; accent-color: #39f; }
+.settings b { width: 40px; text-align: right; }
+
 /* HUD */
+.hitdir { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; animation: hitfade .9s forwards; }
+.hitdir::before { content: ''; position: absolute; left: -40px; top: -190px; width: 80px; height: 26px; border-radius: 50% 50% 0 0 / 100% 100% 0 0; border-top: 8px solid rgba(255,40,40,.9); }
+@keyframes hitfade { from { opacity: 1; } to { opacity: 0; } }
 #scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 32vmin, #000 32.3vmin); }
 #scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 64vmin; height: 1px; background: #000; transform: translate(-50%, -50%); }
 #scope::after { content: ''; position: absolute; left: 50%; top: 50%; height: 64vmin; width: 1px; background: #000; transform: translate(-50%, -50%); }

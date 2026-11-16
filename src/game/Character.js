@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { rayBox } from './World.js';
 import { WEAPONS, WeaponState, HEAL_COOLDOWN } from './Weapons.js';
 import { gunModel } from './Models.js';
+import { buildCharacterMesh } from './Look.js';
 
 const GRAVITY = 24;
 const JUMP_SPEED = 8.2;
@@ -10,7 +11,8 @@ const STEP_HEIGHT = 0.55;
 const EPS = 0.001;
 
 export class Character {
-  constructor({ name, team, color, portalColor, isBot, stats, loadout }) {
+  constructor({ name, team, color, portalColor, isBot, stats, loadout, look }) {
+    this.look = { ...look, name };
     this.name = name;
     this.team = team;
     this.color = color;
@@ -63,22 +65,11 @@ export class Character {
   get weapon() { return this.weapons[this.slot]; }
 
   buildMesh() {
-    const g = new THREE.Group();
-    const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const body = mat(this.color), skin = mat('#f0c8a0'), dark = mat('#2a2a35'), glow = new THREE.MeshBasicMaterial({ color: this.portalColor });
-    const box = (w, h, d, m, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); g.add(b); return b; };
-    this.legL = box(0.24, 0.8, 0.26, dark, -0.15, -0.5, 0);
-    this.legR = box(0.24, 0.8, 0.26, dark, 0.15, -0.5, 0);
-    for (const leg of [this.legL, this.legR]) { leg.geometry.translate(0, -0.4, 0); leg.position.y += 0.4; }
-    box(0.62, 0.78, 0.36, body, 0, 0.16, 0);
-    box(0.42, 0.42, 0.42, skin, 0, 0.72, 0);
-    box(0.36, 0.1, 0.05, glow, 0, 0.76, -0.22); // visor in portal colour
-    box(0.16, 0.16, 0.6, body, 0.3, 0.32, -0.25); // arm
-    this.gunHolder = new THREE.Group();
-    this.gunHolder.position.set(0.3, 0.38, -0.5);
-    g.add(this.gunHolder);
-    box(0.16, 0.16, 0.45, body, -0.28, 0.32, -0.25);
-    return g;
+    const parts = buildCharacterMesh(this.look, { visor: this.portalColor, teamColor: this.color, tag: this.isBot });
+    this.legL = parts.legL;
+    this.legR = parts.legR;
+    this.gunHolder = parts.gunHolder;
+    return parts.group;
   }
 
   setBodyLayer(layer) { this.bodyLayer = layer; this.mesh.traverse(o => o.layers.set(layer)); }

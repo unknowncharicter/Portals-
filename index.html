@@ -25,6 +25,15 @@
       <div class="coins">🪙 <span id="coin-count">0</span></div>
     </div>
     <div class="lobby-grid">
+      <section class="panel char-panel">
+        <h3>Character</h3>
+        <canvas id="preview"></canvas>
+        <label class="field"><span>Name</span><input id="name-input" type="text" maxlength="14" /></label>
+        <div class="field"><span>Shirt</span><div id="sw-shirt" class="swatches"></div></div>
+        <div class="field"><span>Pants</span><div id="sw-pants" class="swatches"></div></div>
+        <div class="field"><span>Skin</span><div id="sw-skin" class="swatches"></div></div>
+        <div class="field"><span>Hat</span><div id="hats" class="hats"></div></div>
+      </section>
       <section class="panel">
         <h3>Upgrades</h3>
         <div id="upgrades"></div>
@@ -36,8 +45,10 @@
         <div id="colors" class="colors"></div>
         <h3>Game mode</h3>
         <div id="modes" class="modes"></div>
+        <h3>Bot difficulty</h3>
+        <div id="difficulty" class="modes"></div>
         <button id="btn-start" class="big">START MATCH</button>
-        <p class="hint">vs bots · first to 3 rounds</p>
+        <p class="hint">vs bots · first to 3 rounds · Hard gives 1.5× coins</p>
       </section>
       <section class="panel">
         <h3>Controls</h3>
@@ -50,6 +61,8 @@
           <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
           <li>You keep your 2 newest portals. Portals close after 60s.</li>
         </ul>
+        <h3>Settings</h3>
+        <div class="settings" data-settings></div>
       </section>
     </div>
   </div>
@@ -77,6 +90,7 @@
   <!-- Pause -->
   <div id="pause" class="screen hidden">
     <h2>PAUSED</h2>
+    <div class="settings" data-settings></div>
     <button id="btn-resume" class="big">RESUME</button>
     <button id="btn-quit">QUIT TO LOBBY</button>
   </div>

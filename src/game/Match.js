@@ -3,10 +3,24 @@ import { Character } from './Character.js';
 import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats } from './Weapons.js';
-
-const BOT_PRIMARIES = ['ar', 'ar', 'smg', 'shotgun', 'sniper'];
+import { randomLook } from './Look.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
+
+const BOT_PRIMARIES = ['ar', 'ar', 'smg', 'shotgun', 'sniper'];
+export const DIFFICULTIES = {
+  easy:   { label: 'Easy',   skill: 0.3,  coins: 0.75 },
+  normal: { label: 'Normal', skill: 0.6,  coins: 1 },
+  hard:   { label: 'Hard',   skill: 0.9,  coins: 1.5 },
+};
+const shadowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 2, 32, 32, 30);
+  grd.addColorStop(0, 'rgba(0,0,0,0.55)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
 
 export const ROUNDS_TO_WIN = 3;
 const COUNTDOWN = 3;
@@ -54,10 +68,12 @@ export class Match {
 
   setup() {
     const botColors = COLORS.filter(c => c !== this.save.color);
+    const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
     const make = (i, team, bodyColor) => {
       const isBot = i !== 0;
+      const name = isBot ? BOT_NAMES[(i - 1) % BOT_NAMES.length] : this.save.look.name;
       const c = new Character({
-        name: isBot ? BOT_NAMES[(i - 1) % BOT_NAMES.length] : 'You',
+        name, look: isBot ? randomLook(name) : this.save.look,
         team, color: bodyColor,
         portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
         isBot, stats: buildStats(isBot ? null : this.save),
@@ -67,7 +83,10 @@ export class Match {
       });
       this.chars.push(c);
       this.scene.add(c.mesh);
-      if (isBot) this.bots.push(new BotBrain(c, this, 0.55 + Math.random() * 0.15));
+      c.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
+      c.shadow.rotation.x = -Math.PI / 2;
+      this.scene.add(c.shadow);
+      if (isBot) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
       return c;
     };
     if (this.mode.ffa) {
@@ -160,7 +179,15 @@ export class Match {
       const dmg = w.damage * (hit.head ? def.headMult : 1);
       this.effects.spark(hit.point, '#ff4040');
       anyHit = true; anyHead = anyHead || hit.head;
-      if (t === this.player) { this.hud.hurt(); Sfx.hurt(); }
+      if (t === this.player) {
+        // Point the hit arrow along the last bit of the bullet's path (works through portals).
+        const seg = tr.segments[tr.segments.length - 1];
+        const d = seg.from.clone().sub(seg.to);
+        const fx = -Math.sin(t.yaw) * d.x - Math.cos(t.yaw) * d.z;
+        const rx = Math.cos(t.yaw) * d.x - Math.sin(t.yaw) * d.z;
+        this.hud.hurt(Math.atan2(rx, fx));
+        Sfx.hurt();
+      }
       if (t.damage(dmg, c)) this.onKill(c, t);
     }
 
@@ -289,6 +316,18 @@ export class Match {
       if (c.pos.y < -40) { c.damage(9999, c.lastAttacker || c); this.onKill(c.lastAttacker || c, c); }
     }
 
+    for (const c of this.chars) {
+      c.shadow.visible = c.alive;
+      if (!c.alive) continue;
+      const g = this.world.raycast(c.pos, new THREE.Vector3(0, -1, 0), 30);
+      if (g) {
+        c.shadow.position.set(c.pos.x, g.point.y + 0.02, c.pos.z);
+        const k = Math.max(0.3, 1 - (g.t - c.halfHeight) / 6);
+        c.shadow.scale.setScalar(k);
+        c.shadow.material.opacity = k;
+      } else c.shadow.visible = false;
+    }
+
     this.portals.update(dt);
     this.effects.update(dt);
     this.updateCamera();
@@ -326,7 +365,8 @@ export class Match {
   finish(winnerTeam) {
     this.state = 'done';
     const won = winnerTeam === this.player.team;
-    const coins = 20 + this.earned.kills * 10 + this.earned.rounds * 20 + (won ? 100 : 0);
+    const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
+    const coins = Math.round((20 + this.earned.kills * 10 + this.earned.rounds * 20 + (won ? 100 : 0)) * diff.coins);
     this.onEnd({ won, coins, kills: this.earned.kills, rounds: this.earned.rounds });
   }
 
@@ -359,6 +399,6 @@ export class Match {
     this.effects.clear();
     this.portals.onEvent = () => {};
     this.scene.remove(this.ghost.mesh);
-    for (const c of this.chars) this.scene.remove(c.mesh);
+    for (const c of this.chars) { this.scene.remove(c.mesh); this.scene.remove(c.shadow); }
   }
 }

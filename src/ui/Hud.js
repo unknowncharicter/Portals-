@@ -56,7 +56,14 @@ export class Hud {
     this._hitT = setTimeout(() => this.hitmarker.classList.remove('show'), 90);
   }
 
-  hurt() {
+  hurt(angle = null) {
+    if (angle !== null) {
+      const a = document.createElement('div');
+      a.className = 'hitdir';
+      a.style.transform = `translate(-50%, -50%) rotate(${angle}rad)`;
+      this.el.appendChild(a);
+      setTimeout(() => a.remove(), 900);
+    }
     this.dmg.classList.add('show');
     clearTimeout(this._dmgT);
     this._dmgT = setTimeout(() => this.dmg.classList.remove('show'), 80);

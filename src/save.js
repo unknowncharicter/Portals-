@@ -12,16 +12,31 @@ export const UPGRADES = [
 
 export const COLORS = ['#33aaff', '#ff44cc', '#44ff88', '#ffcc22', '#ff5533', '#aa66ff', '#22ffee', '#ffffff'];
 
-const DEFAULT = { coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1', loadout: { primary: 'ar', secondary: 'pistol' } };
+import { DEFAULT_LOOK } from './game/Look.js';
+
+const DEFAULT = {
+  coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'normal',
+  loadout: { primary: 'ar', secondary: 'pistol' },
+  look: { ...DEFAULT_LOOK },
+  owned: ['none', 'cap', 'beanie'],
+  settings: { sens: 1, fov: 80, volume: 0.7 },
+};
 
 export function upgradeCost(level) { return 60 * (level + 1); }
 
 export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) { const d = JSON.parse(raw); return { ...DEFAULT, ...d, loadout: { ...DEFAULT.loadout, ...(d.loadout || {}) } }; }
+    if (raw) {
+      const d = JSON.parse(raw);
+      return { ...DEFAULT, ...d,
+        loadout: { ...DEFAULT.loadout, ...(d.loadout || {}) },
+        look: { ...DEFAULT.look, ...(d.look || {}) },
+        settings: { ...DEFAULT.settings, ...(d.settings || {}) },
+        owned: [...new Set([...DEFAULT.owned, ...(d.owned || [])])] };
+    }
   } catch (e) { /* storage blocked */ }
-  return { ...DEFAULT, upgrades: {}, loadout: { ...DEFAULT.loadout } };
+  return structuredClone(DEFAULT);
 }
 
 export function writeSave(save) {

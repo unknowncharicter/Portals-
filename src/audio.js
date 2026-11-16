@@ -7,7 +7,7 @@ function ac() {
     try {
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       master = ctx.createGain();
-      master.gain.value = 0.35;
+      master.gain.value = 0.5 * volume;
       master.connect(ctx.destination);
     } catch (e) { return null; }
   }
@@ -40,6 +40,9 @@ function noise(dur, vol, freq) {
   const g = c.createGain(); g.gain.value = vol;
   s.connect(f); f.connect(g); g.connect(master); s.start();
 }
+
+let volume = 0.7;
+export function setVolume(v) { volume = v; if (master) master.gain.value = 0.5 * v; }
 
 export const Sfx = {
   unlock: () => ac(),
