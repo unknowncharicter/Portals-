@@ -126,10 +126,12 @@ previewRenderer.outputColorSpace = THREE.SRGBColorSpace;
 const previewScene = new THREE.Scene();
 previewScene.add(new THREE.HemisphereLight('#ffffff', '#445', 2.2));
 const pl = new THREE.DirectionalLight('#ffffff', 1.8); pl.position.set(2, 3, 3); previewScene.add(pl);
+const rim = new THREE.DirectionalLight('#9fc8ff', 2.2); rim.position.set(-2, 2.5, -3); previewScene.add(rim); // backlight so dark guns still read
 const previewCam = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
 previewCam.position.set(0, 0.35, 4.2);
 previewCam.lookAt(0, 0.15, 0);
-let previewChar = null;
+let previewChar = null, previewParts = null;
+const previewState = { vel: new THREE.Vector3(), yaw: 0, pitch: 0, grounded: true, crouched: false, sliding: false };
 
 function rebuildPreview() {
   if (previewChar) previewScene.remove(previewChar);
@@ -137,6 +139,7 @@ function rebuildPreview() {
   const gun = gunModel(save.loadout.primary);
   if (gun) parts.gunHolder.add(gun);
   previewChar = parts.group;
+  previewParts = parts;
   previewScene.add(previewChar);
 }
 
@@ -150,6 +153,11 @@ function renderPreview(dt) {
     previewCam.updateProjectionMatrix();
   }
   previewChar.rotation.y += dt * 0.6;
+  if (previewParts.body) {
+    previewChar.updateMatrixWorld(true);
+    previewParts.body.update(dt, previewState);
+    previewParts.body.handIn(previewChar, previewParts.gunHolder.position);
+  }
   previewRenderer.render(previewScene, previewCam);
 }
 
@@ -591,4 +599,4 @@ frame();
 initSDK().then(() => { SDK.loadingStart(); SDK.loadingStop(); });
 
 // Debug handle (handy for testing in the browser console).
-window.__game = { get match() { return match; }, portals, world, camera, renderer, WEAPONS };
+window.__game = { get match() { return match; }, portals, world, camera, renderer, WEAPONS, get preview() { return previewParts; } };

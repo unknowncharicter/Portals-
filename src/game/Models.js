@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { setCharacterTemplate } from './CharacterModel.js';
 
 // Gun models (GLB). The source models point their barrel along +X; we turn them to face -Z
 // (forward in three.js), scale them to a real-world length, and put the grip at the origin.
@@ -19,14 +21,18 @@ let loading = null;
 export function loadModels() {
   if (loading) return loading;
   const loader = new GLTFLoader();
-  loading = Promise.all(Object.entries(GUNS).map(async ([id, cfg]) => {
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  const character = loader.loadAsync('models/character.glb')
+    .then(setCharacterTemplate)
+    .catch(e => console.warn('Could not load character model (using blocky bodies)', e));
+  loading = Promise.all([character, ...Object.entries(GUNS).map(async ([id, cfg]) => {
     try {
       const gltf = await loader.loadAsync(`models/guns/${cfg.file}`);
       templates[id] = normalize(gltf.scene, cfg);
     } catch (e) {
       console.warn('Could not load gun model', id, e);
     }
-  }));
+  })]);
   // Blocky guns built in code (no model file needed).
   templates.crossbow = makeCrossbow();
   templates.rocket = makeRocket();

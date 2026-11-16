@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { AnimatedBody, hasCharacterModel } from './CharacterModel.js';
 
 // Character customization: colours, hats and the blocky body model.
 export const SHIRTS = ['#e8e8f0', '#2b2d3a', '#d84a4a', '#3a6fd8', '#3ab060', '#e0a030', '#9a5ad8', '#e070b0', '#30c0c0', '#7a5030'];
@@ -48,7 +49,52 @@ function nameTag(text, color) {
 
 // Returns { group, legL, legR, gunHolder, tag }.
 // teamColor: shoulder pads + belt (so teams are clear whatever the shirt is). tag: show a name tag.
-export function buildCharacterMesh(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {
+export function buildCharacterMesh(look, opts = {}) {
+  return hasCharacterModel() ? buildAnimated(look, opts) : buildBlocky(look, opts);
+}
+
+// Animated (Mixamo) body: shirt colour on the body, pants colour on the joints.
+// Hats and the visor sit on the head bone; the team band sits on the hips.
+function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {
+  const g = new THREE.Group();
+  const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+  const body = new AnimatedBody({ body: look.shirt, joints: look.pants });
+  g.add(body.root);
+
+  // Head socket: reuse the blocky hat shapes, scaled to the smaller head.
+  const head = body.socket('Head');
+  const hatRoot = new THREE.Group();
+  hatRoot.scale.setScalar(0.62);
+  hatRoot.position.y = 0.12 - 0.72 * 0.62;   // blocky head centre (0.72) -> 12 cm above the head bone
+  head.add(hatRoot);
+  const box = (w, h, d, m, x, y, z, parent = hatRoot) => {
+    const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    b.position.set(x, y, z); parent.add(b); return b;
+  };
+  box(0.36, 0.1, 0.05, new THREE.MeshBasicMaterial({ color: visor }), 0, 0.76, -0.2); // visor
+  addHat(hatRoot, look, box, mat, visor);
+
+  if (teamColor) {
+    const hips = body.socket('Hips');
+    const team = mat(teamColor);
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.07, 0.24), team);
+    belt.position.y = 0.06; hips.add(belt);
+    for (const side of ['LeftArm', 'RightArm']) {
+      const pad = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.13), team);
+      pad.position.y = 0.04; body.socket(side).add(pad);
+    }
+  }
+
+  const gunHolder = new THREE.Group();
+  gunHolder.position.set(0.25, 0.3, -0.45);
+  g.add(gunHolder);
+
+  let tagSprite = null;
+  if (tag) { tagSprite = nameTag(look.name, teamColor || '#ffffff'); g.add(tagSprite); }
+  return { group: g, gunHolder, tag: tagSprite, body };
+}
+
+function buildBlocky(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {
   const g = new THREE.Group();
   const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
   const shirt = mat(look.shirt), pants = mat(look.pants), skin = mat(look.skin), dark = mat('#22232b');

@@ -85,6 +85,7 @@ export class Character {
     const parts = buildCharacterMesh(this.look, { visor: this.portalColor, teamColor: this.color, tag: this.isBot });
     this.legL = parts.legL;
     this.legR = parts.legR;
+    this.body = parts.body || null;
     this.gunHolder = parts.gunHolder;
     return parts.group;
   }
@@ -298,12 +299,23 @@ export class Character {
   }
 
   animate(dt) {
+    this.mesh.position.copy(this.pos);
+    if (this.body) {
+      // Animated body: the crouch clip already lowers it, so no squash. Feet stay on the ground.
+      this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;
+      this.mesh.rotation.set(this.slideT > 0 ? 0.25 : 0, this.yaw, 0, 'YXZ');
+      if (this.mesh.visible) {
+        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0 });
+        this.body.handIn(this.mesh, this.gunHolder.position);
+        this.gunHolder.rotation.set(this.pitch, 0, 0);
+      }
+      return;
+    }
     const hs = Math.hypot(this.vel.x, this.vel.z);
     this.walkT += dt * hs * 1.6;
     const swing = this.grounded ? Math.sin(this.walkT) * Math.min(1, hs / 6) * 0.7 : 0.3;
     this.legL.rotation.x = swing;
     this.legR.rotation.x = -swing;
-    this.mesh.position.copy(this.pos);
     this.mesh.scale.y = this.halfHeight / FULL_HALF;
     this.mesh.rotation.set(this.slideT > 0 ? 0.35 : 0, this.yaw, 0, 'YXZ');
   }
