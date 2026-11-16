@@ -1,9 +1,17 @@
 import { lvl } from '../save.js';
 
+// slot: 'primary' or 'secondary'. pellets > 1 = shotgun. zoom = right-click scope FOV.
 export const WEAPONS = {
-  rifle:  { id: 'rifle',  name: 'Rifle',  damage: 17, headMult: 1.8, interval: 0.1,  mag: 30, reload: 1.8, spread: 0.012, auto: true },
-  pistol: { id: 'pistol', name: 'Pistol', damage: 28, headMult: 2.0, interval: 0.24, mag: 12, reload: 1.3, spread: 0.005, auto: false },
+  ar:       { id: 'ar',       slot: 'primary',   name: 'Assault Rifle', damage: 17, headMult: 1.8, interval: 0.1,   mag: 30, reload: 1.8, spread: 0.012, auto: true,  sound: 'rifle' },
+  smg:      { id: 'smg',      slot: 'primary',   name: 'SMG',           damage: 12, headMult: 1.6, interval: 0.065, mag: 35, reload: 1.5, spread: 0.022, auto: true,  sound: 'smg' },
+  shotgun:  { id: 'shotgun',  slot: 'primary',   name: 'Shotgun',       damage: 11, headMult: 1.4, interval: 0.85,  mag: 6,  reload: 2.2, spread: 0.065, auto: false, sound: 'shotgun', pellets: 9 },
+  sniper:   { id: 'sniper',   slot: 'primary',   name: 'Sniper',        damage: 85, headMult: 2.0, interval: 1.3,   mag: 5,  reload: 2.5, spread: 0.05,  auto: false, sound: 'sniper', zoom: 22, scopedSpread: 0.0005 },
+  pistol:   { id: 'pistol',   slot: 'secondary', name: 'Pistol',        damage: 26, headMult: 2.0, interval: 0.22,  mag: 12, reload: 1.3, spread: 0.006, auto: false, sound: 'pistol' },
+  revolver: { id: 'revolver', slot: 'secondary', name: 'Revolver',      damage: 48, headMult: 2.0, interval: 0.5,   mag: 6,  reload: 2.0, spread: 0.004, auto: false, sound: 'revolver' },
 };
+
+export const PRIMARIES = Object.values(WEAPONS).filter(w => w.slot === 'primary').map(w => w.id);
+export const SECONDARIES = Object.values(WEAPONS).filter(w => w.slot === 'secondary').map(w => w.id);
 
 export const BASE_PORTAL_COOLDOWN = 2.0; // seconds between portal placements
 export const HEAL_COOLDOWN = 15;
@@ -15,7 +23,7 @@ export function buildStats(save) {
   return {
     damageMult: 1 + 0.08 * L('damage'),
     rateMult: 1 + 0.06 * L('firerate'),
-    magBonus: { rifle: 3 * L('mag'), pistol: L('mag') },
+    magMult: 1 + 0.1 * L('mag'),
     heal: BASE_HEAL + 8 * L('heal'),
     maxHp: 100 + 10 * L('health'),
     portalCooldown: BASE_PORTAL_COOLDOWN - 0.15 * L('portal'),
@@ -30,7 +38,7 @@ export class WeaponState {
     this.reloadT = 0;
     this.cooldown = 0;
   }
-  get mag() { return this.def.mag + (this.stats.magBonus[this.def.id] || 0); }
+  get mag() { return Math.round(this.def.mag * this.stats.magMult); }
   get interval() { return this.def.interval / this.stats.rateMult; }
   get damage() { return this.def.damage * this.stats.damageMult; }
   get reloading() { return this.reloadT > 0; }

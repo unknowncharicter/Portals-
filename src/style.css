@@ -34,7 +34,15 @@ button:disabled { opacity: .4; cursor: default; }
 .hint { opacity: .6; font-size: 13px; text-align: center; }
 .controls { list-style: none; display: flex; flex-direction: column; gap: 8px; font-size: 14px; opacity: .9; }
 
+.loadout { display: flex; flex-direction: column; gap: 6px; }
+.loadout .row { display: flex; gap: 6px; flex-wrap: wrap; }
+.loadout button { flex: 1; padding: 8px 6px; font-size: 13px; min-width: 70px; }
+.loadout button.sel { background: #39f; }
+
 /* HUD */
+#scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 32vmin, #000 32.3vmin); }
+#scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 64vmin; height: 1px; background: #000; transform: translate(-50%, -50%); }
+#scope::after { content: ''; position: absolute; left: 50%; top: 50%; height: 64vmin; width: 1px; background: #000; transform: translate(-50%, -50%); }
 #hud { position: fixed; inset: 0; pointer-events: none; }
 #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%,-50%); }
 #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 2px #000; }

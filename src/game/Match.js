@@ -3,6 +3,8 @@ import { Character } from './Character.js';
 import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats } from './Weapons.js';
+
+const BOT_PRIMARIES = ['ar', 'ar', 'smg', 'shotgun', 'sniper'];
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 
@@ -36,6 +38,8 @@ export class Match {
     this.ghostMode = false;
     this.ghost = new PortalGhost(this.scene);
     this.deathCam = null;
+    this.scoped = false;
+    this.baseFov = this.camera.fov;
 
     this.portals.onEvent = (type, c) => {
       if (type === 'teleport') {
@@ -57,6 +61,9 @@ export class Match {
         team, color: bodyColor,
         portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
         isBot, stats: buildStats(isBot ? null : this.save),
+        loadout: isBot
+          ? { primary: BOT_PRIMARIES[Math.floor(Math.random() * BOT_PRIMARIES.length)], secondary: 'pistol' }
+          : this.save.loadout,
       });
       this.chars.push(c);
       this.scene.add(c.mesh);
@@ -82,6 +89,7 @@ export class Match {
     this.effects.clear();
     this.ghostMode = false;
     this.ghost.hide();
+    this.setScope(false);
     this.deathCam = null;
     const teamIdx = {};
     for (const c of this.chars) {
@@ -121,43 +129,62 @@ export class Match {
     if (!w.canFire()) return false;
     w.consume();
 
+    const def = w.def;
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
-    const spread = w.def.spread * (moving ? 1.8 : 1) * (c.grounded ? 1 : 2.2) + extraSpread;
-    const dir = c.lookDir();
-    dir.x += (Math.random() - 0.5) * 2 * spread;
-    dir.y += (Math.random() - 0.5) * 2 * spread;
-    dir.z += (Math.random() - 0.5) * 2 * spread;
-    dir.normalize();
+    const scoped = c === this.player && this.scoped;
+    const base = scoped ? def.scopedSpread : def.spread;
+    const spread = base * (moving ? 1.8 : 1) * (c.grounded ? 1 : 2.2) + extraSpread;
     const origin = c.eyePos();
-    const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
+    const pellets = def.pellets || 1;
+    const isPlayer = c === this.player;
+    const muzzle = isPlayer
+      ? this.viewmodel.muzzleView().applyMatrix4(this.camera.matrixWorld)
+      : c.pos.clone().add(new THREE.Vector3(0.3, 0.38, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.yaw)).addScaledVector(c.lookDir(), 0.9);
 
-    // Tracer starts at the gun for the player.
-    if (c === this.player) {
-      tr.segments[0].from = this.viewmodel.muzzleView().applyMatrix4(this.camera.matrixWorld);
-      this.viewmodel.fire();
-      if (!c.isBot) c.pitch = Math.min(1.5, c.pitch + (w.def.id === 'rifle' ? 0.008 : 0.02)); // recoil
-    } else {
-      tr.segments[0].from = c.pos.clone().add(new THREE.Vector3(0.3, 0.38, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.yaw)).addScaledVector(c.lookDir(), 0.9);
-    }
-    this.effects.tracer(tr.segments, c.portalColor);
+    let anyHit = false, anyHead = false;
+    for (let i = 0; i < pellets; i++) {
+      const dir = c.lookDir();
+      dir.x += (Math.random() - 0.5) * 2 * spread;
+      dir.y += (Math.random() - 0.5) * 2 * spread;
+      dir.z += (Math.random() - 0.5) * 2 * spread;
+      dir.normalize();
+      const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
+      tr.segments[0].from = muzzle.clone();
+      this.effects.tracer(tr.segments, c.portalColor);
 
-    const vol = c === this.player ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
-    (w.def.id === 'rifle' ? Sfx.rifle : Sfx.pistol)(vol);
-
-    const hit = tr.hit;
-    if (!hit) return true;
-    if (hit.type === 'world') { this.effects.spark(hit.point); return true; }
-    if (hit.type === 'character') {
+      const hit = tr.hit;
+      if (!hit) continue;
+      if (hit.type === 'world') { if (i < 3) this.effects.spark(hit.point); continue; }
       const t = hit.character;
-      if (t !== c && t.team === c.team) return true; // no friendly fire (you CAN hit yourself)
-      const dmg = w.damage * (hit.head ? w.def.headMult : 1);
+      if (t !== c && t.team === c.team) continue; // no friendly fire (you CAN hit yourself)
+      const dmg = w.damage * (hit.head ? def.headMult : 1);
       this.effects.spark(hit.point, '#ff4040');
-      if (c === this.player) { this.hud.hit(hit.head); Sfx.hit(); }
+      anyHit = true; anyHead = anyHead || hit.head;
       if (t === this.player) { this.hud.hurt(); Sfx.hurt(); }
-      const killed = t.damage(dmg, c);
-      if (killed) this.onKill(c, t);
+      if (t.damage(dmg, c)) this.onKill(c, t);
     }
+
+    if (isPlayer) {
+      if (anyHit) { this.hud.hit(anyHead); Sfx.hit(); }
+      const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045 }[def.id] || 0.02;
+      this.viewmodel.fire(Math.min(1.5, kick * 30));
+      c.pitch = Math.min(1.5, c.pitch + kick);
+      if (def.zoom) this.setScope(false); // sniper un-scopes after each shot
+    }
+    const vol = isPlayer ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
+    (Sfx[def.sound] || Sfx.rifle)(vol);
     return true;
+  }
+
+  setScope(on) {
+    const p = this.player;
+    on = on && p.alive && !!p.weapon.def.zoom && !p.weapon.reloading;
+    if (on === this.scoped) return;
+    this.scoped = on;
+    this.camera.fov = on ? p.weapon.def.zoom : this.baseFov;
+    this.camera.updateProjectionMatrix();
+    this.viewmodel.hidden = on;
+    this.hud.scope(on);
   }
 
   onKill(killer, victim) {
@@ -167,6 +194,7 @@ export class Match {
     if (killer === this.player && !self) this.earned.kills++;
     this.portals.removeOwner(victim);
     if (victim === this.player) {
+      this.setScope(false);
       this.deathCam = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone() };
       this.ghostMode = false; this.ghost.hide();
       this.hud.centerText(self ? 'You shot yourself!' : `Eliminated by ${killer.name}`, 2000, '#f66');
@@ -195,8 +223,9 @@ export class Match {
     const p = this.player, inp = this.input;
     if (!p.alive) return new THREE.Vector3();
 
-    p.yaw -= inp.dx * inp.sensitivity;
-    p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * inp.sensitivity, -1.55, 1.55);
+    const sens = inp.sensitivity * (this.scoped ? this.camera.fov / this.baseFov : 1);
+    p.yaw -= inp.dx * sens;
+    p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens, -1.55, 1.55);
 
     const wish = new THREE.Vector3();
     if (canAct) {
@@ -208,10 +237,12 @@ export class Match {
       if (inp.down('KeyA')) wish.sub(right);
       if (wish.lengthSq() > 0) wish.normalize();
 
-      if (inp.hit('Digit1')) p.switchTo(0);
-      if (inp.hit('Digit2')) p.switchTo(1);
-      if (inp.wheel) p.switchTo((p.slot + 1) % 2);
-      if (inp.hit('KeyR')) this.reload(p);
+      if (inp.hit('Digit1') && p.switchTo(0)) this.setScope(false);
+      if (inp.hit('Digit2') && p.switchTo(1)) this.setScope(false);
+      if (inp.wheel && p.switchTo((p.slot + 1) % 2)) this.setScope(false);
+      if (inp.hit('KeyR')) { this.reload(p); this.setScope(false); }
+      if (inp.rightClicked && p.weapon.def.zoom) this.setScope(!this.scoped);
+      if (this.scoped && p.weapon.reloading) this.setScope(false);
       if (inp.hit('KeyF')) this.heal(p);
 
       const w = p.weapon;
@@ -323,6 +354,7 @@ export class Match {
   }
 
   dispose() {
+    this.setScope(false);
     this.portals.clear();
     this.effects.clear();
     this.portals.onEvent = () => {};

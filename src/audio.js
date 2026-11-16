@@ -44,6 +44,10 @@ function noise(dur, vol, freq) {
 export const Sfx = {
   unlock: () => ac(),
   rifle: (vol = 1) => { noise(0.12, 0.6 * vol, 2500); tone(140, 0.08, 'square', 0.15 * vol, 60); },
+  smg: (vol = 1) => { noise(0.08, 0.5 * vol, 3000); tone(180, 0.05, 'square', 0.12 * vol, 80); },
+  shotgun: (vol = 1) => { noise(0.35, 1.0 * vol, 1200); tone(90, 0.25, 'sawtooth', 0.3 * vol, 40); },
+  sniper: (vol = 1) => { noise(0.5, 1.0 * vol, 2200); tone(70, 0.4, 'sawtooth', 0.35 * vol, 30); },
+  revolver: (vol = 1) => { noise(0.25, 0.9 * vol, 1600); tone(120, 0.18, 'square', 0.3 * vol, 50); },
   pistol: (vol = 1) => { noise(0.15, 0.7 * vol, 1800); tone(200, 0.1, 'square', 0.2 * vol, 70); },
   reload: () => { tone(500, 0.05, 'square', 0.15); setTimeout(() => tone(700, 0.05, 'square', 0.15), 180); },
   portalGhost: () => tone(600, 0.12, 'sine', 0.2, 900),

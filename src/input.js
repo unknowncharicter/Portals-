@@ -6,6 +6,7 @@ export class Input {
     this.pressed = new Set();   // keys pressed this frame
     this.mouseDown = false;
     this.mouseClicked = false;
+    this.rightClicked = false;
     this.dx = 0; this.dy = 0;
     this.wheel = 0;
     this.sensitivity = 0.0022;
@@ -21,6 +22,7 @@ export class Input {
     addEventListener('mousedown', e => {
       if (!this.enabled || !this.locked) return;
       if (e.button === 0) { this.mouseDown = true; this.mouseClicked = true; }
+      if (e.button === 2) this.rightClicked = true;
     });
     addEventListener('mouseup', e => { if (e.button === 0) this.mouseDown = false; });
     addEventListener('mousemove', e => {
@@ -28,6 +30,7 @@ export class Input {
       this.dx += e.movementX; this.dy += e.movementY;
     });
     addEventListener('wheel', e => { if (this.locked) this.wheel += Math.sign(e.deltaY); }, { passive: true });
+    addEventListener('contextmenu', e => e.preventDefault());
     addEventListener('blur', () => { this.keys.clear(); this.mouseDown = false; });
   }
 
@@ -47,6 +50,7 @@ export class Input {
   endFrame() {
     this.pressed.clear();
     this.mouseClicked = false;
+    this.rightClicked = false;
     this.dx = 0; this.dy = 0; this.wheel = 0;
   }
 

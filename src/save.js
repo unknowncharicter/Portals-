@@ -4,7 +4,7 @@ const KEY = 'portal-duel-save-v1';
 export const UPGRADES = [
   { id: 'damage',  name: 'Weapon damage',   max: 5, desc: '+8% per level' },
   { id: 'firerate', name: 'Fire rate',      max: 5, desc: '+6% per level' },
-  { id: 'mag',     name: 'Magazine size',   max: 5, desc: '+3 rifle / +1 pistol' },
+  { id: 'mag',     name: 'Magazine size',   max: 5, desc: '+10% per level' },
   { id: 'heal',    name: 'Heal power',      max: 5, desc: '+8 HP per level' },
   { id: 'health',  name: 'Max health',      max: 5, desc: '+10 HP per level' },
   { id: 'portal',  name: 'Portal cooldown', max: 5, desc: '-0.15s per level' },
@@ -12,16 +12,16 @@ export const UPGRADES = [
 
 export const COLORS = ['#33aaff', '#ff44cc', '#44ff88', '#ffcc22', '#ff5533', '#aa66ff', '#22ffee', '#ffffff'];
 
-const DEFAULT = { coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1' };
+const DEFAULT = { coins: 0, upgrades: {}, color: COLORS[0], mode: '1v1', loadout: { primary: 'ar', secondary: 'pistol' } };
 
 export function upgradeCost(level) { return 60 * (level + 1); }
 
 export function loadSave() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT, ...JSON.parse(raw) };
+    if (raw) { const d = JSON.parse(raw); return { ...DEFAULT, ...d, loadout: { ...DEFAULT.loadout, ...(d.loadout || {}) } }; }
   } catch (e) { /* storage blocked */ }
-  return { ...DEFAULT, upgrades: {} };
+  return { ...DEFAULT, upgrades: {}, loadout: { ...DEFAULT.loadout } };
 }
 
 export function writeSave(save) {

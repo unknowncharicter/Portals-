@@ -8,6 +8,8 @@ import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { Sfx } from './audio.js';
 import { SDK, initSDK } from './sdk.js';
+import { loadModels } from './game/Models.js';
+import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
 
 const $ = (id) => document.getElementById(id);
@@ -89,6 +91,21 @@ function buildLobby() {
     cols.appendChild(b);
   }
 
+  const lo = $('loadout');
+  lo.innerHTML = '';
+  for (const [slot, list] of [['primary', PRIMARIES], ['secondary', SECONDARIES]]) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    for (const id of list) {
+      const b = document.createElement('button');
+      b.textContent = WEAPONS[id].name;
+      if (save.loadout[slot] === id) b.classList.add('sel');
+      b.onclick = () => { save.loadout[slot] = id; writeSave(save); buildLobby(); };
+      row.appendChild(b);
+    }
+    lo.appendChild(row);
+  }
+
   const modes = $('modes');
   modes.innerHTML = '';
   for (const [id, m] of Object.entries(MODES)) {
@@ -158,7 +175,14 @@ document.addEventListener('pointerlockchange', () => {
 canvas.addEventListener('click', () => { if (state === 'playing' && !input.locked) input.lock(); });
 
 $('btn-play').onclick = () => { Sfx.unlock(); goLobby(); };
-$('btn-start').onclick = () => { Sfx.unlock(); startMatch(); };
+$('btn-start').onclick = async () => {
+  Sfx.unlock();
+  const b = $('btn-start');
+  b.disabled = true; b.textContent = 'LOADING...';
+  await models;
+  b.disabled = false; b.textContent = 'START MATCH';
+  startMatch();
+};
 $('btn-resume').onclick = resume;
 $('btn-quit').onclick = () => { if (match) { match.dispose(); match = null; } goLobby(); };
 $('btn-continue').onclick = async () => {
@@ -191,10 +215,11 @@ function frame() {
   input.endFrame();
 }
 
+const models = loadModels();
 showScreen('menu');
 frame();
 // The SDK loads in the background; it never changes the current screen.
 initSDK().then(() => { SDK.loadingStart(); SDK.loadingStop(); });
 
 // Debug handle (handy for testing in the browser console).
-window.__game = { get match() { return match; }, portals, world, camera, renderer };
+window.__game = { get match() { return match; }, portals, world, camera, renderer, WEAPONS };

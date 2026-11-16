@@ -30,6 +30,8 @@
         <div id="upgrades"></div>
       </section>
       <section class="panel">
+        <h3>Loadout</h3>
+        <div id="loadout" class="loadout"></div>
         <h3>Portal colour</h3>
         <div id="colors" class="colors"></div>
         <h3>Game mode</h3>
@@ -42,7 +44,8 @@
         <ul class="controls">
           <li><b>WASD</b> move · <b>Space</b> jump · <b>Shift</b> sprint</li>
           <li><b>Mouse</b> aim · <b>Click</b> shoot · <b>R</b> reload</li>
-          <li><b>1 / 2</b> rifle / pistol · <b>F</b> heal</li>
+          <li><b>Right-click</b> sniper scope</li>
+          <li><b>1 / 2</b> primary / secondary · <b>F</b> heal</li>
           <li><b>E</b> show portal outline → <b>E</b> again to place</li>
           <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
           <li>You keep your 2 newest portals. Portals close after 60s.</li>
@@ -53,6 +56,7 @@
 
   <!-- HUD -->
   <div id="hud" class="hidden">
+    <div id="scope" class="hidden"></div>
     <div id="crosshair"></div>
     <div id="hitmarker"></div>
     <div id="damage"></div>

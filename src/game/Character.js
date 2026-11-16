@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { rayBox } from './World.js';
 import { WEAPONS, WeaponState, HEAL_COOLDOWN } from './Weapons.js';
+import { gunModel } from './Models.js';
 
 const GRAVITY = 24;
 const JUMP_SPEED = 8.2;
@@ -9,7 +10,7 @@ const STEP_HEIGHT = 0.55;
 const EPS = 0.001;
 
 export class Character {
-  constructor({ name, team, color, portalColor, isBot, stats }) {
+  constructor({ name, team, color, portalColor, isBot, stats, loadout }) {
     this.name = name;
     this.team = team;
     this.color = color;
@@ -32,7 +33,7 @@ export class Character {
     this.alive = true;
     this.kills = 0;
 
-    this.weapons = [new WeaponState(WEAPONS.rifle, stats), new WeaponState(WEAPONS.pistol, stats)];
+    this.weapons = [new WeaponState(WEAPONS[loadout.primary], stats), new WeaponState(WEAPONS[loadout.secondary], stats)];
     this.slot = 0;
     this.switchT = 0;
     this.healCd = 0;
@@ -40,7 +41,23 @@ export class Character {
     this.lastAttacker = null;
 
     this.walkT = 0;
+    this.bodyLayer = 0;
     this.mesh = this.buildMesh();
+    this.gunId = null;
+    this.updateGun();
+  }
+
+  // Show the model of the weapon currently held.
+  updateGun() {
+    const id = this.weapon.def.id;
+    if (id === this.gunId) return;
+    this.gunId = id;
+    this.gunHolder.clear();
+    const m = gunModel(id);
+    if (m) {
+      m.traverse(o => o.layers.set(this.bodyLayer));
+      this.gunHolder.add(m);
+    }
   }
 
   get weapon() { return this.weapons[this.slot]; }
@@ -57,12 +74,14 @@ export class Character {
     box(0.42, 0.42, 0.42, skin, 0, 0.72, 0);
     box(0.36, 0.1, 0.05, glow, 0, 0.76, -0.22); // visor in portal colour
     box(0.16, 0.16, 0.6, body, 0.3, 0.32, -0.25); // arm
-    box(0.1, 0.16, 0.7, dark, 0.3, 0.38, -0.55);  // gun
+    this.gunHolder = new THREE.Group();
+    this.gunHolder.position.set(0.3, 0.38, -0.5);
+    g.add(this.gunHolder);
     box(0.16, 0.16, 0.45, body, -0.28, 0.32, -0.25);
     return g;
   }
 
-  setBodyLayer(layer) { this.mesh.traverse(o => o.layers.set(layer)); }
+  setBodyLayer(layer) { this.bodyLayer = layer; this.mesh.traverse(o => o.layers.set(layer)); }
 
   spawn(at, yaw) {
     this.pos.set(at.x, at.y + this.halfHeight + 0.02, at.z);
@@ -73,6 +92,7 @@ export class Character {
     this.mesh.visible = true;
     this.healCd = 0; this.portalCd = 0;
     this.slot = 0; this.switchT = 0;
+    this.updateGun();
     this.lastAttacker = null;
     for (const w of this.weapons) w.refill();
   }
@@ -234,6 +254,7 @@ export class Character {
     if (slot === this.slot || slot < 0 || slot >= this.weapons.length) return false;
     this.slot = slot;
     this.switchT = 0.3;
+    this.updateGun();
     return true;
   }
 

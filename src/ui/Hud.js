@@ -8,6 +8,7 @@ export class Hud {
     this.weapon = $('weapon-name'); this.ammo = $('ammo');
     this.score = $('score'); this.center = $('center-text');
     this.killfeed = $('killfeed'); this.hitmarker = $('hitmarker'); this.dmg = $('damage');
+    this.scopeEl = $('scope'); this.crosshair = $('crosshair');
     this._hitT = null; this._dmgT = null; this._centerT = null;
   }
   show(v) { this.el.classList.toggle('hidden', !v); }
@@ -23,6 +24,11 @@ export class Hud {
     this.ammo.textContent = w.reloading ? 'RELOADING' : `${w.ammo} / ${w.mag}`;
     const cd = p.portalCd > 0 ? `${p.portalCd.toFixed(1)}s` : 'READY';
     this.portal.innerHTML = `<span style="color:${p.portalColor}">◉</span> Portals ${portalCount}/2 · E ${cd}`;
+  }
+
+  scope(on) {
+    this.scopeEl.classList.toggle('hidden', !on);
+    this.crosshair.classList.toggle('hidden', on);
   }
 
   setScore(html) { this.score.innerHTML = html; }
