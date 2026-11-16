@@ -22,25 +22,22 @@
   <div id="lobby" class="screen hidden">
     <div class="lobby-top">
       <h2>LOBBY</h2>
+      <div class="level-badge" title="Level"><b id="lvl-num">1</b><div class="xp"><div class="xpbar"><i id="xp-fill"></i></div><small id="xp-text"></small></div></div>
       <div class="grow"></div>
       <button id="btn-start-top" class="big">▶ START</button>
       <div class="coins">🪙 <span id="coin-count">0</span></div>
     </div>
-    <div class="lobby-grid">
-      <section class="panel char-panel">
-        <h3>Character</h3>
-        <canvas id="preview"></canvas>
-        <label class="field"><span>Name</span><input id="name-input" type="text" maxlength="14" /></label>
-        <div class="field"><span>Shirt</span><div id="sw-shirt" class="swatches"></div></div>
-        <div class="field"><span>Pants</span><div id="sw-pants" class="swatches"></div></div>
-        <div class="field"><span>Skin</span><div id="sw-skin" class="swatches"></div></div>
-        <div class="field"><span>Hat</span><div id="hats" class="hats"></div></div>
-      </section>
-      <section class="panel">
-        <h3>Upgrades</h3>
-        <div id="upgrades"></div>
-      </section>
-      <section class="panel">
+    <nav class="tabs" id="tabs">
+      <button data-tab="play">🎮 Play</button>
+      <button data-tab="character">🧍 Character</button>
+      <button data-tab="shop">🛒 Shop</button>
+      <button data-tab="upgrades">⬆️ Upgrades</button>
+      <button data-tab="daily">🎁 Daily<i id="daily-dot" class="dot hidden"></i></button>
+      <button data-tab="stats">📊 Stats</button>
+      <button data-tab="settings">⚙️ Settings</button>
+    </nav>
+    <div class="tab-body">
+      <section data-tab="play" class="panel">
         <h3>Loadout</h3>
         <div id="loadout" class="loadout"></div>
         <h3>Portal colour</h3>
@@ -48,13 +45,46 @@
         <h3>Map</h3>
         <div id="maps" class="modes wrap"></div>
         <h3>Game mode</h3>
-        <div id="modes" class="modes"></div>
+        <div id="modes" class="modes wrap"></div>
+        <p id="mode-desc" class="hint left"></p>
         <h3>Bot difficulty</h3>
         <div id="difficulty" class="modes"></div>
         <button id="btn-start" class="big">START MATCH</button>
-        <p class="hint">vs bots · first to 3 rounds · Hard gives 1.5× coins</p>
+        <button id="btn-tutorial">📘 How to play (tutorial)</button>
+        <p class="hint">Hard bots give 1.5× coins</p>
       </section>
-      <section class="panel">
+      <section data-tab="character" class="panel char-panel">
+        <canvas id="preview"></canvas>
+        <label class="field"><span>Name</span><input id="name-input" type="text" maxlength="14" /></label>
+        <div class="field"><span>Shirt</span><div id="sw-shirt" class="swatches"></div></div>
+        <div class="field"><span>Pants</span><div id="sw-pants" class="swatches"></div></div>
+        <div class="field"><span>Skin</span><div id="sw-skin" class="swatches"></div></div>
+        <div class="field"><span>Hat</span><div id="hats" class="hats"></div></div>
+      </section>
+      <section data-tab="shop" class="panel">
+        <h3>Gun skins</h3>
+        <div id="shop-skins" class="shop"></div>
+        <h3>Kill effects</h3>
+        <div id="shop-fx" class="shop"></div>
+        <p class="hint left">Some items unlock for free when you reach a level.</p>
+      </section>
+      <section data-tab="upgrades" class="panel">
+        <h3>Upgrades</h3>
+        <div id="upgrades"></div>
+      </section>
+      <section data-tab="daily" class="panel">
+        <h3>Daily reward</h3>
+        <div id="daily-reward"></div>
+        <h3>Today's challenges</h3>
+        <div id="challenges"></div>
+      </section>
+      <section data-tab="stats" class="panel">
+        <h3>Your stats</h3>
+        <div id="stats" class="stats"></div>
+      </section>
+      <section data-tab="settings" class="panel">
+        <h3>Settings</h3>
+        <div class="settings" data-settings></div>
         <h3>Controls</h3>
         <ul class="controls">
           <li><b>WASD</b> move (always running) · <b>Space</b> jump</li>
@@ -67,8 +97,6 @@
           <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
           <li>You keep your 2 newest portals. Portals close after 60s.</li>
         </ul>
-        <h3>Settings</h3>
-        <div class="settings" data-settings></div>
       </section>
     </div>
   </div>
@@ -115,7 +143,7 @@
   <!-- Results -->
   <div id="results" class="screen hidden">
     <h2 id="results-title"></h2>
-    <p id="results-detail"></p>
+    <div id="results-detail" class="results"></div>
     <button id="btn-continue" class="big">CONTINUE</button>
   </div>
 

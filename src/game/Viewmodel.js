@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { gunModel } from './Models.js';
+import { gunModel, applySkin } from './Models.js';
 
 // Where each gun sits on screen (view space, grip point).
 const HOLD = {
@@ -38,11 +38,21 @@ export class Viewmodel {
 
   setAspect(a) { this.camera.aspect = a; this.camera.updateProjectionMatrix(); }
 
+  // Change the gun skin (rebuilds the cached first-person guns).
+  setSkin(skin, portalColor) {
+    const key = (skin ? skin.id : 'default') + portalColor;
+    if (key === this.skinKey) return;
+    this.skinKey = key; this.skin = skin; this.portalColor = portalColor;
+    for (const g of Object.values(this.guns)) this.root.remove(g);
+    this.guns = {}; this.current = null;
+  }
+
   show(id) {
     if (this.current === id) return;
     this.current = id;
     if (!this.guns[id]) {
       const m = gunModel(id);
+      if (m) applySkin(m, this.skin, this.portalColor);
       if (m) { this.guns[id] = m; this.root.add(m); }
     }
     for (const [k, g] of Object.entries(this.guns)) g.visible = k === id;

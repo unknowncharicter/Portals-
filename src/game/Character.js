@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { rayBox } from './World.js';
 import { WEAPONS, WeaponState, HEAL_COOLDOWN } from './Weapons.js';
-import { gunModel } from './Models.js';
+import { gunModel, applySkin } from './Models.js';
 import { buildCharacterMesh } from './Look.js';
 
 // Movement tuning: fast and snappy.
@@ -20,7 +20,8 @@ const STEP_HEIGHT = 0.55;
 const EPS = 0.001;
 
 export class Character {
-  constructor({ name, team, color, portalColor, isBot, stats, loadout, look }) {
+  constructor({ name, team, color, portalColor, isBot, stats, loadout, look, skin = null }) {
+    this.skin = skin;
     this.look = { ...look, name };
     this.name = name;
     this.team = team;
@@ -72,6 +73,7 @@ export class Character {
     this.gunHolder.clear();
     const m = gunModel(id);
     if (m) {
+      applySkin(m, this.skin, this.portalColor);
       m.traverse(o => o.layers.set(this.bodyLayer));
       this.gunHolder.add(m);
     }

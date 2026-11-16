@@ -104,6 +104,27 @@ function normalize(scene, cfg) {
   return root;
 }
 
+// Recolour a gun for a skin. skin: entry from GUN_SKINS (progress.js).
+export function applySkin(root, skin, portalColor) {
+  if (!skin || !skin.color) return root;
+  let i = 0;
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.material = o.material.clone();
+    let c;
+    if (skin.color === 'rainbow') c = new THREE.Color().setHSL((i++ * 0.17) % 1, 0.85, 0.55);
+    else c = new THREE.Color(skin.color === 'portal' ? portalColor : skin.color);
+    const lum = o.material.color.getHSL({}).l;
+    o.material.color.copy(c).multiplyScalar(0.55 + lum * 0.9); // keep light/dark parts readable
+    if (o.material.emissive) {
+      if (skin.emissive) o.material.emissive.set(skin.emissive === 'portal' ? portalColor : skin.emissive);
+      if (skin.emissive === 'portal') o.material.emissiveIntensity = 0.6;
+      if (skin.color === 'rainbow') o.material.emissive.copy(c).multiplyScalar(0.25);
+    }
+  });
+  return root;
+}
+
 // A fresh copy of a gun (shares geometry and materials with the template).
 export function gunModel(id) {
   const t = templates[id];

@@ -5,6 +5,7 @@ import { PortalGhost } from './Portals.js';
 import { buildStats } from './Weapons.js';
 import { randomLook } from './Look.js';
 import { Projectiles } from './Projectiles.js';
+import { GUN_SKINS } from '../progress.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 
@@ -81,6 +82,7 @@ export class Match {
       const name = isBot ? BOT_NAMES[(i - 1) % BOT_NAMES.length] : this.save.look.name;
       const c = new Character({
         name, look: isBot ? randomLook(name) : this.save.look,
+        skin: isBot ? null : GUN_SKINS.find(s => s.id === this.save.gunSkin) || null,
         team, color: bodyColor,
         portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
         isBot, stats: isBot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(this.save),
@@ -104,6 +106,7 @@ export class Match {
     }
     this.player = this.chars.find(c => !c.isBot);
     this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
+    this.viewmodel.setSkin(this.player.skin, this.player.portalColor);
     for (const c of this.chars) this.wins[c.team] = 0;
   }
 
@@ -291,6 +294,8 @@ export class Match {
       else { this.hud.killPop(victim.name, info.head ? 'HEADSHOT' : 'ELIMINATED'); Sfx.kill(); }
     }
     if (this.onKillHook) this.onKillHook(killer, victim, info);
+    const fx = killer === this.player && !self ? (this.save.killFx || 'sparks') : 'sparks';
+    this.effects.killFx(fx, victim.pos.clone(), killer.portalColor);
     this.portals.removeOwner(victim);
     if (victim === this.player) {
       this.earned.deaths++;
@@ -506,8 +511,9 @@ export class Match {
     this.state = 'done';
     const won = winnerTeam === this.player.team;
     const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
-    const coins = Math.round((20 + this.earned.kills * 10 + this.earned.rounds * 20 + (won ? 100 : 0)) * diff.coins);
-    this.onEnd({ won, coins, kills: this.earned.kills, rounds: this.earned.rounds });
+    const e = this.earned;
+    const coins = Math.round((20 + e.kills * 10 + e.portalKills * 15 + e.headshots * 3 + e.rounds * 20 + (won ? 100 : 0)) * diff.coins);
+    this.onEnd({ won, coins, kills: e.kills, rounds: e.rounds, earned: { ...e } });
   }
 
   updateCamera(dt = 0) {

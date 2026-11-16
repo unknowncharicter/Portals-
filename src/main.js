@@ -14,6 +14,7 @@ import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
+import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -294,6 +295,11 @@ function buildLobby() {
   }
 
   buildCharacterPanel();
+  buildTabs();
+  buildLevel();
+  buildShop();
+  buildDaily();
+  buildStats();
 
   const modes = $('modes');
   modes.innerHTML = '';
@@ -304,6 +310,103 @@ function buildLobby() {
     b.onclick = () => { save.mode = id; writeSave(save); buildLobby(); };
     modes.appendChild(b);
   }
+  $('mode-desc').textContent = (MODES[save.mode] || MODES['1v1']).desc || '';
+}
+
+// ---------- Lobby tabs ----------
+let currentTab = 'play';
+try { currentTab = localStorage.getItem('portal-duel-tab') || 'play'; } catch (e) { /* ignore */ }
+function buildTabs() {
+  for (const b of document.querySelectorAll('#tabs button')) {
+    b.classList.toggle('sel', b.dataset.tab === currentTab);
+    b.onclick = () => {
+      currentTab = b.dataset.tab;
+      try { localStorage.setItem('portal-duel-tab', currentTab); } catch (e) { /* ignore */ }
+      Sfx.click();
+      buildLobby();
+    };
+  }
+  for (const s of document.querySelectorAll('.tab-body > section')) s.classList.toggle('active', s.dataset.tab === currentTab);
+}
+
+function buildLevel() {
+  const li = levelInfo(save.xp || 0);
+  $('lvl-num').textContent = li.level;
+  $('xp-fill').style.width = (100 * li.into / li.need) + '%';
+  $('xp-text').textContent = `Level ${li.level} · ${li.into} / ${li.need} XP`;
+  $('daily-dot').classList.toggle('hidden', !dailyReward(save).canClaim);
+}
+
+// ---------- Shop ----------
+function shopItem(item, equipped, swatch, onEquip) {
+  const d = document.createElement('div');
+  d.className = 'item' + (equipped ? ' sel' : '');
+  const lvl = levelInfo(save.xp || 0).level;
+  const have = owns(save, item);
+  d.innerHTML = `<div class="swatch" style="background:${swatch}"></div><div>${item.name}</div>`;
+  const b = document.createElement('button');
+  if (equipped) { b.textContent = 'Equipped'; b.disabled = true; }
+  else if (have) { b.textContent = 'Equip'; b.onclick = () => { onEquip(); writeSave(save); Sfx.click(); buildLobby(); }; }
+  else if (item.level) { b.textContent = `🔒 Level ${item.level}`; b.disabled = true; }
+  else {
+    b.textContent = `🪙 ${item.price}`;
+    b.disabled = save.coins < item.price;
+    b.onclick = () => { save.coins -= item.price; save.owned.push(item.id); onEquip(); writeSave(save); Sfx.coin(); buildLobby(); };
+  }
+  d.appendChild(b);
+  return d;
+}
+
+function buildShop() {
+  const skins = $('shop-skins'); skins.innerHTML = '';
+  for (const s of GUN_SKINS) {
+    const sw = s.color === 'rainbow' ? 'linear-gradient(90deg,#f44,#fd4,#4f6,#4cf,#a6f)' : s.color === 'portal' ? save.color : (s.color || '#3a3d48');
+    skins.appendChild(shopItem(s, (save.gunSkin || 'default') === s.id, sw, () => { save.gunSkin = s.id; }));
+  }
+  const fx = $('shop-fx'); fx.innerHTML = '';
+  const fxSwatch = { sparks: '#ff7040', confetti: 'linear-gradient(90deg,#f44,#fd4,#4f6,#4cf)', pixels: save.color, ghost: '#dde', vortex: `radial-gradient(${save.color}, #000)` };
+  for (const k of KILL_FX) fx.appendChild(shopItem(k, (save.killFx || 'sparks') === k.id, fxSwatch[k.id], () => { save.killFx = k.id; }));
+}
+
+// ---------- Daily ----------
+function buildDaily() {
+  const info = dailyReward(save);
+  const box = $('daily-reward');
+  const days = info.rewards.map((r, i) => {
+    const day = i + 1;
+    const cls = day < info.day || (!info.canClaim && day === info.day) ? 'done' : day === info.day ? 'today' : '';
+    return `<div class="${cls}">Day ${day}<b>🪙${r}</b></div>`;
+  }).join('');
+  box.innerHTML = `<div class="daily-days">${days}</div>`;
+  const b = document.createElement('button');
+  b.className = 'big';
+  b.style.marginTop = '10px';
+  b.textContent = info.canClaim ? `Claim 🪙 ${info.amount}` : 'Come back tomorrow!';
+  b.disabled = !info.canClaim;
+  b.onclick = () => { const got = claimDailyReward(save); if (got) { writeSave(save); Sfx.coin(); buildLobby(); } };
+  box.appendChild(b);
+
+  const ch = $('challenges'); ch.innerHTML = '';
+  for (const c of dailyChallenges(save)) {
+    const d = document.createElement('div');
+    d.className = 'challenge' + (c.done ? ' done' : '');
+    d.innerHTML = `<div class="t">${c.done ? '✅ ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">🪙${c.reward}</span>`;
+    ch.appendChild(d);
+  }
+  writeSave(save);
+}
+
+// ---------- Stats ----------
+function buildStats() {
+  const s = { matches: 0, wins: 0, kills: 0, deaths: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, grenadeKills: 0, rounds: 0, ...(save.stats || {}) };
+  const pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
+  const rows = [
+    ['Level', levelInfo(save.xp || 0).level], ['Matches', s.matches], ['Wins', s.wins], ['Win rate', pct(s.wins, s.matches)],
+    ['Kills', s.kills], ['Deaths', s.deaths], ['K/D', s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills],
+    ['Portal kills 🌀', s.portalKills], ['Headshot kills', s.headshots], ['Grenade kills', s.grenadeKills],
+    ['Accuracy', pct(s.hits, s.shots)], ['Rounds won', s.rounds],
+  ];
+  $('stats').innerHTML = rows.map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join('');
 }
 
 setAdAudioHooks(() => setMuted(true), () => setMuted(false));
@@ -336,6 +439,7 @@ function startMatch() {
 
 function onMatchEnd(res) {
   save.coins += res.coins;
+  const prog = applyMatch(save, res);
   writeSave(save);
   SDK.gameplayStop();
   if (res.won) SDK.happyTime();
@@ -344,7 +448,14 @@ function onMatchEnd(res) {
   input.unlock();
   $('results-title').textContent = res.won ? 'VICTORY!' : 'DEFEAT';
   $('results-title').style.color = res.won ? '#7f7' : '#f77';
-  $('results-detail').textContent = `Kills ${res.kills} · Rounds won ${res.rounds} · +${res.coins} coins`;
+  const e = res.earned, li = levelInfo(save.xp);
+  let html = `<div>Kills <b>${e.kills}</b> · Portal kills <b>${e.portalKills}</b> 🌀 · Headshots <b>${e.headshots}</b> · Rounds won <b>${e.rounds}</b></div>`;
+  html += `<div>🪙 <b>+${res.coins}</b> coins · ⭐ <b>+${prog.xp}</b> XP</div>`;
+  html += `<div class="xpbar"><i style="width:${100 * li.into / li.need}%"></i></div><small>Level ${li.level} · ${li.into} / ${li.need} XP</small>`;
+  for (const l of prog.levelUps) html += `<div class="lvlup">LEVEL UP! Level ${l.level} · +🪙${l.coins}</div>`;
+  for (const c of prog.challengesDone) html += `<div class="ch">✅ Challenge done: ${c.text} · +🪙${c.reward}</div>`;
+  $('results-detail').innerHTML = html;
+  if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);
   showScreen('results');
 }
 
