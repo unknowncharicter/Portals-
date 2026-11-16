@@ -19,7 +19,7 @@ const DEFAULT = {
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },
   owned: ['none', 'cap', 'beanie'],
-  settings: { sens: 1, fov: 80, volume: 0.7 },
+  settings: { sens: 1, fov: 80, volume: 0.7, music: 0.5 },
 };
 
 export function upgradeCost(level) { return 60 * (level + 1); }

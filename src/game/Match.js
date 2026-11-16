@@ -48,7 +48,9 @@ export class Match {
     this.state = 'countdown';
     this.stateT = 0;
     this.round = 0;
-    this.earned = { kills: 0, rounds: 0 };
+    // Everything the player did this match (used for coins, XP, challenges and stats).
+    this.earned = { kills: 0, rounds: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, deaths: 0, grenadeKills: 0 };
+    this.killcam = null;
     this.ghostMode = false;
     this.ghost = new PortalGhost(this.scene);
     this.deathCam = null;
@@ -58,6 +60,7 @@ export class Match {
     this.fovKick = 0; this.eyeSmooth = 1.6; this.roundT = ROUND_TIME;
 
     this.portals.onEvent = (type, c) => {
+      if (type === 'expire' && c.owner === this.player) Sfx.portalClose();
       if (type === 'teleport') {
         if (c === this.player) Sfx.teleport();
         const brain = this.bots.find(b => b.c === c);
@@ -111,6 +114,7 @@ export class Match {
     this.ghostMode = false;
     this.ghost.hide();
     this.setScope(false);
+    this.endKillcam();
     this.deathCam = null;
     const teamIdx = {};
     for (const c of this.chars) {
@@ -176,7 +180,11 @@ export class Match {
 
       const hit = tr.hit;
       if (!hit) continue;
-      if (hit.type === 'world') { if (i < 3) this.effects.spark(hit.point); continue; }
+      if (hit.type === 'world') {
+        if (i < 3) this.effects.spark(hit.point);
+        if (i === 0 && hit.point.distanceTo(this.player.pos) < 25) Sfx.impact(isPlayer ? 1 : 0.6);
+        continue;
+      }
       const t = hit.character;
       if (t !== c && t.team === c.team) continue; // no friendly fire (you CAN hit yourself)
       const dmg = w.damage * (hit.head ? def.headMult : 1);
@@ -194,11 +202,13 @@ export class Match {
       }
       const tb = t.isBot && this.bots.find(b => b.c === t);
       if (tb && t !== c) tb.hear(c.pos, true); // getting shot reveals where it came from
-      if (t.damage(dmg, c)) this.onKill(c, t);
+      if (t.damage(dmg, c)) this.onKill(c, t, { portal: tr.segments.length > 1, head: hit.head, segs: tr.segments });
     }
 
     if (isPlayer) {
-      if (anyHit) { this.hud.hit(anyHead); Sfx.hit(); }
+      this.earned.shots++;
+      if (anyHit) this.earned.hits++;
+      if (anyHit) { this.hud.hit(anyHead); anyHead ? Sfx.headshot() : Sfx.hit(); }
       const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045 }[def.id] || 0.02;
       this.viewmodel.fire(Math.min(1.5, kick * 30));
       this.bloom = Math.min(3, this.bloom + kick * 40);
@@ -225,18 +235,49 @@ export class Match {
     this.hud.scope(on);
   }
 
-  onKill(killer, victim) {
+  // info: { portal: shot went through a portal, head: headshot, segs: bullet path, grenade }
+  onKill(killer, victim, info = {}) {
     const self = killer === victim;
-    this.hud.kill(killer, victim, self);
+    this.hud.kill(killer, victim, self, info);
     if (!self) killer.kills++;
-    if (killer === this.player && !self) { this.earned.kills++; this.hud.killPop(victim.name); Sfx.kill(); }
+    if (killer === this.player && !self) {
+      this.earned.kills++;
+      if (info.head) this.earned.headshots++;
+      if (info.grenade) this.earned.grenadeKills++;
+      if (info.portal) { this.earned.portalKills++; this.hud.killPop(victim.name, 'PORTAL KILL!'); Sfx.portalKill(); }
+      else { this.hud.killPop(victim.name, info.head ? 'HEADSHOT' : 'ELIMINATED'); Sfx.kill(); }
+    }
+    if (this.onKillHook) this.onKillHook(killer, victim, info);
     this.portals.removeOwner(victim);
     if (victim === this.player) {
+      this.earned.deaths++;
       this.setScope(false);
       this.deathCam = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone() };
       this.ghostMode = false; this.ghost.hide();
-      this.hud.centerText(self ? 'You shot yourself!' : `Eliminated by ${killer.name}`, 2000, '#f66');
+      if (!self && info.segs && killer.alive !== undefined) this.startKillcam(killer, info);
+      else this.hud.centerText(self ? 'You shot yourself!' : `Eliminated by ${killer.name}`, 2000, '#f66');
     }
+  }
+
+  // Kill-cam: look from the killer's eyes along the shot that got you, with its path drawn.
+  startKillcam(killer, info) {
+    this.endKillcam();
+    const pts = [];
+    for (const s of info.segs) pts.push(s.from.clone(), s.to.clone());
+    const line = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: '#ff3355', depthTest: false, transparent: true }));
+    line.renderOrder = 20;
+    this.scene.add(line);
+    const from = info.segs[0].from.clone(), to = info.segs[0].to.clone();
+    this.killcam = { t: 2.6, killer, line, from, dir: to.clone().sub(from).normalize() };
+    this.hud.killcam(`KILLED BY ${killer.name}`, info.portal ? 'through a portal 🌀' : info.head ? 'headshot' : killer.weapon.def.name);
+  }
+
+  endKillcam() {
+    if (!this.killcam) return;
+    this.scene.remove(this.killcam.line);
+    this.killcam.line.geometry.dispose(); this.killcam.line.material.dispose();
+    this.killcam = null;
+    this.hud.killcam(null);
   }
 
   reload(c) {
@@ -280,9 +321,9 @@ export class Match {
         if (wish.lengthSq() > 1) wish.normalize();
       }
 
-      if (inp.hit('Digit1') && p.switchTo(0)) this.setScope(false);
-      if (inp.hit('Digit2') && p.switchTo(1)) this.setScope(false);
-      if (inp.wheel && p.switchTo((p.slot + 1) % 2)) this.setScope(false);
+      if (inp.hit('Digit1') && p.switchTo(0)) { this.setScope(false); Sfx.swap(); }
+      if (inp.hit('Digit2') && p.switchTo(1)) { this.setScope(false); Sfx.swap(); }
+      if (inp.wheel && p.switchTo((p.slot + 1) % 2)) { this.setScope(false); Sfx.swap(); }
       if (inp.hit('KeyR')) { this.reload(p); this.setScope(false); }
       if (inp.rightClicked && p.weapon.def.zoom) this.setScope(!this.scoped);
       if (this.scoped && p.weapon.reloading) this.setScope(false);
@@ -340,7 +381,8 @@ export class Match {
       const a = brain ? { crouch: brain.crouch, dash: brain.dash } : act;
       c.move(dt, w, j, a, this.world, this.portals.ignoredBoxes(c));
       if (c === p) {
-        if (c.jumped) this.jumpBuf = 0;
+        if (c.jumped) { this.jumpBuf = 0; Sfx.jump(); }
+        if (c.landImpact > 6) Sfx.land(Math.min(1, c.landImpact / 18));
         if (c.dashed) { Sfx.dash(); this.fovKick = 10; }
         if (c.slid) Sfx.slide();
       }
@@ -428,7 +470,11 @@ export class Match {
       cam.position.set(p.pos.x, feet + this.eyeSmooth, p.pos.z);
       // Head bob, landing dip and a little shake when hit.
       const hs = Math.hypot(p.vel.x, p.vel.z);
-      if (p.grounded && hs > 1) this.bobT += dt * hs * 1.5;
+      if (p.grounded && hs > 1) {
+        const before = Math.floor(this.bobT / Math.PI);
+        this.bobT += dt * hs * 1.5;
+        if (Math.floor(this.bobT / Math.PI) !== before && p.slideT <= 0) Sfx.step(p.crouched ? 0.4 : 1); // footstep
+      }
       const bob = p.grounded ? Math.sin(this.bobT) * 0.03 * Math.min(1, hs / 7) : 0;
       if (p.landImpact > 4) this.dipV -= Math.min(p.landImpact, 22) * 0.025;
       p.landImpact = 0;
@@ -449,6 +495,16 @@ export class Match {
           cam.updateProjectionMatrix();
         }
       }
+    } else if (this.killcam && this.killcam.t > 0) {
+      const k = this.killcam;
+      k.t -= dt;
+      // Just behind and above the killer's eyes, looking along their shot.
+      const eye = k.killer.alive ? k.killer.eyePos() : k.from.clone();
+      const back = eye.clone().addScaledVector(k.dir, -1.6).add(new THREE.Vector3(0, 0.45, 0));
+      cam.position.lerp(back, Math.min(1, dt * 8));
+      cam.lookAt(eye.clone().addScaledVector(k.dir, 6));
+      if (cam.fov !== this.baseFov) { cam.fov = this.baseFov; cam.updateProjectionMatrix(); }
+      if (k.t <= 0) this.endKillcam();
     } else if (this.deathCam) {
       // Float up and look down at where you died.
       cam.position.lerp(this.deathCam.pos.clone().add(new THREE.Vector3(0, 6, 0)), 0.02);
@@ -468,6 +524,7 @@ export class Match {
   }
 
   dispose() {
+    this.endKillcam();
     this.setScope(false);
     this.portals.clear();
     this.effects.clear();

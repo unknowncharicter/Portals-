@@ -9,8 +9,8 @@ import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
 import { MAPS, MAP_IDS } from './game/maps.js';
-import { Sfx, setVolume } from './audio.js';
-import { SDK, initSDK } from './sdk.js';
+import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
+import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
@@ -84,13 +84,15 @@ let state = 'menu'; // menu | lobby | playing | paused | results
 const SETTINGS = [
   { id: 'sens',   label: 'Mouse speed', min: 0.2, max: 3,   step: 0.05, fmt: v => v.toFixed(2) },
   { id: 'fov',    label: 'Field of view', min: 60, max: 110, step: 1,   fmt: v => String(v) },
-  { id: 'volume', label: 'Volume',      min: 0,   max: 1,   step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  { id: 'volume', label: 'Sound',       min: 0,   max: 1,   step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  { id: 'music',  label: 'Music',       min: 0,   max: 1,   step: 0.05, fmt: v => Math.round(v * 100) + '%' },
 ];
 
 function applySettings() {
   const st = save.settings;
   input.sensitivity = 0.0022 * st.sens;
   setVolume(st.volume);
+  setMusicVolume(st.music ?? 0.5);
   camera.fov = st.fov;
   if (match) { match.baseFov = st.fov; if (match.scoped) camera.fov = match.player.weapon.def.zoom; }
   camera.updateProjectionMatrix();
@@ -304,7 +306,10 @@ function buildLobby() {
   }
 }
 
+setAdAudioHooks(() => setMuted(true), () => setMuted(false));
+
 function goLobby() {
+  Music.play('menu');
   state = 'lobby';
   input.enabled = false;
   if (MAPS[save.map]) world.load(save.map);
@@ -320,6 +325,7 @@ function startMatch() {
   const mapId = save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena');
   world.load(mapId);
   match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, save.mode, save, onMatchEnd);
+  Music.play('battle');
   state = 'playing';
   input.enabled = true;
   input.reset();

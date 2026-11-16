@@ -47,12 +47,29 @@ export class Hud {
     this.timer.classList.toggle('low', s <= 15);
   }
 
-  killPop(name) {
+  killPop(name, title = 'ELIMINATED') {
     const k = this.killpopEl;
-    k.innerHTML = `<small>ELIMINATED</small>${name}`;
+    k.innerHTML = `<small>${title}</small>${name}`;
+    k.classList.toggle('portal', title === 'PORTAL KILL!');
     k.classList.remove('show'); void k.offsetWidth; k.classList.add('show');
     clearTimeout(this._kpT);
     this._kpT = setTimeout(() => k.classList.remove('show'), 1400);
+  }
+
+  killcam(title, sub = '') {
+    const el = document.getElementById('killcam');
+    if (!title) { el.classList.add('hidden'); return; }
+    el.innerHTML = `<span>KILL CAM</span><b>${title}</b><small>${sub}</small>`;
+    el.classList.remove('hidden');
+  }
+
+  // Short floating message (XP, coins, challenge done...)
+  toast(text, color = '#fff') {
+    const box = document.getElementById('toasts');
+    const d = document.createElement('div');
+    d.textContent = text; d.style.color = color;
+    box.appendChild(d);
+    setTimeout(() => d.remove(), 2600);
   }
 
   setScore(html) { this.score.innerHTML = html; }
@@ -64,11 +81,12 @@ export class Hud {
     if (ms) this._centerT = setTimeout(() => { this.center.textContent = ''; }, ms);
   }
 
-  kill(killer, victim, self = false) {
+  kill(killer, victim, self = false, info = {}) {
     const d = document.createElement('div');
+    const how = info.grenade ? ' 💣' : info.portal ? ' 🌀' : info.head ? ' 🎯' : '';
     d.innerHTML = self
-      ? `<b style="color:${victim.color}">${victim.name}</b> shot themselves 🌀`
-      : `<b style="color:${killer.color}">${killer.name}</b> ▸ <b style="color:${victim.color}">${victim.name}</b>`;
+      ? `<b style="color:${victim.color}">${victim.name}</b> took themselves out${how}`
+      : `<b style="color:${killer.color}">${killer.name}</b> ▸${how} <b style="color:${victim.color}">${victim.name}</b>`;
     this.killfeed.prepend(d);
     setTimeout(() => d.remove(), 5000);
   }

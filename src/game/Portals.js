@@ -286,7 +286,7 @@ export class PortalSystem {
     for (const p of [...this.portals]) {
       p.age += dt;
       p.uniforms.open.value = Math.min(1.05, p.age / 0.25);
-      if (p.age >= PORTAL_LIFETIME) this.remove(p);
+      if (p.age >= PORTAL_LIFETIME) { this.onEvent('expire', p); this.remove(p); }
     }
   }
 
