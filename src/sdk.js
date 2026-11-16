@@ -20,10 +20,15 @@ export const SDK = {
   gameplayStop: () => call(s => s.game.gameplayStop()),
   happyTime: () => call(s => s.game.happytime()),
   // Midgame ad between matches. Resolves when the ad finished (or immediately without SDK).
+  // Only on CrazyGames itself: elsewhere (your own site, local testing) there is no real ad
+  // and the "finished" callback may never come, which would freeze the CONTINUE button.
   midgameAd: () => new Promise(resolve => {
-    if (!sdk) return resolve();
+    if (!sdk || sdk.environment !== 'crazygames') return resolve();
+    let done = false;
+    const finish = () => { if (!done) { done = true; resolve(); } };
+    setTimeout(finish, 45000); // never wait forever
     try {
-      sdk.ad.requestAd('midgame', { adFinished: resolve, adError: resolve, adStarted: () => {} });
-    } catch (e) { resolve(); }
+      sdk.ad.requestAd('midgame', { adFinished: finish, adError: finish, adStarted: () => {} });
+    } catch (e) { finish(); }
   }),
 };

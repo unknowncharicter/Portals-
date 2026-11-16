@@ -343,7 +343,9 @@ document.addEventListener('pointerlockchange', () => {
 });
 // Clicking the game while playing re-grabs the mouse (e.g. after a failed lock).
 canvas.addEventListener('click', () => { if (!touchMode && state === 'playing' && !input.locked) input.lock(); });
-$('lockprompt').addEventListener('click', () => input.lock());
+$('lockprompt').addEventListener('click', () => { if (state === 'playing') input.lock(); });
+// If the mouse somehow gets grabbed while a menu is open, give it back.
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement && state !== 'playing') input.unlock(); });
 
 // Switch between mouse and touch controls based on what the player actually uses.
 function setTouchMode(on) {
@@ -399,10 +401,12 @@ function frame() {
   if (state === 'playing' && match) {
     match.update(dt);
     if (touchMode) touch.update(match);
-    // Mouse players: if the game doesn't have the mouse yet, ask for a click.
-    $('lockprompt').classList.toggle('hidden', touchMode || input.locked);
-    if (match && match.state !== 'done') match.render();
-  } else if (match && (state === 'paused' || state === 'results')) {
+  }
+  // Mouse players: if the game doesn't have the mouse yet, ask for a click.
+  // Only while actually playing (the match may have just ended during update()).
+  $('lockprompt').classList.toggle('hidden', state !== 'playing' || touchMode || input.locked);
+
+  if (match && (state === 'playing' || state === 'paused' || state === 'results')) {
     match.render();
   } else {
     if (state === 'lobby') renderPreview(dt);
