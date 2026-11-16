@@ -6,6 +6,7 @@ import { buildStats, WEAPONS, WeaponState } from './Weapons.js';
 import { randomLook } from './Look.js';
 import { Projectiles } from './Projectiles.js';
 import { GUN_SKINS } from '../progress.js';
+import { Tutorial } from './Tutorial.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 
@@ -39,6 +40,7 @@ export const MODES = {
     desc: '2v2 with respawns. Stand in the glowing zone to score. First team to 100 wins.' },
   'gungame': { label: 'Gun Game', ffa: true, count: 4, respawn: true, gungame: true, time: 300,
     desc: 'Free for all with respawns. Every kill gives you the next gun. Get a kill with the last one to win.' },
+  'tutorial': { label: 'Tutorial', teams: [[0], [1]], tutorial: true, hidden: true },
   'portalonly': { label: 'Portal Only', teams: [[0], [1]], portalOnly: true,
     desc: 'Damage only counts if the shot went through a portal. Bounce your shots! First to 3 rounds.' },
 };
@@ -73,12 +75,26 @@ export class Match {
       if (type === 'expire' && c.owner === this.player) Sfx.portalClose();
       if (type === 'teleport') {
         if (c === this.player) Sfx.teleport();
+        if (c === this.player && this.tutorial) this.tutorial.flags.teleported = true;
         const brain = this.bots.find(b => b.c === c);
         if (brain) brain.flank = null;
       }
     };
     this.setup();
     this.startRound();
+    if (this.mode.tutorial) {
+      this.bots = [];            // the target dummy just stands there
+      this.roundT = 1e9;
+      this.stateT = 0.6;
+      this.tutorial = new Tutorial(this);
+      this.tutorial.placeDummy(new THREE.Vector3(6.2, 0, 9), -Math.PI / 2);
+    }
+  }
+
+  finishTutorial() {
+    if (this.state === 'done') return;
+    this.state = 'done';
+    this.onEnd({ tutorial: true, won: true, coins: 0, kills: 0, rounds: 0, earned: { ...this.earned } });
   }
 
   setup() {
@@ -329,6 +345,7 @@ export class Match {
     if (!t.alive) return false;
     if (t !== attacker && t.team === attacker.team) return false; // no friendly fire (you CAN hit yourself)
     if (this.mode.portalOnly && !info.portal) return false;        // Portal Only mode
+    if (this.tutorial && t !== attacker) { this.tutorial.onHit(info); return true; } // target dummy
     if (t === this.player) {
       // Point the hit arrow toward where the damage came from (through portals too).
       let d;
@@ -357,6 +374,7 @@ export class Match {
     const vel = dir.clone().multiplyScalar(17).add(new THREE.Vector3(0, 3.5, 0)).addScaledVector(c.vel, 0.5);
     this.projectiles.spawn('grenade', c, c.eyePos().addScaledVector(dir, 0.6), vel);
     if (c === this.player) { Sfx.pin(); setTimeout(() => Sfx.throw(), 80); this.viewmodel.fire(0.6); }
+    if (c === this.player && this.tutorial) this.tutorial.flags.grenade = true;
     return true;
   }
 
@@ -573,6 +591,9 @@ export class Match {
       const n = Math.ceil(this.stateT);
       if (n !== this.lastBeep && n > 0) { this.lastBeep = n; this.hud.centerText(String(n)); Sfx.beep(false); }
       if (this.stateT <= 0) { this.state = 'fight'; this.hud.centerText('FIGHT!', 700, '#7cf'); Sfx.beep(true); }
+    } else if (this.state === 'fight' && this.tutorial) {
+      this.tutorial.update(dt);
+      this.hud.setTimer(null);
     } else if (this.state === 'fight' && this.mode.respawn) {
       this.roundT -= dt;
       this.hud.setTimer(this.roundT);
@@ -685,6 +706,7 @@ export class Match {
   }
 
   dispose() {
+    if (this.tutorial) this.tutorial.dispose();
     if (this.hillMesh) this.scene.remove(this.hillMesh);
     this.endKillcam();
     this.projectiles.clear();

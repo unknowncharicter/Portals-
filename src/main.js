@@ -304,13 +304,16 @@ function buildLobby() {
   const modes = $('modes');
   modes.innerHTML = '';
   for (const [id, m] of Object.entries(MODES)) {
+    if (m.hidden) continue;
     const b = document.createElement('button');
     b.textContent = m.label;
     if (id === save.mode) b.classList.add('sel');
     b.onclick = () => { save.mode = id; writeSave(save); buildLobby(); };
     modes.appendChild(b);
   }
+  if (!MODES[save.mode] || MODES[save.mode].hidden) save.mode = '1v1';
   $('mode-desc').textContent = (MODES[save.mode] || MODES['1v1']).desc || '';
+  $('btn-tutorial').classList.toggle('new', !save.tutorialDone);
 }
 
 // ---------- Lobby tabs ----------
@@ -422,12 +425,13 @@ function goLobby() {
   showScreen('lobby');
 }
 
-function startMatch() {
+function startMatch(modeId = save.mode) {
   if (match) match.dispose();
   hud.clear();
-  const mapId = save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena');
+  let mapId = save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena');
+  if (modeId === 'tutorial') mapId = 'arena';
   world.load(mapId);
-  match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, save.mode, save, onMatchEnd);
+  match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, modeId, save, onMatchEnd);
   Music.play('battle');
   state = 'playing';
   input.enabled = true;
@@ -438,6 +442,22 @@ function startMatch() {
 }
 
 function onMatchEnd(res) {
+  if (res.tutorial) {
+    const first = !save.tutorialDone;
+    save.tutorialDone = true;
+    if (first) { save.coins += 100; save.xp = (save.xp || 0) + 50; }
+    writeSave(save);
+    SDK.gameplayStop();
+    state = 'results';
+    input.enabled = false;
+    input.unlock();
+    $('results-title').textContent = 'TUTORIAL COMPLETE!';
+    $('results-title').style.color = '#7cf';
+    $('results-detail').innerHTML = first ? '<div>🪙 <b>+100</b> coins · ⭐ <b>+50</b> XP</div><div>Now try a real match!</div>' : '<div>Nice! Now try a real match.</div>';
+    showScreen('results');
+    Sfx.win();
+    return;
+  }
   save.coins += res.coins;
   const prog = applyMatch(save, res);
   writeSave(save);
@@ -521,6 +541,7 @@ $('btn-start').onclick = async () => {
   startMatch();
 };
 $('btn-start-top').onclick = () => $('btn-start').onclick();
+$('btn-tutorial').onclick = async () => { Sfx.unlock(); await models; startMatch('tutorial'); };
 $('btn-resume').onclick = resume;
 $('btn-quit').onclick = () => { if (match) { match.dispose(); match = null; } goLobby(); };
 $('btn-continue').onclick = async () => {

@@ -169,6 +169,87 @@ export const MAPS = {
       m.mirror([22, 0, 10], [24, 3, 12], wood);
     },
   },
+
+  towers: {
+    name: 'Twin Towers',
+    theme: { sky: '#ffb48a', fog: [70, 190], hemi: 1.6, sun: 1.9 },
+    view: { r: 36, h: 20 },
+    killY: -25,
+    hill: { x: 0, y: 4, z: -5, r: 3 },
+    spawns: {
+      0: [V(-24, 0, 4), V(-22, 0, 0)],
+      1: [V(24, 0, -4), V(22, 0, 0)],
+      ffa: [V(-24, 0, 4), V(24, 0, -4), V(0, 0, 8), V(0, 4, -5)],
+    },
+    build(m) {
+      const stone = '#c9b8a8', dark = '#7d6f66', wood = '#a8743c', glow = '#ffd27a', panel = '#e8dccc';
+      // Tower bases (over the void)
+      m.mirror([18, -3, -8], [30, 0, 8], stone);
+      m.mirror([30, 0, -8.5], [31, 12, 8.5], dark);          // back wall
+      m.mirror([18, 0, -8.5], [30, 12, -8], dark);           // side walls
+      m.mirror([18, 0, 8], [30, 12, 8.5], dark);
+      // Floor 1 (y 4) with a stair hole, floor 2 (y 8) with another
+      m.mirror([20, 3.6, -8], [26.5, 4, 8], wood);
+      m.mirror([26.5, 3.6, -2], [30, 4, 8], wood);
+      for (let i = 0; i < 8; i++) m.mirror([27, 0, -8 + i * 0.7], [29.5, 0.5 * (i + 1), -8 + (i + 1) * 0.7], stone);
+      m.mirror([20, 7.6, -8], [26.5, 8, 8], wood);
+      m.mirror([26.5, 7.6, -8], [30, 8, 2], wood);
+      for (let i = 0; i < 8; i++) m.mirror([27, 4, 8 - (i + 1) * 0.7], [29.5, 4 + 0.5 * (i + 1), 8 - i * 0.7], stone);
+      m.mirror([20, 8, -8], [21, 9.2, 8], dark);             // perch railing
+      // Low centre island + bridges
+      m.box([-6, -3, 2], [6, 0, 10], stone);
+      m.mirror([6, -0.5, 4], [18, 0, 6], wood);
+      m.box([-1, 0, 5], [1, 6, 7], panel);                   // centre pillar (portal walls)
+      m.box([-5, 0, 8.5], [-3, 1.3, 9.5], wood);
+      m.box([3, 0, 2.5], [5, 1.3, 3.5], wood);
+      // High centre platform + bridges from floor 1
+      m.box([-4, 3.6, -7], [4, 4, -3], glow);
+      m.mirror([4, 3.6, -6], [20, 4, -4], wood);
+      m.box([-1, 4, -7], [1, 5.2, -6.6], dark);
+      // Floating panels for portals
+      m.box([-3, 2, -16.5], [3, 7, -16], panel);
+      m.box([-3, 2, 16], [3, 7, 16.5], panel);
+      m.mirror([10, 1, 12], [10.5, 6, 16], panel);
+    },
+  },
+
+  canyon: {
+    name: 'Canyon',
+    theme: { sky: '#f3c98f', fog: [60, 170], hemi: 1.7, sun: 2.1 },
+    view: { r: 32, h: 16 },
+    hill: { x: 0, y: 0, z: 0, r: 4.5 },
+    spawns: {
+      0: [V(-26, 5, -3), V(-26, 5, 3)],
+      1: [V(26, 5, 3), V(26, 5, -3)],
+      ffa: [V(-26, 5, -3), V(26, 5, 3), V(-10, 0, 12), V(10, 0, -12)],
+    },
+    build(m) {
+      const sand = '#d9b07a', rock = '#b07a52', dark = '#8a5a3c', wood = '#9a6a3a', stone = '#c8b49a';
+      const W = 33, D = 20;
+      m.box([-W, -1, -D], [W, 0, D], sand);                  // valley floor
+      m.box([-W - 1, 0, -D - 1], [W + 1, 12, -D], rock);     // outer walls
+      m.box([-W - 1, 0, D], [W + 1, 12, D + 1], rock);
+      m.box([-W - 1, 0, -D], [-W, 12, D], rock);
+      m.box([W, 0, -D], [W + 1, 12, D], rock);
+      // Cliffs (team sides) with stairs down
+      m.mirror([18, 0, -D], [W, 5, D], rock);
+      for (const z of [-14, 12]) for (let i = 0; i < 9; i++) m.mirror([18 - (i + 1) * 0.6, 0, z], [18 - i * 0.6, 5 - 0.5 * (i + 1), z + 2.5], dark);
+      m.mirror([22, 5, -1], [23, 6.3, 1], wood);             // cliff-top cover
+      m.mirror([26, 5, 9], [28, 7, 11], wood);
+      m.mirror([26, 5, -11], [28, 7, -9], wood);
+      // Valley: rock pillars, an arch, boulders
+      for (const z of [-7, 7]) m.mirror([6, 0, z - 1], [8, 9, z + 1], stone);
+      m.box([-1, 0, -4.5], [1, 6, -3], stone);
+      m.box([-1, 0, 3], [1, 6, 4.5], stone);
+      m.box([-1, 6, -4.5], [1, 7, 4.5], stone);              // arch top
+      m.mirror([11, 0, -2], [13, 1.4, 2], rock);
+      m.box([-4, 0, 10], [-1, 1.4, 12], rock);
+      m.box([1, 0, -12], [4, 1.4, -10], rock);
+      // Long high bridge between the cliffs
+      m.box([-18, 4.6, -18.5], [18, 5, -16.5], wood);
+      m.box([-18, 5, -18.6], [18, 5.9, -18.5], wood);
+    },
+  },
 };
 
 export const MAP_IDS = Object.keys(MAPS);

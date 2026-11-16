@@ -122,6 +122,10 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #killcam span { font-size: 12px; letter-spacing: 4px; color: #ff5570; font-weight: 800; }
 #killcam b { font-size: 26px; }
 #killcam small { font-size: 14px; opacity: .85; }
+#tutorial { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); width: min(640px, 92%); text-align: center; background: rgba(10,14,30,.8); border: 2px solid #39f; border-radius: 14px; padding: 12px 18px; font-size: 20px; font-weight: 700; }
+#tutorial small { display: block; font-size: 12px; letter-spacing: 3px; color: #7cf; margin-bottom: 4px; }
+#btn-tutorial.new { background: linear-gradient(90deg, #2a8a4a, #3ab060); }
+#btn-tutorial.new::after { content: ' · NEW!'; color: #ffd75e; }
 #toasts { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
 #toasts div { font-weight: 800; font-size: 18px; text-shadow: 0 0 6px #000; animation: toast 2.6s forwards; }
 @keyframes toast { 0% { opacity: 0; transform: translateY(10px); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-14px); } }
