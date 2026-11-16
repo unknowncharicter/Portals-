@@ -19,7 +19,20 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('game');
 
 // ---------- Renderer & shared objects ----------
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// Some computers only give the browser a 16-bit depth buffer. Then far-away walls and boxes
+// "fight" and show through each other. On those, use a logarithmic depth buffer instead.
+function depthBits() {
+  try {
+    const c = document.createElement('canvas');
+    const gl = c.getContext('webgl2', { antialias: true, powerPreference: 'high-performance' }) || c.getContext('webgl', { antialias: true });
+    if (!gl) return 24;
+    const bits = gl.getParameter(gl.DEPTH_BITS);
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return bits || 24;
+  } catch (e) { return 24; }
+}
+const LOW_DEPTH = new URLSearchParams(location.search).has('logdepth') || depthBits() < 24;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: LOW_DEPTH });
 let touchMode = isTouchDevice();
 document.body.classList.toggle('touch', touchMode);
 // Phones: render at a lower resolution so it stays smooth.
@@ -27,7 +40,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, touchMode ? 1 : 1.5));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, 1, 0.03, 400);
+// Near plane 8 cm (not 3 cm): ~3x more depth precision, so surfaces don't flicker through each other.
+const camera = new THREE.PerspectiveCamera(75, 1, 0.08, 300);
 camera.layers.set(0);
 camera.layers.enable(3);
 

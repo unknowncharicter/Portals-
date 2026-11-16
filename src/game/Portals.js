@@ -15,8 +15,14 @@ export const portalShared = {
 };
 
 const surfaceVert = /* glsl */`
+  #include <common>
+  #include <logdepthbuf_pars_vertex>
   varying vec2 vUv;
-  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    #include <logdepthbuf_vertex>
+  }
 `;
 const surfaceFrag = /* glsl */`
   uniform sampler2D tex;
@@ -24,7 +30,9 @@ const surfaceFrag = /* glsl */`
   uniform vec3 color;
   uniform float linked, flatMode, time, open;
   varying vec2 vUv;
+  #include <logdepthbuf_pars_fragment>
   void main() {
+    #include <logdepthbuf_fragment>
     vec2 p = (vUv - 0.5) * 2.0;
     float r = length(p);
     if (r > 1.0 || r > open) discard;
