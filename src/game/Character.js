@@ -319,7 +319,7 @@ export class Character {
       this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;
       this.mesh.rotation.set(this.slideT > 0 ? 0.25 : 0, this.yaw, 0, 'YXZ');
       if (this.mesh.visible) {
-        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0, climbing: this.climbT > 0 });
+        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0, climbing: this.climbT > 0, aiming: this.aiming });
         this.body.handIn(this.mesh, this.gunHolder.position);
         this.gunHolder.rotation.set(this.pitch, 0, 0);
       }
@@ -364,9 +364,15 @@ export class Character {
     if (this.hp <= 0) {
       this.hp = 0;
       this.alive = false;
-      if (this.body && this.body.actions.die) {
-        // Play the fall, leave the body on the ground for a moment.
-        this.body.die();
+      if (this.body && this.body.actions.die1) {
+        // Play a fall that matches where the hit came from, leave the body down for a moment.
+        let fromBack = false, fromRight = false;
+        if (attacker && attacker !== this) {
+          const dx = attacker.pos.x - this.pos.x, dz = attacker.pos.z - this.pos.z;
+          const f = -Math.sin(this.yaw) * dx - Math.cos(this.yaw) * dz, r = Math.cos(this.yaw) * dx - Math.sin(this.yaw) * dz;
+          fromBack = f < -Math.abs(r) * 0.6; fromRight = !fromBack && r > Math.abs(f);
+        }
+        this.body.die({ fromBack, fromRight, crouched: this.crouched, head: this.lastHitHead });
         this.corpseT = 3;
         if (this.tagSprite) this.tagSprite.visible = false;
       } else this.mesh.visible = false;

@@ -108,6 +108,7 @@ export class BotBrain {
     if (!this.target || !this.target.alive) { this.target = enemies[0]; this.aimDir = null; }
 
     if (this.aimDir) { this.seenT += dt; this.hiddenT = 0; } else { this.seenT = 0; this.hiddenT += dt; }
+    c.aiming = !!this.aimDir; // raise the gun in combat
 
     // Heal when low.
     if (c.hp < c.maxHp * 0.45) m.heal(c);

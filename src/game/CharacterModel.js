@@ -14,9 +14,12 @@ export const hasCharacterModel = () => !!template;
 
 // How fast each clip moves when played at normal speed (m/s), measured from the original
 // root motion. Used to match the leg speed to the real movement speed.
-const CLIP_SPEED = { run: 5.95, rifleRun: 3.18, strafe: 4.84, walk: 1.81, back: 1.1, runback: 3.19, crouch: 1.23, stairs: 0.9 };
-// Clips that already hold the rifle: keep their arms, just bend the upper body to aim up/down.
-const RIFLE = new Set(['rifleRun', 'strafeL', 'strafeR', 'start', 'die']);
+const SPRINT_SPEED = 7.26, CROUCH_SPEED = 2.05;
+// 8 movement directions, in order around the compass (0 = forward, then clockwise).
+const DIRS = ['f', 'fr', 'r', 'br', 'b', 'bl', 'l', 'fl'];
+// Every clip holds the rifle except the stairs climb: those keep their own arms and just bend
+// the upper body to aim up/down. The stairs clip gets the posed-arms treatment instead.
+const POSED_ARMS = new Set(['stairs'])
 
 // Arm directions for a rifle hold, in character space (forward = -Z, right = +X, up = +Y).
 const AIM = {
@@ -55,17 +58,19 @@ export class AnimatedBody {
     for (const clip of template.clips) this.actions[clip.name] = this.mixer.clipAction(clip);
     this.current = null;
     this.dead = false;
-    this.play(this.actions.start ? 'start' : 'walk', 0);
+    this.play('idle', 1);
   }
 
-  // Fall over (plays once and stays down).
-  die() {
-    if (!this.actions.die) return;
+  // Fall over (plays once and stays down). The fall matches where the hit came from.
+  die({ fromBack = false, fromRight = false, crouched = false, head = false } = {}) {
+    let name = crouched ? 'dieCrouch' : fromBack ? (head ? 'die5' : 'die2') : fromRight ? 'die3' : (head ? 'die4' : 'die1');
+    if (!this.actions[name]) name = 'die1';
+    const a = this.actions[name];
+    if (!a) return;
     this.dead = true;
-    const a = this.actions.die;
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
-    this.play('die', 1);
+    this.play(name, 1);
   }
 
   updateDead(dt) { this.mixer.update(dt); }
@@ -75,7 +80,7 @@ export class AnimatedBody {
     this.dead = false;
     for (const a of Object.values(this.actions)) { a.stop(); a.setLoop(THREE.LoopRepeat, Infinity); a.clampWhenFinished = false; }
     this.current = null;
-    this.play(this.actions.start ? 'start' : 'walk', 0);
+    this.play('idle', 1);
   }
 
   // Attach something to a bone in metres, facing our -Z forward.
@@ -97,39 +102,32 @@ export class AnimatedBody {
     this.current = a;
   }
 
-  // s: { vel, yaw, pitch, grounded, crouched, sliding, climbing }
+  // s: { vel, yaw, pitch, grounded, crouched, sliding, climbing, aiming }
   update(dt, s) {
     const fwdX = -Math.sin(s.yaw), fwdZ = -Math.cos(s.yaw);
     const fwd = s.vel.x * fwdX + s.vel.z * fwdZ;
     const side = s.vel.x * -fwdZ + s.vel.z * fwdX;
     const hs = Math.hypot(s.vel.x, s.vel.z);
+    // Which of the 8 directions are we moving in, and how far off it?
+    const ang = Math.atan2(side, fwd);
+    const k = ((Math.round(ang / (Math.PI / 4)) % 8) + 8) % 8;
+    let off = ang - Math.round(ang / (Math.PI / 4)) * (Math.PI / 4);
     let legYaw = 0;
 
-    if (s.sliding) this.play('crouch', 0);
-    else if (s.crouched) this.play('crouch', hs > 0.3 ? THREE.MathUtils.clamp(hs / CLIP_SPEED.crouch, 0.6, 2.2) * (fwd < -0.3 ? -1 : 1) : 0);
-    else if (s.climbing && fwd > 0.5 * hs) this.play('stairs', THREE.MathUtils.clamp(hs / 5, 0.9, 1.7)); // going up steps
-    else if (!s.grounded) this.play('rifleRun', 0.3);
-    else if (hs < 0.6) this.play('start', 0);                 // rifle-ready stance
-    else if (fwd < -0.5 * hs) {
-      // Backpedal: walk backwards when slow, run backwards when fast.
-      if (hs < 2.5) this.play('back', THREE.MathUtils.clamp(hs / CLIP_SPEED.back, 0.8, 2.2));
-      else this.play('runback', THREE.MathUtils.clamp(hs / CLIP_SPEED.runback, 0.8, 2.3));
-      legYaw = THREE.MathUtils.clamp(Math.atan2(side, -fwd), -1, 1) * -0.8;
-    } else {
-      const ang = Math.atan2(side, fwd); // 0 = forward, +90° = moving right
-      if (Math.abs(ang) > 0.9) {
-        // Mostly sideways: run-left / run-right clips.
-        this.play(ang > 0 ? 'strafeR' : 'strafeL', THREE.MathUtils.clamp(hs / CLIP_SPEED.strafe, 0.8, 1.9));
-        legYaw = -(ang - Math.sign(ang) * Math.PI / 2) * 0.6;
-      } else {
-        this.play('rifleRun', THREE.MathUtils.clamp(hs / CLIP_SPEED.rifleRun, 0.8, 2.4));
-        legYaw = -THREE.MathUtils.clamp(ang, -0.8, 0.8);   // diagonal: turn the legs a little
-      }
+    if (s.sliding) this.play('crouchIdle', 0);
+    else if (s.crouched) {
+      if (hs > 0.3) { this.play('c_' + DIRS[k], THREE.MathUtils.clamp(hs / CROUCH_SPEED, 0.6, 2.2)); legYaw = -off; }
+      else this.play(s.aiming ? 'crouchIdleAim' : 'crouchIdle', 1);
     }
+    else if (s.climbing && fwd > 0.5 * hs) this.play('stairs', THREE.MathUtils.clamp(hs / 5, 0.9, 1.7)); // going up steps
+    else if (!s.grounded) this.play('jump', 1);
+    else if (hs < 0.6) this.play(s.aiming ? 'idleAim' : 'idle', 1);
+    else { this.play('s_' + DIRS[k], THREE.MathUtils.clamp(hs / SPRINT_SPEED, 0.7, 1.6)); legYaw = -off; }
+
     this.model.rotation.y += (Math.PI + legYaw - this.model.rotation.y) * Math.min(1, dt * 12);
     this.mixer.update(dt);
-    if (this.current && RIFLE.has(this.current.getClip().name)) this.bendSpine(s.pitch || 0);
-    else this.pose(s.pitch || 0);
+    if (this.current && POSED_ARMS.has(this.current.getClip().name)) this.pose(s.pitch || 0);
+    else this.bendSpine(s.pitch || 0);
   }
 
   // Aim up/down with a rifle clip: bend the spine instead of re-posing the arms.

@@ -373,6 +373,7 @@ export class Match {
     const tb = t.isBot && this.bots.find(b => b.c === t);
     if (tb && t !== attacker) tb.hear(attacker.pos, true); // getting hit reveals where it came from
     if (attacker === this.player && t !== attacker && info.explosion) { this.hud.hit(false); Sfx.hit(); }
+    t.lastHitHead = !!info.head;
     if (t.damage(dmg, attacker)) this.onKill(attacker, t, info);
     return true;
   }
@@ -596,6 +597,7 @@ export class Match {
     this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id);
     this.adsT += ((this.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
+    p.aiming = this.ads || this.input.mouseDown; // your body (seen through portals) raises the gun
     this.hud.aiming(this.ads);
     this.viewmodel.update(dt, { ads: this.adsT, moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / SWITCH_TIME, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
     this.hud.update(p, this.portals.ownerCount(p));
