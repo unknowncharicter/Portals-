@@ -7,8 +7,9 @@ import { World } from './game/World.js';
 import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
-import { Match, MODES, DIFFICULTIES, matchDifficulty } from './game/Match.js';
-import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, cleanName } from './game/Look.js';
+import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES } from './game/Match.js';
+import { Room } from './net/Room.js';
+import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, cleanName, randomLook } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
@@ -342,6 +343,7 @@ function buildLobby() {
   buildLevel();
   buildShop();
   buildDaily();
+  buildOnline();
   buildStats();
 
   // Modes: icon cards.
@@ -491,13 +493,14 @@ function goLobby() {
   showScreen('lobby');
 }
 
-function startMatch(modeId = save.mode) {
+// opts: { map, online: { room, roster } } for online matches.
+function startMatch(modeId = save.mode, opts = {}) {
   if (match) match.dispose();
   hud.clear();
-  let mapId = save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena');
+  let mapId = opts.map || (save.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[save.map] ? save.map : 'arena'));
   if (modeId === 'tutorial') mapId = 'arena';
   world.load(mapId);
-  match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, modeId, save, onMatchEnd);
+  match = new Match({ scene, renderer, camera, world, portals, effects, viewmodel, input, hud }, modeId, save, onMatchEnd, opts.online || null);
   Music.play('battle');
   state = 'playing';
   input.enabled = true;
@@ -508,6 +511,16 @@ function startMatch(modeId = save.mode) {
 }
 
 function onMatchEnd(res) {
+  if (res.aborted) {
+    // Online match ended early (host left / connection lost).
+    if (match) { match.dispose(); match = null; }
+    leaveRoom();
+    currentTab = 'online';
+    goLobby();
+    onlineStatus(res.reason || 'Connection lost.', true);
+    return;
+  }
+  const online = !!(match && match.online);
   if (res.tutorial) {
     const first = !save.tutorialDone;
     save.tutorialDone = true;
@@ -526,7 +539,7 @@ function onMatchEnd(res) {
   }
   save.coins += res.coins;
   const prog = applyMatch(save, res);
-  const ranked = save.difficulty === 'ranked' ? applyRanked(save, res) : null;
+  const ranked = !online && save.difficulty === 'ranked' ? applyRanked(save, res) : null;
   writeSave(save);
   SDK.gameplayStop();
   if (res.won) SDK.happyTime();
@@ -617,11 +630,157 @@ $('btn-start').onclick = async () => {
 $('btn-start-top').onclick = () => $('btn-start').onclick();
 $('btn-tutorial').onclick = async () => { Sfx.unlock(); await models; startMatch('tutorial'); };
 $('btn-resume').onclick = resume;
-$('btn-quit').onclick = () => { if (match) { match.dispose(); match = null; } goLobby(); };
-$('btn-continue').onclick = async () => {
+$('btn-quit').onclick = () => {
+  const wasOnline = !!(match && match.online);
   if (match) { match.dispose(); match = null; }
+  if (wasOnline) { leaveRoom(); currentTab = 'online'; }
+  goLobby();
+};
+$('btn-continue').onclick = async () => {
+  const wasOnline = !!(match && match.online);
+  if (match) { match.dispose(); match = null; }
+  if (wasOnline && room) {
+    // Back to the room (no ad, friends are waiting).
+    if (room.isHost) { room.started = false; room.sendLobby(); }
+    currentTab = 'online';
+    goLobby();
+    return;
+  }
   await SDK.midgameAd();
   goLobby();
+};
+
+// ---------- Online rooms ----------
+let room = null;
+const ONLINE_MODES = Object.entries(MODES).filter(([, m]) => !m.hidden).map(([id]) => id);
+const slotsFor = (modeId) => { const M = MODES[modeId]; return M.ffa ? M.count : M.teams.flat().length; };
+const me = () => ({ name: save.look.name, look: save.look, color: save.color, loadout: save.loadout, gunSkin: save.gunSkin });
+
+function onlineStatus(text, err = false) {
+  const el = $('on-status');
+  el.textContent = text || '';
+  el.classList.toggle('err', err);
+}
+
+function leaveRoom() {
+  if (room) room.leave();
+  room = null;
+}
+
+function bindRoom(r) {
+  r.on('players', () => { if (state === 'lobby') buildOnline(); });
+  r.on('message', (msg) => { if (msg.t === 'start' && !r.isHost) startOnline(msg); });
+  r.on('closed', (why) => {
+    if (match && match.online) return; // the match shows it
+    leaveRoom();
+    onlineStatus(why, true);
+    if (state === 'lobby') buildOnline();
+  });
+  r.on('error', (why) => onlineStatus(why, true));
+}
+
+// Who plays on which team. Players alternate teams; bots fill the empty spots.
+function makeRoster(modeId, players) {
+  const M = MODES[modeId];
+  const slots = M.ffa
+    ? Array.from({ length: M.count }, (_, i) => ({ team: i, bodyColor: FFA_COLORS[i] }))
+    : M.teams.flatMap((members, team) => members.map(() => ({ team, bodyColor: TEAM_COLORS[team] })));
+  const free = [...slots], roster = [];
+  players.forEach((p, i) => {
+    let k = M.ffa ? 0 : free.findIndex(s => s.team === i % M.teams.length);
+    if (k < 0) k = 0;
+    const slot = free.splice(k, 1)[0];
+    roster.push({ ...slot, owner: p.id, bot: false, name: p.name, look: p.look, color: p.color, loadout: p.loadout, gunSkin: p.gunSkin });
+  });
+  const diff = matchDifficulty(save);
+  const used = new Set(players.map(p => p.color));
+  const botColors = COLORS.filter(c => !used.has(c));
+  free.forEach((slot, i) => {
+    const name = BOT_NAMES[i % BOT_NAMES.length] + ' (bot)';
+    roster.push({ ...slot, owner: 'h', bot: true, name, look: randomLook(name), color: botColors[i % botColors.length] || COLORS[i % COLORS.length],
+      loadout: { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' }, gunSkin: null });
+  });
+  roster.forEach((e, i) => { e.id = i; });
+  return roster;
+}
+
+async function startOnline(msg) {
+  await models;
+  startMatch(msg.mode, { map: msg.map, online: { room, roster: msg.roster } });
+}
+
+function buildOnline() {
+  const inRoom = !!(room && room.myId);
+  $('on-start').classList.toggle('hidden', inRoom);
+  $('on-room').classList.toggle('hidden', !inRoom);
+  if (!inRoom) return;
+  $('room-code').textContent = room.code;
+  const mode = MODES[room.mode] || MODES['2v2'];
+  const roster = makeRoster(room.mode, room.players.slice(0, slotsFor(room.mode)));
+  $('room-players').innerHTML = room.players.map(p => {
+    const e = roster.find(r => r.owner === p.id && !r.bot);
+    const team = !e ? 'waiting (too many for this mode)' : mode.ffa ? 'free for all' : e.team === 0 ? 'Blue team' : 'Red team';
+    return `<div style="--c:${e ? e.bodyColor : '#888'}">${escapeHtml(p.name)}${p.id === room.myId ? ' (you)' : ''}${p.id === 'h' ? ' 👑' : ''}<small>${team}</small></div>`;
+  }).join('') + roster.filter(r => r.bot).map(r => `<div style="--c:${r.bodyColor}">🤖 Bot<small>${mode.ffa ? 'free for all' : r.team === 0 ? 'Blue team' : 'Red team'}</small></div>`).join('');
+  const set = $('room-settings');
+  const mapName = room.map === 'random' ? 'Random' : (MAPS[room.map] || MAPS.arena).name;
+  if (room.isHost) {
+    set.innerHTML = `<select id="room-mode">${ONLINE_MODES.map(id => `<option value="${id}"${id === room.mode ? ' selected' : ''}>${MODES[id].label} (${slotsFor(id)} players)</option>`).join('')}</select>`
+      + `<select id="room-map">${[...MAP_IDS, 'random'].map(id => `<option value="${id}"${id === room.map ? ' selected' : ''}>${id === 'random' ? 'Random map' : MAPS[id].name}</option>`).join('')}</select>`;
+    $('room-mode').onchange = (e) => { room.setSettings(e.target.value, room.map); buildOnline(); };
+    $('room-map').onchange = (e) => { room.setSettings(room.mode, e.target.value); buildOnline(); };
+    const tooMany = room.players.length > slotsFor(room.mode);
+    $('btn-room-start').classList.remove('hidden');
+    $('btn-room-start').disabled = tooMany;
+    onlineStatus(tooMany ? `Too many players for ${mode.label}. Pick a bigger mode.` : room.players.length < 2 ? 'Waiting for friends to join… (or start now with bots)' : 'Ready!');
+  } else {
+    set.innerHTML = `<div class="hint left">${mode.label} · ${mapName} — the host picks the mode and map.</div>`;
+    $('btn-room-start').classList.add('hidden');
+    onlineStatus('Waiting for the host to start…');
+  }
+}
+
+const escapeHtml = (t) => String(t).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+$('btn-create').onclick = async () => {
+  Sfx.click();
+  leaveRoom();
+  room = new Room();
+  bindRoom(room);
+  onlineStatus('Creating room…');
+  $('btn-create').disabled = true;
+  try {
+    await room.host(me());
+    room.setSettings(ONLINE_MODES.includes(save.mode) ? save.mode : '2v2', save.map || 'arena');
+    buildOnline();
+  } catch (e) { leaveRoom(); onlineStatus(e.message, true); }
+  $('btn-create').disabled = false;
+};
+$('btn-join').onclick = async () => {
+  Sfx.click();
+  const code = $('join-code').value.trim().toUpperCase();
+  if (code.length < 5) { onlineStatus('Enter the 5-letter room code.', true); return; }
+  leaveRoom();
+  room = new Room();
+  bindRoom(room);
+  onlineStatus('Joining…');
+  $('btn-join').disabled = true;
+  try { await room.join(code, me()); buildOnline(); }
+  catch (e) { leaveRoom(); onlineStatus(e.message, true); }
+  $('btn-join').disabled = false;
+};
+$('join-code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('btn-join').onclick(); };
+$('btn-copy').onclick = () => { navigator.clipboard?.writeText(room ? room.code : '').then(() => onlineStatus('Code copied! Send it to your friends.')).catch(() => {}); };
+$('btn-leave').onclick = () => { Sfx.click(); leaveRoom(); onlineStatus(''); buildOnline(); };
+$('btn-room-start').onclick = async () => {
+  if (!room || !room.isHost) return;
+  Sfx.unlock();
+  await models;
+  const map = room.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[room.map] ? room.map : 'arena');
+  const msg = { t: 'start', mode: room.mode, map, roster: makeRoster(room.mode, room.players) };
+  room.started = true;
+  room.broadcast(msg);
+  startOnline(msg);
 };
 
 // ---------- Loop ----------
@@ -632,7 +791,7 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
-  if (state === 'playing' && match) {
+  if (match && (state === 'playing' || (state === 'paused' && match.online))) {
     match.update(dt);
     if (touchMode) touch.update(match);
   }

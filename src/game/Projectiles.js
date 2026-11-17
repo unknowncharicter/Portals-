@@ -85,7 +85,7 @@ export class Projectiles {
         // Bolt: direct hit
         if (t === p.owner || t.team !== p.owner.team) {
           const dmg = p.def.damage * p.owner.stats.damageMult * (hit.head ? p.def.headMult : 1);
-          m.applyDamage(p.owner, t, dmg, { portal: p.viaPortal, head: hit.head, segs: tr.segments, from: p.pos.clone() });
+          m.applyDamage(p.owner, t, dmg, { portal: p.viaPortal, head: hit.head, segs: tr.segments, from: p.pos.clone(), proj: true });
         }
         this.finish(i, null);
         continue;
@@ -139,7 +139,7 @@ export class Projectiles {
       c.grounded = false;
       let dmg = def.damage * k * p.owner.stats.damageMult;
       if (c === p.owner) dmg *= 0.35; // self damage is reduced
-      if (dmg >= 1) m.applyDamage(p.owner, c, dmg, { portal: p.viaPortal, grenade: p.type === 'grenade', explosion: true, from: at.clone() });
+      if (dmg >= 1) m.applyDamage(p.owner, c, dmg, { portal: p.viaPortal, grenade: p.type === 'grenade', explosion: true, from: at.clone(), proj: true });
     }
   }
 

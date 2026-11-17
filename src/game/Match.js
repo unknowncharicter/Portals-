@@ -9,6 +9,7 @@ import { GUN_SKINS } from '../progress.js';
 import { Tutorial } from './Tutorial.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
+import { NetSync, packSegs, unpackSegs, v3, arr } from '../net/NetSync.js';
 
 export const DIFFICULTIES = {
   easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun', 'burst'] },
@@ -39,9 +40,9 @@ export const ROUNDS_TO_WIN = 3;
 const COUNTDOWN = 3;
 const ROUND_TIME = 120;
 const ROUND_END_TIME = 3;
-const TEAM_COLORS = ['#3a6fd8', '#d84a4a'];
-const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
-const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
+export const TEAM_COLORS = ['#3a6fd8', '#d84a4a'];
+export const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
+export const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
 
 export const MODES = {
   '1v1': { label: '1v1', teams: [[0], [1]], desc: 'Duel one bot. Last one standing wins the round. First to 3 rounds.' },
@@ -58,8 +59,13 @@ export const MODES = {
 export const GUN_LADDER = ['smg', 'shotgun', 'burst', 'ar', 'crossbow', 'sniper', 'revolver', 'pistol'];
 
 export class Match {
-  constructor(ctx, modeId, save, onEnd) {
+  // online: { room, roster } for an online match (see src/net/), otherwise null.
+  constructor(ctx, modeId, save, onEnd, online = null) {
     Object.assign(this, ctx); // scene, renderer, camera, world, portals, effects, viewmodel, input, hud
+    this.online = online;
+    this.isAuthority = !online || online.room.isHost; // decides rounds, scores and the winner
+    this.net = null;
+    this.byNet = {};
     this.mode = MODES[modeId];
     this.modeId = modeId;
     this.save = save;
@@ -94,6 +100,7 @@ export class Match {
     };
     this.setup();
     this.startRound();
+    if (online) this.net = new NetSync(this, online.room);
     if (this.mode.tutorial) {
       this.bots = [];            // the target dummy just stands there
       this.roundT = 1e9;
@@ -109,7 +116,45 @@ export class Match {
     this.onEnd({ tutorial: true, won: true, coins: 0, kills: 0, rounds: 0, earned: { ...this.earned } });
   }
 
+  // Online: characters come from the host's roster (players + bots), in the same order everywhere.
+  setupOnline(roster) {
+    const myId = this.online.room.myId;
+    const diff = matchDifficulty(this.save);
+    for (const e of roster) {
+      const local = e.owner === myId, isMe = local && !e.bot;
+      const c = new Character({
+        name: e.name, look: e.look, team: e.team, color: e.bodyColor, portalColor: e.color, isBot: e.bot,
+        skin: GUN_SKINS.find(s => s.id === e.gunSkin) || null,
+        stats: isMe ? buildStats(this.save) : e.bot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(null),
+        loadout: e.loadout,
+      });
+      c.netId = e.id; c.owner = e.owner; c.remote = !local;
+      this.byNet[e.id] = c;
+      this.addChar(c);
+      if (e.bot && local) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
+    }
+    this.player = this.chars.find(c => c.owner === myId && !c.isBot);
+  }
+
+  addChar(c) {
+    this.chars.push(c);
+    this.scene.add(c.mesh);
+    c.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
+    c.shadow.rotation.x = -Math.PI / 2;
+    this.scene.add(c.shadow);
+  }
+
   setup() {
+    if (this.online) this.setupOnline(this.online.roster);
+    else this.setupBots();
+    this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
+    if (this.mode.gungame) for (const c of this.chars) { c.gunLevel = 0; this.setGunGameWeapon(c); }
+    if (this.mode.koth) this.setupHill();
+    this.viewmodel.setSkin(this.player.skin, this.player.portalColor);
+    for (const c of this.chars) this.wins[c.team] = 0;
+  }
+
+  setupBots() {
     const botColors = COLORS.filter(c => c !== this.save.color);
     const diff = matchDifficulty(this.save);
     const make = (i, team, bodyColor) => {
@@ -125,11 +170,7 @@ export class Match {
           ? { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' }
           : this.save.loadout,
       });
-      this.chars.push(c);
-      this.scene.add(c.mesh);
-      c.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.1), new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false }));
-      c.shadow.rotation.x = -Math.PI / 2;
-      this.scene.add(c.shadow);
+      this.addChar(c);
       if (isBot) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
       return c;
     };
@@ -140,11 +181,6 @@ export class Match {
       this.chars.sort((a, b) => (a.isBot ? 1 : 0) - (b.isBot ? 1 : 0));
     }
     this.player = this.chars.find(c => !c.isBot);
-    this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
-    if (this.mode.gungame) for (const c of this.chars) { c.gunLevel = 0; this.setGunGameWeapon(c); }
-    if (this.mode.koth) this.setupHill();
-    this.viewmodel.setSkin(this.player.skin, this.player.portalColor);
-    for (const c of this.chars) this.wins[c.team] = 0;
   }
 
   enemiesOf(c) { return this.chars.filter(o => o.team !== c.team); }
@@ -178,6 +214,10 @@ export class Match {
     this.stateT = COUNTDOWN;
     this.roundT = this.mode.time || ROUND_TIME;
     this.lastBeep = null;
+    if (this.net) {
+      this.net.states.clear();
+      if (this.isAuthority) this.net.send({ e: 'round', what: 'start' });
+    }
     this.scores = {};
     for (const c of this.chars) { this.scores[c.team] = 0; c.respawnT = 0; }
     this.updateScore();
@@ -230,7 +270,7 @@ export class Match {
   updateRespawnMode(dt) {
     const p = this.player;
     for (const c of this.chars) {
-      if (c.alive) continue;
+      if (c.alive || c.remote || c.gone) continue; // each browser respawns its own characters
       c.respawnT -= dt;
       if (c === p) this.hud.centerText(c.respawnT > 0 ? `Respawning in ${Math.ceil(c.respawnT)}` : '', 0, '#fff');
       if (c.respawnT <= 0) this.respawn(c);
@@ -241,14 +281,18 @@ export class Match {
       const color = teams.size > 1 ? '#ffd040' : holder === null ? '#ffffff' : TEAM_COLORS[holder];
       for (const m of this.hillMats) m.color.set(color);
       this.hillMesh.children[0].rotation.y += dt;
-      if (holder !== null) {
+      if (holder !== null && this.isAuthority) {
         this.scores[holder] += dt * 2;
         if (this.scores[holder] >= this.mode.target) return this.finish(holder);
+      }
+      if (this.net && this.isAuthority && (this.scoreSendT = (this.scoreSendT || 0) - dt) <= 0) {
+        this.scoreSendT = 0.3;
+        this.net.send({ e: 'score', scores: this.scores });
       }
       this.hillText = teams.size > 1 ? 'CONTESTED' : holder === null ? 'EMPTY' : holder === p.team ? 'YOURS' : 'ENEMY';
     }
     this.updateScore();
-    if (this.roundT <= 0) {
+    if (this.roundT <= 0 && this.isAuthority) {
       // Time up: best score wins.
       const val = (t) => this.mode.gungame ? Math.max(...this.chars.filter(c => c.team === t).map(c => c.gunLevel)) : this.scores[t];
       const best = Object.keys(this.scores).map(Number).sort((a, b) => val(b) - val(a))[0];
@@ -309,11 +353,14 @@ export class Match {
       : c.pos.clone().add(new THREE.Vector3(0.3, 0.38, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), c.yaw)).addScaledVector(c.lookDir(), 0.9);
 
     let anyHit = false, anyHead = false;
+    const sendSegs = [], sendHits = [];
     if (def.projectile) {
       // Rockets and crossbow bolts fly (and go through portals).
       const dir = c.lookDir();
       const start = origin.clone().addScaledVector(dir, 0.5);
-      this.projectiles.spawn(def.projectile, c, start, dir.multiplyScalar(def.speed));
+      const vel = dir.multiplyScalar(def.speed);
+      this.projectiles.spawn(def.projectile, c, start, vel);
+      if (this.net) this.net.send({ e: 'proj', n: c.netId, type: def.projectile, pos: arr(start), vel: arr(vel) });
     } else {
       for (let i = 0; i < pellets; i++) {
         const dir = c.lookDir();
@@ -324,6 +371,7 @@ export class Match {
         const tr = this.portals.trace(origin, dir, 250, { characters: this.chars, ignore: c });
         tr.segments[0].from = muzzle.clone();
         this.effects.tracer(tr.segments, c.portalColor);
+        if (this.net) { sendSegs.push(packSegs(tr.segments)); if (tr.hit && tr.hit.type === 'world' && i < 3) sendHits.push(arr(tr.hit.point)); }
 
         const hit = tr.hit;
         if (!hit) continue;
@@ -340,6 +388,7 @@ export class Match {
         }
       }
     }
+    if (this.net) this.net.send({ e: 'fire', n: c.netId, segs: sendSegs, hits: sendHits });
     // Empty? Reload straight away.
     if (w.ammo === 0) { w.burstLeft = 0; this.reload(c); }
 
@@ -369,6 +418,13 @@ export class Match {
     if (t !== attacker && t.team === attacker.team) return false; // no friendly fire (you CAN hit yourself)
     if (this.mode.portalOnly && !info.portal) return false;        // Portal Only mode
     if (this.tutorial && t !== attacker) { this.tutorial.onHit(info); return true; } // target dummy
+    if (this.net && t.remote) {
+      // Someone else's character: their browser applies the damage. Grenades and rockets fly on
+      // every screen, so each browser only handles its own characters for those.
+      if (info.proj || info.explosion || !this.net.owns(attacker)) return false;
+      this.net.send({ e: 'hit', a: attacker.netId, v: t.netId, d: dmg, head: !!info.head, portal: !!info.portal, segs: info.segs ? packSegs(info.segs) : null });
+      return true;
+    }
     if (t === this.player) {
       // Point the hit arrow toward where the damage came from (through portals too).
       let d;
@@ -396,7 +452,9 @@ export class Match {
     c.grenadeCd = 0.8;
     const dir = c.lookDir();
     const vel = dir.clone().multiplyScalar(17).add(new THREE.Vector3(0, 3.5, 0)).addScaledVector(c.vel, 0.5);
-    this.projectiles.spawn('grenade', c, c.eyePos().addScaledVector(dir, 0.6), vel);
+    const at = c.eyePos().addScaledVector(dir, 0.6);
+    this.projectiles.spawn('grenade', c, at, vel);
+    if (this.net) this.net.send({ e: 'proj', n: c.netId, type: 'grenade', pos: arr(at), vel: arr(vel) });
     if (c === this.player) { Sfx.pin(); setTimeout(() => Sfx.throw(), 80); this.viewmodel.fire(0.6); }
     if (c === this.player && this.tutorial) this.tutorial.flags.grenade = true;
     return true;
@@ -416,6 +474,9 @@ export class Match {
   // info: { portal: shot went through a portal, head: headshot, segs: bullet path, grenade }
   onKill(killer, victim, info = {}) {
     const self = killer === victim;
+    if (this.net && !info.fromNet && this.net.owns(victim)) {
+      this.net.send({ e: 'kill', k: killer.netId, v: victim.netId, head: !!info.head, portal: !!info.portal, grenade: !!info.grenade, segs: info.segs ? packSegs(info.segs) : null });
+    }
     this.hud.kill(killer, victim, self, info);
     if (!self) killer.kills++;
     victim.deaths = (victim.deaths || 0) + 1;
@@ -431,7 +492,7 @@ export class Match {
     if (this.mode.respawn) victim.respawnT = victim === this.player ? 4.5 : 3;
     if (this.mode.gungame && !self && killer.alive && this.state === 'fight') {
       killer.gunLevel++;
-      if (killer.gunLevel >= GUN_LADDER.length) { this.finish(killer.team); }
+      if (killer.gunLevel >= GUN_LADDER.length) { if (this.isAuthority) this.finish(killer.team); }
       else {
         this.setGunGameWeapon(killer);
         if (killer === this.player) { this.hud.toast(`Next gun: ${WEAPONS[GUN_LADDER[killer.gunLevel]].name}`, '#7cf'); Sfx.swap(); }
@@ -484,6 +545,7 @@ export class Match {
     if (c.portalCd > 0 || !pose || !pose.valid) return false;
     this.portals.place(c, pose);
     c.portalCd = c.stats.portalCooldown;
+    if (this.net) this.net.send({ e: 'portal', n: c.netId, pos: arr(pose.pos), normal: arr(pose.normal), up: arr(pose.up) });
     if (c === this.player) Sfx.portalPlace();
     return true;
   }
@@ -572,6 +634,7 @@ export class Match {
     for (const b of this.bots) { if (fighting) b.update(dt); else { b.wish.set(0, 0, 0); b.jump = false; } }
 
     for (const c of this.chars) {
+      if (c.remote) { this.net.updatePuppet(c, dt); continue; } // another player's character
       if (!c.alive) { if (c.body && c.mesh.visible) c.animate(dt); continue; } // death fall
       const brain = this.bots.find(b => b.c === c);
       const w = brain ? brain.wish : wish;
@@ -603,7 +666,7 @@ export class Match {
     // Burst rifle: keep firing the rest of a burst.
     for (const c of this.chars) {
       const w = c.weapon;
-      if (c.alive && w.burstLeft > 0 && w.cooldown <= 0) this.fire(c, c.isBot ? 0.02 : 0, true);
+      if (c.alive && !c.remote && w.burstLeft > 0 && w.cooldown <= 0) this.fire(c, c.isBot ? 0.02 : 0, true);
     }
     this.projectiles.update(dt);
     this.portals.update(dt);
@@ -623,6 +686,7 @@ export class Match {
     const mv = Math.hypot(p.vel.x, p.vel.z) > 1 ? 1.35 : 1;
     this.hud.setSpread((def.pellets ? 0.6 : 1) * (def.spread * mv * (p.grounded ? 1 : 1.7) * 500 + this.bloom * 10));
 
+    if (this.net) this.net.tick(dt);
     this.stateT -= dt;
     if (this.state === 'countdown') {
       const n = Math.ceil(this.stateT);
@@ -635,6 +699,9 @@ export class Match {
       this.roundT -= dt;
       this.hud.setTimer(this.roundT);
       this.updateRespawnMode(dt);
+    } else if (this.state === 'fight' && !this.isAuthority) {
+      this.roundT -= dt;                 // online: the host decides when the round ends
+      this.hud.setTimer(Math.max(0, this.roundT));
     } else if (this.state === 'fight') {
       this.roundT -= dt;
       this.hud.setTimer(this.roundT);
@@ -647,7 +714,7 @@ export class Match {
         const sorted = Object.entries(hp).sort((a, b) => b[1] - a[1]);
         this.endRound(sorted.length > 1 && sorted[0][1] - sorted[1][1] < 0.01 ? undefined : Number(sorted[0][0]), true);
       }
-    } else if (this.state === 'roundEnd' && this.stateT <= 0) {
+    } else if (this.state === 'roundEnd' && this.stateT <= 0 && this.isAuthority) {
       const champ = Object.keys(this.wins).find(t => this.wins[t] >= ROUNDS_TO_WIN);
       if (champ !== undefined) this.finish(Number(champ));
       else this.startRound();
@@ -655,6 +722,7 @@ export class Match {
   }
 
   endRound(winnerTeam, timeUp = false) {
+    if (this.net && this.isAuthority) this.net.send({ e: 'round', what: 'end', winner: winnerTeam ?? null, timeUp });
     this.hud.setTimer(null);
     this.state = 'roundEnd';
     this.stateT = ROUND_END_TIME;
@@ -670,6 +738,7 @@ export class Match {
 
   finish(winnerTeam) {
     if (this.state === 'done' || this.state === 'outro') return;
+    if (this.net && this.isAuthority) this.net.send({ e: 'finish', winner: winnerTeam ?? null });
     this.hud.setTimer(null);
     const won = winnerTeam === this.player.team;
     const diff = matchDifficulty(this.save);
@@ -802,6 +871,61 @@ export class Match {
     cam.updateMatrixWorld();
   }
 
+  // ---------- Online ----------
+
+  netEvent(msg) {
+    const B = this.byNet, c = B[msg.n];
+    switch (msg.e) {
+      case 'fire': if (c) this.remoteFire(c, msg); break;
+      case 'hit': {
+        const a = B[msg.a], v = B[msg.v];
+        if (a && v && this.net.owns(v)) this.applyDamage(a, v, msg.d, { head: msg.head, portal: msg.portal, segs: msg.segs ? unpackSegs(msg.segs) : null, from: a.pos.clone() });
+        break;
+      }
+      case 'kill': {
+        const k = B[msg.k], v = B[msg.v];
+        if (!k || !v || this.state === 'outro' || this.state === 'done') break;
+        if (v.alive) { v.lastHitHead = !!msg.head; v.damage(v.hp + 9999, k); }
+        if (v.remote) this.net.died(v);
+        this.onKill(k, v, { head: msg.head, portal: msg.portal, grenade: msg.grenade, segs: msg.segs ? unpackSegs(msg.segs) : null, fromNet: true });
+        break;
+      }
+      case 'portal': if (c) this.remotePortal(c, msg); break;
+      case 'proj': if (c) this.projectiles.spawn(msg.type, c, v3(msg.pos), v3(msg.vel)); break;
+      case 'round':
+        if (msg.what === 'start') { if (this.state !== 'outro' && this.state !== 'done') this.startRound(); }
+        else this.endRound(msg.winner ?? undefined, msg.timeUp);
+        break;
+      case 'finish': this.finish(msg.winner ?? undefined); break;
+      case 'score': this.scores = msg.scores; break;
+      case 'gone': this.net.playerLeft(msg.id); break;
+    }
+  }
+
+  // Another player shot: draw the tracers and play the sound (the shooter decides the hits).
+  remoteFire(c, msg) {
+    for (const s of msg.segs || []) this.effects.tracer(unpackSegs(s), c.portalColor);
+    for (const h of msg.hits || []) this.effects.spark(v3(h));
+    const vol = Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
+    (Sfx[c.weapon.def.sound] || Sfx.rifle)(vol);
+    for (const b of this.bots) if (b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < 30 && !b.aimDir) b.hear(c.pos);
+  }
+
+  remotePortal(c, msg) {
+    const pos = v3(msg.pos), normal = v3(msg.normal), up = v3(msg.up);
+    const hit = this.world.raycast(pos.clone().addScaledVector(normal, 0.05), normal.clone().negate(), 0.3);
+    if (!hit) return;
+    this.portals.place(c, { pos, normal, up, box: hit.box, valid: true });
+  }
+
+  // The host left (or the connection dropped).
+  netClosed(why) {
+    if (this.state === 'done') return;
+    this.state = 'done';
+    this.hud.centerText(why || 'Connection lost', 3000, '#f77');
+    setTimeout(() => this.onEnd({ aborted: true, reason: why }), 1500);
+  }
+
   // Third-person camera over a character's shoulder, pulled in if a wall is behind them.
   followCam(c, dt, snap = false) {
     const cam = this.camera;
@@ -830,6 +954,7 @@ export class Match {
   }
 
   dispose() {
+    if (this.net) this.net.dispose();
     if (this.tutorial) this.tutorial.dispose();
     if (this.hillMesh) this.scene.remove(this.hillMesh);
     this.endKillcam();

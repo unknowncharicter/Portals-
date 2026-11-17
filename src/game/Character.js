@@ -101,6 +101,7 @@ export class Character {
     this.yaw = yaw; this.pitch = 0;
     this.hp = this.maxHp;
     this.alive = true;
+    this.life = (this.life || 0) + 1; // counts spawns (online: tells old updates from new ones)
     this.emote = null;
     this.mesh.visible = true;
     if (this.body) this.body.reset();

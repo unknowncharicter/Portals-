@@ -30,6 +30,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
   - **Gun Game:** free for all with respawns. Every kill gives you the next gun.
   - **Portal Only:** damage only counts if the shot went through a portal.
   - **Tutorial:** an 11-step "How to play" lesson.
+- **Online:** Online tab → Create room, send the 5-letter code, friends Join. Up to 4 players, bots fill empty spots. Works in every mode except the tutorial. Uses free PeerJS (WebRTC); the host's browser runs the bots and the rounds.
 - **Maps:** Arena, Sky Islands, Warehouse, Village, Sunset Spires, Canyon, Desert Compound, or Random.
 - **Weapons:**
   - Primary: Assault Rifle, SMG, Shotgun, Sniper (scope), Burst Rifle, Crossbow, Rocket Launcher (rocket jumps!).
@@ -59,6 +60,8 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 | `src/game/Tutorial.js` | The step-by-step tutorial |
 | `src/game/maps.js` / `World.js` | Map layouts / loading and raycasts |
 | `src/game/CharacterModel.js` | Animated character: SWAT and Punk (`public/models/chars/`) or the Mixamo robot (`public/models/character.glb`, also the source of all animation clips); picks run/back/crouch clips from movement |
+| `src/net/Room.js` | Online rooms (PeerJS): create/join by code, lobby, message passing through the host |
+| `src/net/NetSync.js` | In-match sync: movement 20×/s, shots, hits, kills, portals, grenades, rounds |
 | `src/game/Retarget.js` | Copies the Mixamo clips onto the SWAT/Punk skeleton at load time |
 | `src/game/Look.js`, `Models.js`, `Viewmodel.js`, `Effects.js` | Characters and hats, gun models and skins, first-person gun, effects and kill effects |
 | `src/progress.js` | XP, levels, daily reward, challenges, stats, cosmetics catalogue |
