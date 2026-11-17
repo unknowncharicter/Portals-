@@ -60,7 +60,7 @@ export class Viewmodel {
 
   fire(strength = 1) { this.kick = strength; this.flashT = 0.05; }
 
-  update(dt, { moving, switching, reloading, lookX = 0, lookY = 0 }) {
+  update(dt, { moving, switching, reloading, lookX = 0, lookY = 0, ads = 0 }) {
     // The gun lags a little behind your aim.
     const k = Math.min(1, dt * 10);
     this.swayX += (THREE.MathUtils.clamp(-lookX * 0.0006, -0.04, 0.04) - this.swayX) * k;
@@ -71,13 +71,17 @@ export class Viewmodel {
     const g = this.guns[this.current];
     if (!g) return;
     const hold = HOLD[this.current] || HOLD.ar;
-    let y = hold.y + Math.sin(this.bobT * 2) * bobA;
-    const x = hold.x + Math.cos(this.bobT) * bobA;
+    // Aiming: slide the gun to the middle of the screen, sights in line with the crosshair.
+    const g0 = this.guns[this.current];
+    const aimY = -(g0 ? g0.userData.muzzle.y : 0) - 0.045;
+    const bob = 1 - ads * 0.8;
+    let y = THREE.MathUtils.lerp(hold.y, aimY, ads) + Math.sin(this.bobT * 2) * bobA * bob;
+    const x = THREE.MathUtils.lerp(hold.x, 0, ads) + Math.cos(this.bobT) * bobA * bob;
     let rx = this.kick * 0.12;
     if (switching > 0) y -= switching * 0.5;
     if (reloading) { y -= 0.06; rx -= 0.45; }
     this.root.position.set(x + this.swayX, y + this.swayY, hold.z + this.kick * 0.05);
-    this.root.rotation.set(rx, 0.04, reloading ? 0.35 : 0);
+    this.root.rotation.set(rx * (1 - ads * 0.6), 0.04 * (1 - ads), reloading ? 0.35 : 0);
     this.root.updateMatrixWorld();
 
     this.flashT -= dt;

@@ -31,6 +31,12 @@ export class Hud {
     this.portal.innerHTML = `<span style="color:${p.portalColor}">◉</span> Portals ${portalCount}/2 · E ${cd}`;
   }
 
+  aiming(on) {
+    if (on === this._aiming) return;
+    this._aiming = on;
+    this.crosshair.classList.toggle('ads', on);
+  }
+
   scope(on) {
     this.scopeEl.classList.toggle('hidden', !on);
     this.crosshair.classList.toggle('hidden', on);

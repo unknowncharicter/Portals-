@@ -1,4 +1,8 @@
 import * as THREE from 'three';
+import '@fontsource/rubik/400.css';
+import '@fontsource/rubik/700.css';
+import '@fontsource/russo-one/400.css';
+import { thumbs, makeGunThumbs, makeMapThumbs } from './ui/thumbs.js';
 import { World } from './game/World.js';
 import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
@@ -128,8 +132,8 @@ previewScene.add(new THREE.HemisphereLight('#ffffff', '#445', 2.2));
 const pl = new THREE.DirectionalLight('#ffffff', 1.8); pl.position.set(2, 3, 3); previewScene.add(pl);
 const rim = new THREE.DirectionalLight('#9fc8ff', 2.2); rim.position.set(-2, 2.5, -3); previewScene.add(rim); // backlight so dark guns still read
 const previewCam = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
-previewCam.position.set(0, 0.35, 4.2);
-previewCam.lookAt(0, 0.15, 0);
+previewCam.position.set(0, 0.25, 5.4);
+previewCam.lookAt(0, 0.05, 0);
 let previewChar = null, previewParts = null;
 const previewState = { vel: new THREE.Vector3(), yaw: 0, pitch: 0, grounded: true, crouched: false, sliding: false };
 
@@ -263,42 +267,46 @@ function buildLobby() {
     cols.appendChild(b);
   }
 
+  // Loadout: gun cards with pictures.
   const lo = $('loadout');
   lo.innerHTML = '';
   for (const [slot, list] of [['primary', PRIMARIES], ['secondary', SECONDARIES]]) {
     const row = document.createElement('div');
     row.className = 'row';
     for (const id of list) {
-      const b = document.createElement('button');
-      b.textContent = WEAPONS[id].name;
-      if (save.loadout[slot] === id) b.classList.add('sel');
-      b.onclick = () => { save.loadout[slot] = id; writeSave(save); buildLobby(); };
+      const b = card(WEAPONS[id].name, save.loadout[slot] === id, () => { save.loadout[slot] = id; writeSave(save); rebuildPreview(); buildLobby(); });
+      if (thumbs.guns[id]) { const img = document.createElement('img'); img.src = thumbs.guns[id]; img.alt = ''; b.prepend(img); }
+      else b.prepend(icon('🔫'));
       row.appendChild(b);
     }
     lo.appendChild(row);
   }
 
+  // Maps: picture cards.
   const mapsEl = $('maps');
   mapsEl.innerHTML = '';
   for (const id of [...MAP_IDS, 'random']) {
-    const b = document.createElement('button');
-    b.textContent = id === 'random' ? '🎲 Random' : MAPS[id].name;
-    if (id === (save.map || 'arena')) b.classList.add('sel');
-    b.onclick = () => {
+    const b = card(id === 'random' ? 'Random' : MAPS[id].name, id === (save.map || 'arena'), () => {
       save.map = id; writeSave(save);
       if (id !== 'random') world.load(id);
       buildLobby();
-    };
+    });
+    const t = document.createElement('div');
+    t.className = 'thumb';
+    if (id === 'random') { t.style.background = 'linear-gradient(135deg,#36b5ff,#b65cff,#ff5cc8)'; t.textContent = ''; b.appendChild(icon('🎲')); }
+    else t.style.background = thumbs.maps[id] ? `url(${thumbs.maps[id]}) center / cover` : MAPS[id].theme.sky;
+    b.prepend(t);
     mapsEl.appendChild(b);
   }
 
+  // Difficulty: segmented control.
   const diff = $('difficulty');
   diff.innerHTML = '';
   for (const [id, d] of Object.entries(DIFFICULTIES)) {
     const b = document.createElement('button');
     b.textContent = d.label;
     if (id === (save.difficulty || 'normal')) b.classList.add('sel');
-    b.onclick = () => { save.difficulty = id; writeSave(save); buildLobby(); };
+    b.onclick = () => { save.difficulty = id; writeSave(save); Sfx.click(); buildLobby(); };
     diff.appendChild(b);
   }
 
@@ -309,20 +317,37 @@ function buildLobby() {
   buildDaily();
   buildStats();
 
+  // Modes: icon cards.
+  if (!MODES[save.mode] || MODES[save.mode].hidden) save.mode = '1v1';
+  const MODE_ICONS = { '1v1': '⚔️', '2v2': '👥', ffa: '💥', koth: '👑', gungame: '🔫', portalonly: '🌀' };
   const modes = $('modes');
   modes.innerHTML = '';
   for (const [id, m] of Object.entries(MODES)) {
     if (m.hidden) continue;
-    const b = document.createElement('button');
-    b.textContent = m.label;
-    if (id === save.mode) b.classList.add('sel');
-    b.onclick = () => { save.mode = id; writeSave(save); buildLobby(); };
+    const b = card(m.label, id === save.mode, () => { save.mode = id; writeSave(save); buildLobby(); });
+    b.prepend(icon(MODE_ICONS[id] || '🎮'));
+    b.title = m.desc || '';
     modes.appendChild(b);
   }
-  if (!MODES[save.mode] || MODES[save.mode].hidden) save.mode = '1v1';
+
+  // Hero (left column) text.
+  $('hero-name').textContent = save.look.name;
+  $('hero-sub').textContent = `${WEAPONS[save.loadout.primary].name} · ${WEAPONS[save.loadout.secondary].name}`;
+  const mapName = save.map === 'random' ? 'Random map' : (MAPS[save.map] || MAPS.arena).name;
+  $('hero-mode').textContent = `${MODES[save.mode].label} · ${mapName} · ${(DIFFICULTIES[save.difficulty] || DIFFICULTIES.normal).label} bots`;
   $('mode-desc').textContent = (MODES[save.mode] || MODES['1v1']).desc || '';
   $('btn-tutorial').classList.toggle('new', !save.tutorialDone);
 }
+
+function card(label, selected, onClick) {
+  const b = document.createElement('button');
+  b.className = 'card' + (selected ? ' sel' : '');
+  const l = document.createElement('div'); l.className = 'lbl'; l.textContent = label;
+  b.appendChild(l);
+  b.onclick = () => { Sfx.click(); onClick(); };
+  return b;
+}
+function icon(ch) { const i = document.createElement('div'); i.className = 'ico'; i.textContent = ch; return i; }
 
 // ---------- Lobby tabs ----------
 let currentTab = 'play';
@@ -590,7 +615,15 @@ function frame() {
 }
 
 const models = loadModels();
-models.then(() => { if (state === 'lobby') rebuildPreview(); });
+models.then(() => {
+  makeGunThumbs(gunModel, [...PRIMARIES, ...SECONDARIES]);
+  if (state === 'lobby') { rebuildPreview(); buildLobby(); }
+});
+// Map pictures: rendered once, shortly after start (uses the main renderer).
+setTimeout(() => {
+  try { makeMapThumbs(renderer, world, scene, MAPS, MAP_IDS); } catch (e) { console.warn('map thumbnails failed', e); }
+  if (state === 'lobby') buildLobby();
+}, 300);
 applySettings();
 buildSettings();
 showScreen('menu');

@@ -20,83 +20,96 @@
 
   <!-- Lobby -->
   <div id="lobby" class="screen hidden">
-    <div class="lobby-top">
-      <h2>LOBBY</h2>
-      <div class="level-badge" title="Level"><b id="lvl-num">1</b><div class="xp"><div class="xpbar"><i id="xp-fill"></i></div><small id="xp-text"></small></div></div>
+    <header class="lobby-top">
+      <div class="brand">PORTAL<span>DUEL</span></div>
+      <div class="level-badge" title="Level"><b id="lvl-num">1</b><div class="xp"><small id="xp-text"></small><div class="xpbar"><i id="xp-fill"></i></div></div></div>
       <div class="grow"></div>
-      <button id="btn-start-top" class="big">▶ START</button>
-      <div class="coins">🪙 <span id="coin-count">0</span></div>
-    </div>
-    <nav class="tabs" id="tabs">
-      <button data-tab="play">🎮 Play</button>
-      <button data-tab="character">🧍 Character</button>
-      <button data-tab="shop">🛒 Shop</button>
-      <button data-tab="upgrades">⬆️ Upgrades</button>
-      <button data-tab="daily">🎁 Daily<i id="daily-dot" class="dot hidden"></i></button>
-      <button data-tab="stats">📊 Stats</button>
-      <button data-tab="settings">⚙️ Settings</button>
-    </nav>
-    <div class="tab-body">
-      <section data-tab="play" class="panel">
-        <h3>Loadout</h3>
-        <div id="loadout" class="loadout"></div>
-        <h3>Portal colour</h3>
-        <div id="colors" class="colors"></div>
-        <h3>Map</h3>
-        <div id="maps" class="modes wrap"></div>
-        <h3>Game mode</h3>
-        <div id="modes" class="modes wrap"></div>
-        <p id="mode-desc" class="hint left"></p>
-        <h3>Bot difficulty</h3>
-        <div id="difficulty" class="modes"></div>
-        <button id="btn-start" class="big">START MATCH</button>
-        <button id="btn-tutorial">📘 How to play (tutorial)</button>
-        <p class="hint">Hard bots give 1.5× coins</p>
-      </section>
-      <section data-tab="character" class="panel char-panel">
-        <canvas id="preview"></canvas>
-        <label class="field"><span>Name</span><input id="name-input" type="text" maxlength="14" /></label>
-        <div class="field"><span>Shirt</span><div id="sw-shirt" class="swatches"></div></div>
-        <div class="field"><span>Pants</span><div id="sw-pants" class="swatches"></div></div>
-        <div class="field"><span>Skin</span><div id="sw-skin" class="swatches"></div></div>
-        <div class="field"><span>Hat</span><div id="hats" class="hats"></div></div>
-      </section>
-      <section data-tab="shop" class="panel">
-        <h3>Gun skins</h3>
-        <div id="shop-skins" class="shop"></div>
-        <h3>Kill effects</h3>
-        <div id="shop-fx" class="shop"></div>
-        <p class="hint left">Some items unlock for free when you reach a level.</p>
-      </section>
-      <section data-tab="upgrades" class="panel">
-        <h3>Upgrades</h3>
-        <div id="upgrades"></div>
-      </section>
-      <section data-tab="daily" class="panel">
-        <h3>Daily reward</h3>
-        <div id="daily-reward"></div>
-        <h3>Today's challenges</h3>
-        <div id="challenges"></div>
-      </section>
-      <section data-tab="stats" class="panel">
-        <h3>Your stats</h3>
-        <div id="stats" class="stats"></div>
-      </section>
-      <section data-tab="settings" class="panel">
-        <h3>Settings</h3>
-        <div class="settings" data-settings></div>
-        <h3>Controls</h3>
-        <ul class="controls">
-          <li><b>WASD</b> move (always running) · <b>Space</b> jump</li>
-          <li><b>Shift</b> dash · <b>C</b> crouch, or slide while running</li>
-          <li>Jump out of a slide or right as you land to keep your speed</li>
-          <li><b>Mouse</b> aim · <b>Click</b> shoot · <b>R</b> reload</li>
-          <li><b>Right-click</b> also shoots (sniper: aims the scope)</li>
-          <li><b>1 / 2</b> primary / secondary · <b>F</b> heal · <b>G</b> grenade (2 per round)</li>
-          <li><b>E</b> show portal outline → <b>E</b> again to place</li>
-          <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
-          <li>You keep your 2 newest portals. Portals close after 60s.</li>
-        </ul>
+      <div class="coins"><i>🪙</i><span id="coin-count">0</span></div>
+    </header>
+    <div class="lobby-main">
+      <aside class="hero">
+        <div class="hero-stage"><canvas id="preview"></canvas><div class="hero-floor"></div></div>
+        <div class="hero-info">
+          <div class="hero-name" id="hero-name">Player</div>
+          <div class="hero-sub" id="hero-sub"></div>
+        </div>
+        <button id="btn-start-top" class="play-btn">PLAY</button>
+        <div class="hero-mode" id="hero-mode"></div>
+      </aside>
+      <section class="content">
+        <nav class="tabs" id="tabs">
+          <button data-tab="play">🎮<span>Play</span></button>
+          <button data-tab="character">🧍<span>Character</span></button>
+          <button data-tab="shop">🛒<span>Shop</span></button>
+          <button data-tab="upgrades">⬆️<span>Upgrades</span></button>
+          <button data-tab="daily">🎁<span>Daily</span><i id="daily-dot" class="dot hidden"></i></button>
+          <button data-tab="stats">📊<span>Stats</span></button>
+          <button data-tab="settings">⚙️<span>Settings</span></button>
+        </nav>
+        <div class="tab-body">
+          <section data-tab="play" class="panel">
+            <h3>Game mode</h3>
+            <div id="modes" class="cards modes-grid"></div>
+            <p id="mode-desc" class="hint left"></p>
+            <h3>Map</h3>
+            <div id="maps" class="cards maps-grid"></div>
+            <h3>Loadout</h3>
+            <div id="loadout" class="loadout"></div>
+            <div class="row2">
+              <div><h3>Bot difficulty</h3><div id="difficulty" class="seg"></div></div>
+              <div><h3>Portal colour</h3><div id="colors" class="colors"></div></div>
+            </div>
+            <div class="row2 actions">
+              <button id="btn-start" class="big">START MATCH</button>
+              <button id="btn-tutorial">📘 How to play</button>
+            </div>
+            <p class="hint">Hard bots give 1.5× coins</p>
+          </section>
+          <section data-tab="character" class="panel char-panel">
+            <h3>Customize</h3>
+            <label class="field"><span>Name</span><input id="name-input" type="text" maxlength="14" /></label>
+            <div class="field"><span>Body colour</span><div id="sw-shirt" class="swatches"></div></div>
+            <div class="field"><span>Joints colour</span><div id="sw-pants" class="swatches"></div></div>
+            <div class="field"><span>Skin (blocky style)</span><div id="sw-skin" class="swatches"></div></div>
+            <div class="field"><span>Hat</span><div id="hats" class="hats"></div></div>
+          </section>
+          <section data-tab="shop" class="panel">
+            <h3>Gun skins</h3>
+            <div id="shop-skins" class="shop"></div>
+            <h3>Kill effects</h3>
+            <div id="shop-fx" class="shop"></div>
+            <p class="hint left">Some items unlock for free when you reach a level.</p>
+          </section>
+          <section data-tab="upgrades" class="panel">
+            <h3>Upgrades</h3>
+            <div id="upgrades"></div>
+          </section>
+          <section data-tab="daily" class="panel">
+            <h3>Daily reward</h3>
+            <div id="daily-reward"></div>
+            <h3>Today's challenges</h3>
+            <div id="challenges"></div>
+          </section>
+          <section data-tab="stats" class="panel">
+            <h3>Your stats</h3>
+            <div id="stats" class="stats"></div>
+          </section>
+          <section data-tab="settings" class="panel">
+            <h3>Settings</h3>
+            <div class="settings" data-settings></div>
+            <h3>Controls</h3>
+            <ul class="controls">
+              <li><b>WASD</b> move (always running) · <b>Space</b> jump</li>
+              <li><b>Shift</b> dash · <b>C</b> crouch, or slide while running</li>
+              <li>Jump out of a slide or right as you land to keep your speed</li>
+              <li><b>Left click</b> shoot · <b>Right click</b> (hold) aim · <b>R</b> reload</li>
+              <li><b>1 / 2</b> primary / secondary · <b>F</b> heal · <b>G</b> grenade (2 per round)</li>
+              <li><b>E</b> show portal outline → <b>E</b> again to place</li>
+              <li><b>Q</b> cancel portal · <b>Esc</b> pause</li>
+              <li>You keep your 2 newest portals. Portals close after 60s.</li>
+            </ul>
+          </section>
+        </div>
       </section>
     </div>
   </div>

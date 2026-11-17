@@ -11,6 +11,7 @@ export class Input {
     this.dx = 0; this.dy = 0;
     this.wheel = 0;
     this.moveX = 0; this.moveY = 0; this.touchSprint = false; // touch joystick
+    this.touchAim = false; // touch aim button (toggle)
     this.sensitivity = 0.0022;
     this.enabled = false;
 

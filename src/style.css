@@ -111,6 +111,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #crosshair i:nth-child(2) { width: 2px; height: 8px; left: -1px; top: var(--gap); }
 #crosshair i:nth-child(3) { height: 2px; width: 8px; top: -1px; left: calc(-8px - var(--gap)); }
 #crosshair i:nth-child(4) { height: 2px; width: 8px; top: -1px; left: var(--gap); }
+#crosshair.ads i { opacity: 0; }
 #crosshair::after { content: ''; position: absolute; left: -1px; top: -1px; width: 2px; height: 2px; background: #fff; }
 #timer { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; text-shadow: 0 0 6px #000; }
 #timer.low { color: #ff6060; }
@@ -146,6 +147,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 .tbtn { position: absolute; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(20,24,40,.45); border: 2px solid rgba(255,255,255,.4); color: #fff; font-weight: 900; font-size: 13px; width: 64px; height: 64px; }
 .tbtn.on { background: rgba(80,160,255,.55); }
 .tbtn.cool { opacity: .45; }
+.tbtn.lit { background: rgba(80,160,255,.6); }
 .tbtn.big { width: 92px; height: 92px; font-size: 16px; right: 28px; bottom: 34px; background: rgba(200,50,50,.45); }
 .tbtn.small { width: 48px; height: 48px; font-size: 18px; }
 #t-jump { right: 132px; bottom: 26px; }
@@ -233,3 +235,134 @@ body.touch .hitdir::before { top: -140px; }
 #bottom-right { position: absolute; right: 20px; bottom: 20px; text-align: right; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
 #weapon-name { font-size: 16px; opacity: .8; }
 #ammo { font-size: 40px; font-weight: 900; }
+
+/* ===================== Lobby (redesign) ===================== */
+:root {
+  --glass: rgba(16, 20, 44, .62);
+  --glass-2: rgba(255, 255, 255, .06);
+  --line: rgba(140, 170, 255, .18);
+  --accent: #4cc3ff;
+  --accent-2: #d45cff;
+  --grad: linear-gradient(90deg, #36b5ff, #b65cff 60%, #ff5cc8);
+  --gold: #ffd75e;
+}
+html, body { font-family: 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+.logo, .brand, .play-btn, button.big, .panel h3, .tabs button span, #center-text, #results-title, .screen h2 { font-family: 'Russo One', 'Rubik', system-ui, sans-serif; font-weight: 400; }
+
+#lobby {
+  justify-content: flex-start; align-items: stretch; gap: 14px; padding: 16px 22px; overflow: hidden;
+  background:
+    radial-gradient(ellipse at 18% 60%, rgba(76,195,255,.18), transparent 55%),
+    linear-gradient(90deg, rgba(6,8,20,.72) 0%, rgba(6,8,20,.30) 32%, rgba(6,8,20,.80) 58%, rgba(6,8,20,.92) 100%);
+}
+#lobby .lobby-top { width: 100%; max-width: none; display: flex; align-items: center; gap: 18px; }
+.brand { font-size: 30px; letter-spacing: 2px; color: #8fdcff; text-shadow: 0 0 18px rgba(54,181,255,.7); }
+.brand span { color: #ff7ad9; text-shadow: 0 0 18px rgba(255,92,200,.7); margin-left: 6px; }
+.grow { flex: 1; }
+.level-badge { background: var(--glass); border: 1px solid var(--line); border-radius: 999px; padding: 5px 14px 5px 5px; backdrop-filter: blur(8px); }
+.level-badge b { width: 34px; height: 34px; font-size: 16px; box-shadow: 0 0 14px rgba(182,92,255,.6); }
+.level-badge .xpbar { width: 140px; height: 7px; margin-top: 3px; }
+.level-badge small { font-size: 11px; opacity: .8; }
+#lobby .coins { display: flex; align-items: center; gap: 8px; background: var(--glass); border: 1px solid rgba(255,215,94,.35); border-radius: 999px; padding: 6px 16px; font-size: 22px; color: var(--gold); backdrop-filter: blur(8px); }
+#lobby .coins i { font-style: normal; }
+
+.lobby-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(250px, 34%) 1fr; gap: 22px; }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 0; }
+.hero-stage { position: relative; width: 100%; flex: 1; min-height: 220px; }
+#preview { position: absolute; inset: 0; width: 100%; height: 100%; background: transparent; border-radius: 0; z-index: 1; }
+.hero-floor { position: absolute; left: 15%; right: 15%; bottom: 4%; height: 18%; border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(76,195,255,.45), rgba(182,92,255,.18) 45%, transparent 70%); filter: blur(2px); }
+.hero-info { text-align: center; }
+.hero-name { font-family: 'Russo One', sans-serif; font-size: 28px; letter-spacing: 1px; text-shadow: 0 2px 10px rgba(0,0,0,.6); }
+.hero-sub { font-size: 14px; opacity: .8; margin-top: 2px; }
+.play-btn {
+  width: min(320px, 100%); font-size: 34px; letter-spacing: 3px; padding: 14px 0; border-radius: 16px; color: #fff;
+  background: var(--grad); box-shadow: 0 8px 30px rgba(182,92,255,.45), inset 0 -4px 0 rgba(0,0,0,.2);
+  transition: transform .12s, box-shadow .12s, filter .12s; position: relative; overflow: hidden;
+}
+.play-btn::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: skewX(-20deg); animation: shine 3.2s infinite; }
+@keyframes shine { 0%, 60% { left: -60%; } 100% { left: 130%; } }
+.play-btn:hover { transform: translateY(-2px) scale(1.02); filter: brightness(1.1); box-shadow: 0 12px 36px rgba(182,92,255,.6); }
+.play-btn:active { transform: translateY(1px); }
+.hero-mode { font-size: 13px; opacity: .75; text-align: center; }
+
+.content { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
+#lobby .tabs { width: 100%; gap: 6px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 6px; backdrop-filter: blur(8px); flex-wrap: nowrap; overflow-x: auto; }
+#lobby .tabs button { flex: 1; min-width: max-content; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border-radius: 10px; padding: 9px 12px; font-size: 14px; color: #c9d4ff; transition: background .15s; }
+#lobby .tabs button span { font-size: 13px; letter-spacing: .5px; }
+#lobby .tabs button:hover { background: var(--glass-2); }
+#lobby .tabs button.sel { background: var(--grad); color: #fff; box-shadow: 0 4px 16px rgba(182,92,255,.35); }
+#lobby .tab-body { width: 100%; flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+#lobby .tab-body > section { max-width: none; margin: 0; }
+#lobby .panel { background: var(--glass); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; gap: 10px; backdrop-filter: blur(10px); }
+#lobby .panel h3 { font-size: 13px; letter-spacing: 2px; color: #9fb4ff; opacity: 1; margin-top: 4px; }
+#lobby button { transition: background .15s, transform .1s, border-color .15s; }
+#lobby button:not(:disabled):active { transform: scale(.97); }
+
+.cards { display: grid; gap: 8px; }
+.modes-grid { grid-template-columns: repeat(3, 1fr); }
+.maps-grid { grid-template-columns: repeat(4, 1fr); }
+.card { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; padding: 0; overflow: hidden; border-radius: 12px; border: 2px solid transparent; background: var(--glass-2); min-height: 64px; }
+.card:hover { border-color: rgba(140,170,255,.4); background: rgba(255,255,255,.1); }
+.card.sel { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(76,195,255,.25), 0 6px 20px rgba(54,181,255,.3); }
+.card .ico { font-size: 26px; margin-top: 8px; }
+.card .lbl { font-size: 13px; font-weight: 700; padding: 6px 4px 8px; text-align: center; line-height: 1.1; }
+.maps-grid .card { aspect-ratio: 16 / 10; justify-content: flex-end; }
+.maps-grid .card .thumb { position: absolute; inset: 0; background-size: cover; background-position: center; }
+.maps-grid .card .lbl { position: relative; width: 100%; background: linear-gradient(transparent, rgba(0,0,0,.75)); padding-top: 18px; }
+.loadout { gap: 8px; }
+.loadout .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.loadout .card { min-height: 84px; }
+.loadout .card img { width: 92%; height: 52px; object-fit: contain; margin-top: 6px; filter: drop-shadow(0 3px 4px rgba(0,0,0,.5)); }
+.loadout .card .lbl { font-size: 12px; padding: 2px 4px 7px; }
+.seg { display: flex; background: rgba(0,0,0,.25); border-radius: 10px; padding: 4px; gap: 4px; }
+.seg button { flex: 1; background: transparent; padding: 8px 6px; font-size: 13px; border-radius: 8px; }
+.seg button.sel { background: var(--grad); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+.row2.actions { grid-template-columns: 2fr 1fr; margin-top: 4px; }
+.row2.actions button.big { padding: 13px 10px; font-size: 18px; }
+#lobby .colors button { width: 30px; height: 30px; box-shadow: inset 0 0 0 2px rgba(0,0,0,.25); }
+#lobby .colors button.sel { border-color: #fff; box-shadow: 0 0 12px currentColor; }
+.shop .item, .challenge, .stats div, .daily-days div { background: var(--glass-2); border: 1px solid var(--line); }
+.shop .item.sel { border-color: var(--accent); }
+.upg { padding: 8px 10px; border-radius: 10px; background: var(--glass-2); }
+
+@media (max-width: 820px) {
+  #lobby { overflow-y: auto; padding: 12px; }
+  .lobby-main { grid-template-columns: 1fr; }
+  .hero { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+  .hero-stage { flex: none; width: 160px; height: 200px; min-height: 0; }
+  .play-btn { font-size: 26px; }
+  .modes-grid { grid-template-columns: repeat(2, 1fr); }
+  .maps-grid { grid-template-columns: repeat(2, 1fr); }
+  #lobby .tabs button span { display: none; }
+  .brand { font-size: 22px; }
+  .level-badge .xpbar { width: 80px; }
+}
+@media (max-height: 560px) and (min-width: 821px) {
+  .hero-name { font-size: 22px; }
+  .play-btn { font-size: 26px; padding: 10px 0; }
+}
+.lobby-main { grid-template-columns: minmax(190px, 32%) minmax(0, 1fr); }
+.card .ico { position: relative; z-index: 1; }
+.maps-grid .card .ico { font-size: 34px; margin: auto; }
+@media (max-height: 520px) {
+  #lobby { padding: 8px 12px; gap: 8px; }
+  .brand { font-size: 20px; }
+  .level-badge b { width: 28px; height: 28px; font-size: 14px; }
+  .level-badge .xpbar { width: 90px; }
+  #lobby .coins { font-size: 17px; padding: 4px 12px; }
+  .hero { gap: 4px; }
+  .hero-stage { min-height: 0; }
+  .hero-name { font-size: 18px; }
+  .hero-sub, .hero-mode { font-size: 11px; }
+  .play-btn { font-size: 22px; padding: 8px 0; border-radius: 12px; }
+  #lobby .tabs { padding: 4px; }
+  #lobby .tabs button { padding: 6px 8px; }
+  #lobby .tabs button span { display: none; }
+  #lobby .panel { padding: 10px 12px; gap: 8px; }
+  .card .ico { font-size: 20px; margin-top: 5px; }
+  .card .lbl { font-size: 11px; padding: 4px 3px 6px; }
+  .card { min-height: 52px; }
+  .loadout .card img { height: 36px; }
+}

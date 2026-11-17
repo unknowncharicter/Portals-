@@ -67,6 +67,7 @@ export class Match {
     this.ghost = new PortalGhost(this.scene);
     this.deathCam = null;
     this.scoped = false;
+    this.ads = false; this.adsT = 0; // aiming down sights (right mouse)
     this.baseFov = this.camera.fov;
     this.jumpBuf = 0; this.bobT = 0; this.dip = 0; this.dipV = 0; this.shake = 0; this.bloom = 0;
     this.fovKick = 0; this.eyeSmooth = 1.6; this.roundT = ROUND_TIME;
@@ -276,7 +277,8 @@ export class Match {
     }
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
     const scoped = c === this.player && this.scoped;
-    const base = scoped ? def.scopedSpread : def.spread;
+    const aiming = c === this.player && this.ads;
+    const base = scoped ? def.scopedSpread : def.spread * (aiming ? 0.35 : 1);
     const spread = base * (moving ? 1.35 : 1) * (c.grounded ? 1 : 1.7) + extraSpread;
     const origin = c.eyePos();
     const pellets = def.pellets || 1;
@@ -417,6 +419,7 @@ export class Match {
     if (victim === this.player) {
       this.earned.deaths++;
       this.setScope(false);
+      this.ads = false;
       this.deathCam = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone() };
       this.ghostMode = false; this.ghost.hide();
       if (!self && info.segs && killer.alive !== undefined) this.startKillcam(killer, info);
@@ -467,7 +470,7 @@ export class Match {
     const p = this.player, inp = this.input;
     if (!p.alive) return new THREE.Vector3();
 
-    const sens = inp.sensitivity * (this.scoped ? this.camera.fov / this.baseFov : 1);
+    const sens = inp.sensitivity * ((this.scoped || this.ads) ? Math.min(1, this.camera.fov / this.baseFov) : 1);
     p.yaw -= inp.dx * sens;
     p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens, -1.55, 1.55);
 
@@ -490,16 +493,19 @@ export class Match {
       if (inp.hit('Digit2') && p.switchTo(1)) { this.setScope(false); Sfx.swap(); }
       if (inp.wheel && p.switchTo((p.slot + 1) % 2)) { this.setScope(false); Sfx.swap(); }
       if (inp.hit('KeyR')) { this.reload(p); this.setScope(false); }
-      if (inp.rightClicked && p.weapon.def.zoom) this.setScope(!this.scoped);
-      if (this.scoped && p.weapon.reloading) this.setScope(false);
+      // Right mouse (held) aims with every gun. The sniper aims through its scope
+      // (and comes back out while the bolt cycles after a shot).
+      const wantAim = inp.rightDown || inp.touchAim;
+      const canAim = !p.weapon.reloading && p.switchT <= 0;
+      if (p.weapon.def.zoom) { this.setScope(wantAim && canAim && p.weapon.cooldown <= 0); this.ads = false; }
+      else { this.setScope(false); this.ads = wantAim && canAim; }
       if (inp.hit('KeyF')) this.heal(p);
       if (inp.hit('KeyG')) this.throwGrenade(p);
 
       // Left click shoots. Right click aims guns that have a scope, and shoots with every other gun.
       const w = p.weapon;
-      const rightFires = !w.def.zoom;
-      const held = inp.mouseDown || (rightFires && inp.rightDown);
-      const clicked = inp.mouseClicked || (rightFires && inp.rightClicked);
+      const held = inp.mouseDown;          // left click shoots
+      const clicked = inp.mouseClicked;
       if (w.def.auto ? held : clicked) this.fire(p);
 
       // Portals: E shows the outline, E again places it. Q cancels.
@@ -578,7 +584,9 @@ export class Match {
     this.effects.update(dt);
     this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id);
-    this.viewmodel.update(dt, { moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / SWITCH_TIME, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
+    this.adsT += ((this.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
+    this.hud.aiming(this.ads);
+    this.viewmodel.update(dt, { ads: this.adsT, moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / SWITCH_TIME, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
     this.hud.update(p, this.portals.ownerCount(p));
     // Crosshair opens up while moving, jumping and shooting.
     this.bloom = Math.max(0, this.bloom - dt * 3);
@@ -671,9 +679,10 @@ export class Match {
       if (!this.scoped) {
         // Field of view widens with speed (and kicks on a dash).
         this.fovKick = Math.max(0, this.fovKick - dt * 30);
-        const target = this.baseFov + THREE.MathUtils.clamp((hs - 7) * 0.9, 0, 12) + this.fovKick;
+        const target = this.ads ? (p.weapon.def.adsFov || this.baseFov * 0.75)
+          : this.baseFov + THREE.MathUtils.clamp((hs - 7) * 0.9, 0, 12) + this.fovKick;
         if (Math.abs(cam.fov - target) > 0.01) {
-          cam.fov += (target - cam.fov) * Math.min(1, dt * 8);
+          cam.fov += (target - cam.fov) * Math.min(1, dt * (this.ads ? 14 : 8));
           cam.updateProjectionMatrix();
         }
       }

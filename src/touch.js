@@ -82,7 +82,7 @@ export class TouchControls {
         case 'nade': inp.tap('KeyG'); break;
         case 'heal': inp.tap('KeyF'); break;
         case 'swap': inp.wheel += 1; break;
-        case 'scope': inp.rightClicked = true; break;
+        case 'scope': inp.touchAim = !inp.touchAim; e.target.classList.toggle('lit', inp.touchAim); break;
         case 'pause': this.onPause(); break;
       }
       return;
@@ -140,7 +140,7 @@ export class TouchControls {
   update(match) {
     if (!match) return;
     const p = match.player;
-    this.btn.scope.style.display = p.weapon.def.zoom ? '' : 'none';
+    this.btn.scope.style.display = '';
     this.btn.cancel.style.display = match.ghostMode ? '' : 'none';
     this.btn.portal.textContent = match.ghostMode ? 'PLACE' : 'PORTAL';
     this.btn.portal.classList.toggle('cool', p.portalCd > 0);

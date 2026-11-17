@@ -19,6 +19,8 @@
   },
   "homepage": "https://github.com/unknowncharicter/Portals-#readme",
   "dependencies": {
+    "@fontsource/rubik": "^5.1.0",
+    "@fontsource/russo-one": "^5.1.0",
     "three": "^0.170.0"
   },
   "devDependencies": {
