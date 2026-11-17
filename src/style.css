@@ -113,7 +113,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #crosshair i:nth-child(4) { height: 2px; width: 8px; top: -1px; left: var(--gap); }
 #crosshair.ads i { opacity: 0; }
 #crosshair::after { content: ''; position: absolute; left: -1px; top: -1px; width: 2px; height: 2px; background: #fff; }
-#timer { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; text-shadow: 0 0 6px #000; }
+#timer { position: absolute; top: 104px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: 800; text-shadow: 0 0 6px #000; }
 #timer.low { color: #ff6060; }
 #killpop { position: absolute; top: 58%; width: 100%; text-align: center; font-size: 26px; font-weight: 900; color: #ff5050; text-shadow: 0 0 10px #000; opacity: 0; pointer-events: none; }
 #killpop small { display: block; font-size: 13px; letter-spacing: 3px; color: #fff; }
@@ -123,7 +123,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #killcam span { font-size: 12px; letter-spacing: 4px; color: #ff5570; font-weight: 800; }
 #killcam b { font-size: 26px; }
 #killcam small { font-size: 14px; opacity: .85; }
-#tutorial { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); width: min(640px, 92%); text-align: center; background: rgba(10,14,30,.8); border: 2px solid #39f; border-radius: 14px; padding: 12px 18px; font-size: 20px; font-weight: 700; }
+#tutorial { position: absolute; top: 132px; left: 50%; transform: translateX(-50%); width: min(640px, 92%); text-align: center; background: rgba(10,14,30,.8); border: 2px solid #39f; border-radius: 14px; padding: 12px 18px; font-size: 20px; font-weight: 700; }
 #tutorial small { display: block; font-size: 12px; letter-spacing: 3px; color: #7cf; margin-bottom: 4px; }
 #btn-tutorial.new { background: linear-gradient(90deg, #2a8a4a, #3ab060); }
 #btn-tutorial.new::after { content: ' · NEW!'; color: #ffd75e; }
@@ -366,3 +366,31 @@ html, body { font-family: 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, s
   .card { min-height: 52px; }
   .loadout .card img { height: 36px; }
 }
+.accs { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.acc { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; background: var(--glass-2); border: 2px solid transparent; }
+.acc:hover { border-color: rgba(140,170,255,.4); }
+.acc.sel { border-color: var(--accent); box-shadow: 0 0 14px rgba(54,181,255,.3); }
+.acc .ai { font-size: 26px; line-height: 1.1; }
+.acc .an { font-size: 12px; font-weight: 700; }
+.acc .ap { font-size: 11px; opacity: .8; }
+.acc.locked .ap { color: var(--gold); opacity: 1; }
+.acc.poor { opacity: .55; }
+/* Scoreboard */
+#score { background: none !important; padding: 0 !important; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.sb-row { display: flex; align-items: stretch; gap: 6px; }
+.sb-side { display: flex; align-items: center; gap: 10px; background: rgba(8,10,24,.7); border-radius: 12px; padding: 4px 14px; border-bottom: 3px solid var(--c); }
+.sb-side.r { flex-direction: row-reverse; }
+.sb-side .sb-name { color: var(--c); font-size: 14px; letter-spacing: 1px; }
+.sb-side b { font-family: 'Russo One', sans-serif; font-size: 30px; font-weight: 400; color: #fff; min-width: 22px; text-align: center; }
+.sb-side small { font-size: 11px; opacity: .75; }
+.sb-mid { display: flex; flex-direction: column; justify-content: center; align-items: center; background: rgba(8,10,24,.7); border-radius: 12px; padding: 4px 12px; font-family: 'Russo One', sans-serif; font-size: 13px; letter-spacing: 1px; }
+.sb-mid small { font-family: 'Rubik', sans-serif; font-size: 10px; opacity: .7; letter-spacing: 0; }
+.sb-row.ffa { gap: 4px; }
+.sb-ffa { display: flex; flex-direction: column; align-items: center; background: rgba(8,10,24,.7); border-radius: 10px; padding: 3px 12px; border-bottom: 3px solid var(--c); min-width: 64px; }
+.sb-ffa.me { box-shadow: 0 0 0 2px rgba(255,255,255,.5); }
+.sb-ffa span { font-size: 11px; color: var(--c); }
+.sb-ffa b { font-family: 'Russo One', sans-serif; font-weight: 400; font-size: 22px; line-height: 1.1; }
+.sb-ffa small { font-size: 10px; opacity: .75; }
+.sb-kd { font-size: 12px; background: rgba(8,10,24,.6); padding: 2px 10px; border-radius: 8px; opacity: .9; }
+body.touch .sb-side b { font-size: 22px; }
+body.touch .sb-kd { display: none; }

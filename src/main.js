@@ -8,7 +8,7 @@ import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
 import { Match, MODES, DIFFICULTIES } from './game/Match.js';
-import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, cleanName } from './game/Look.js';
+import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, cleanName } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
@@ -135,14 +135,28 @@ const previewCam = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
 previewCam.position.set(0, 0.25, 5.4);
 previewCam.lookAt(0, 0.05, 0);
 let previewChar = null, previewParts = null;
+// Drag the character to spin it.
+const previewDrag = { active: false, x: 0, yaw: Math.PI, last: 0 };
+previewCanvas.style.pointerEvents = 'auto';
+previewCanvas.style.cursor = 'grab';
+previewCanvas.addEventListener('pointerdown', (e) => { previewDrag.active = true; previewDrag.x = e.clientX; previewCanvas.setPointerCapture?.(e.pointerId); });
+previewCanvas.addEventListener('pointermove', (e) => {
+  if (!previewDrag.active) return;
+  previewDrag.yaw += (e.clientX - previewDrag.x) * 0.012; previewDrag.x = e.clientX; previewDrag.last = performance.now();
+});
+const endDrag = () => { previewDrag.active = false; previewDrag.last = performance.now(); };
+previewCanvas.addEventListener('pointerup', endDrag);
+previewCanvas.addEventListener('pointercancel', endDrag);
 const previewState = { vel: new THREE.Vector3(), yaw: 0, pitch: 0, grounded: true, crouched: false, sliding: false };
 
 function rebuildPreview() {
+  const keepYaw = previewChar ? previewChar.rotation.y : Math.PI; // start facing the camera
   if (previewChar) previewScene.remove(previewChar);
   const parts = buildCharacterMesh(save.look, { visor: save.color, tag: false });
   const gun = gunModel(save.loadout.primary);
   if (gun) parts.gunHolder.add(gun);
   previewChar = parts.group;
+  previewChar.rotation.y = keepYaw;
   previewParts = parts;
   previewScene.add(previewChar);
 }
@@ -156,7 +170,9 @@ function renderPreview(dt) {
     previewCam.aspect = w / h;
     previewCam.updateProjectionMatrix();
   }
-  previewChar.rotation.y += dt * 0.6;
+  if (!previewDrag.active && performance.now() - previewDrag.last > 1500) previewChar.rotation.y += dt * 0.6;
+  else previewChar.rotation.y = previewDrag.yaw;
+  previewDrag.yaw = previewChar.rotation.y;
   if (previewParts.body) {
     previewChar.updateMatrixWorld(true);
     previewParts.body.update(dt, previewState);
@@ -184,27 +200,36 @@ function buildCharacterPanel() {
     }
   }
 
-  const hats = $('hats');
-  hats.innerHTML = '';
-  for (const h of HATS) {
-    const owned = save.owned.includes(h.id);
-    const b = document.createElement('button');
-    b.textContent = owned ? h.name : `🪙 ${h.price}`;
-    b.title = h.name;
-    if (!owned) { b.classList.add('locked'); b.disabled = save.coins < h.price; }
-    if (L.hat === h.id) b.classList.add('sel');
-    b.onclick = () => {
-      if (!owned) {
-        if (save.coins < h.price) return;
-        save.coins -= h.price;
-        save.owned.push(h.id);
-        Sfx.portalPlace();
-      }
-      L.hat = h.id;
-      writeSave(save);
-      buildLobby();
-    };
-    hats.appendChild(b);
+  // Accessory shops: hats, face and back. Free items are always owned.
+  const HAT_ICONS = { none: '🚫', cap: '🧢', beanie: '🧶', helmet: '⛑️', headphones: '🎧', tophat: '🎩', horns: '😈', crown: '👑' };
+  const slots = [
+    ['hats', 'hat', HATS.map(h => ({ ...h, icon: HAT_ICONS[h.id] || '🎩' }))],
+    ['faces', 'face', FACES],
+    ['backs', 'back', BACKS],
+  ];
+  for (const [elId, key, list] of slots) {
+    const grid = $(elId);
+    grid.innerHTML = '';
+    for (const item of list) {
+      const owned = !item.price || save.owned.includes(item.id);
+      const equipped = (L[key] || list[0].id) === item.id;
+      const b = document.createElement('button');
+      b.className = 'acc' + (equipped ? ' sel' : '') + (owned ? '' : ' locked');
+      b.innerHTML = `<span class="ai">${item.icon}</span><span class="an">${item.name}</span><span class="ap">${equipped ? 'Equipped' : owned ? 'Equip' : '🪙 ' + item.price}</span>`;
+      if (!owned && save.coins < item.price) b.classList.add('poor');
+      b.onclick = () => {
+        if (!owned) {
+          if (save.coins < item.price) { Sfx.portalDeny(); return; }
+          save.coins -= item.price;
+          save.owned.push(item.id);
+          Sfx.coin();
+        } else Sfx.click();
+        L[key] = item.id;
+        writeSave(save);
+        buildLobby();
+      };
+      grid.appendChild(b);
+    }
   }
   rebuildPreview();
 }

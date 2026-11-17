@@ -17,11 +17,32 @@ export const HATS = [
   { id: 'crown',      name: 'Crown',      price: 500 },
 ];
 
-export const DEFAULT_LOOK = { name: 'Player', shirt: SHIRTS[3], pants: PANTS[0], skin: SKINS[1], hat: 'cap' };
+// Face accessories (on the head, in front of the face).
+export const FACES = [
+  { id: 'nofaceitem', name: 'None',       icon: '🙂', price: 0 },
+  { id: 'visor',      name: 'Visor',      icon: '🥽', price: 0 },
+  { id: 'shades',     name: 'Shades',     icon: '🕶️', price: 120 },
+  { id: 'ninja',      name: 'Ninja mask', icon: '🥷', price: 180 },
+  { id: 'gasmask',    name: 'Gas mask',   icon: '😷', price: 260 },
+  { id: 'skull',      name: 'Skull mask', icon: '💀', price: 350 },
+  { id: 'cyber',      name: 'Cyber face', icon: '🤖', price: 450 },
+];
+// Back accessories.
+export const BACKS = [
+  { id: 'noback',   name: 'None',     icon: '⬜', price: 0 },
+  { id: 'backpack', name: 'Backpack', icon: '🎒', price: 150 },
+  { id: 'katana',   name: 'Katana',   icon: '🗡️', price: 280 },
+  { id: 'cape',     name: 'Cape',     icon: '🦸', price: 300 },
+  { id: 'jetpack',  name: 'Jetpack',  icon: '🚀', price: 450 },
+  { id: 'wings',    name: 'Wings',    icon: '🪽', price: 600 },
+];
+
+export const DEFAULT_LOOK = { name: 'Player', shirt: SHIRTS[3], pants: PANTS[0], skin: SKINS[1], hat: 'cap', face: 'visor', back: 'noback' };
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function randomLook(name) {
-  return { name, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)), hat: pick(HATS).id };
+  return { name, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)), hat: pick(HATS).id,
+    face: pick(['visor', 'visor', 'shades', 'ninja', 'skull', 'gasmask']), back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
 }
 
 export function cleanName(s) {
@@ -71,8 +92,16 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     b.position.set(x, y, z); parent.add(b); return b;
   };
-  box(0.36, 0.1, 0.05, new THREE.MeshBasicMaterial({ color: visor }), 0, 0.76, -0.2); // visor
+  addFace(look, box, mat, visor);
   addHat(hatRoot, look, box, mat, visor);
+
+  // Back socket (on the upper spine): same "blocky torso" coordinates, scaled to the robot.
+  const back = new THREE.Group();
+  back.scale.setScalar(0.8);
+  back.position.set(0, -0.26, -0.03);
+  body.socket('Spine2').add(back);
+  const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, back);
+  addBack(look, bbox, mat, visor);
 
   if (teamColor) {
     const hips = body.socket('Hips');
@@ -112,7 +141,8 @@ function buildBlocky(look, { visor = '#33aaff', teamColor = null, tag = true } =
   }
   box(0.62, 0.78, 0.36, shirt, 0, 0.16, 0);
   box(0.42, 0.42, 0.42, skin, 0, 0.72, 0);
-  box(0.36, 0.1, 0.05, glow, 0, 0.76, -0.22); // visor in portal colour
+  addFace(look, box, mat, visor);
+  addBack(look, (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z), mat, visor);
   box(0.16, 0.16, 0.6, shirt, 0.3, 0.32, -0.25);
   box(0.16, 0.16, 0.45, shirt, -0.28, 0.32, -0.25);
   box(0.14, 0.14, 0.14, skin, 0.3, 0.32, -0.58);  // hands
@@ -134,6 +164,86 @@ function buildBlocky(look, { visor = '#33aaff', teamColor = null, tag = true } =
   let tagSprite = null;
   if (tag) { tagSprite = nameTag(look.name, teamColor || '#ffffff'); g.add(tagSprite); }
   return { group: g, legL, legR, gunHolder, tag: tagSprite };
+}
+
+// Face items, in "blocky head" coordinates: head centre y 0.72, face at z -0.21.
+function addFace(look, box, mat, visor) {
+  const glow = new THREE.MeshBasicMaterial({ color: visor });
+  const black = mat('#111116'), white = mat('#f2f0e6'), z = -0.225;
+  switch (look.face || 'visor') {
+    case 'visor': box(0.36, 0.1, 0.05, glow, 0, 0.76, -0.2); break;
+    case 'shades':
+      box(0.15, 0.08, 0.03, black, -0.09, 0.76, z); box(0.15, 0.08, 0.03, black, 0.09, 0.76, z);
+      box(0.06, 0.02, 0.03, black, 0, 0.78, z); box(0.42, 0.02, 0.02, black, 0, 0.78, z + 0.01);
+      break;
+    case 'ninja': {
+      const cloth = mat('#1d1f2a');
+      box(0.44, 0.2, 0.44, cloth, 0, 0.62, 0);                 // lower face wrap
+      box(0.44, 0.08, 0.44, cloth, 0, 0.88, 0);                // forehead band
+      box(0.08, 0.06, 0.2, cloth, 0.1, 0.88, 0.28);            // knot tails
+      break;
+    }
+    case 'gasmask': {
+      const rubber = mat('#2c3328');
+      box(0.32, 0.24, 0.06, rubber, 0, 0.68, z);
+      box(0.12, 0.08, 0.03, glow, -0.08, 0.77, z - 0.03); box(0.12, 0.08, 0.03, glow, 0.08, 0.77, z - 0.03);
+      for (const x of [-0.13, 0.13]) box(0.11, 0.11, 0.09, mat('#5a5f52'), x, 0.6, z - 0.06); // filters
+      break;
+    }
+    case 'skull':
+      box(0.4, 0.44, 0.04, white, 0, 0.71, z);                 // mask
+      box(0.11, 0.1, 0.02, black, -0.09, 0.78, z - 0.02);      // eye sockets
+      box(0.11, 0.1, 0.02, black, 0.09, 0.78, z - 0.02);
+      box(0.05, 0.06, 0.02, black, 0, 0.69, z - 0.02);         // nose
+      for (let i = -2; i <= 2; i++) box(0.035, 0.07, 0.02, i % 2 ? black : white, i * 0.045, 0.6, z - 0.02); // teeth
+      break;
+    case 'cyber':
+      box(0.42, 0.42, 0.04, mat('#15161c'), 0, 0.72, z);
+      box(0.3, 0.05, 0.02, glow, 0, 0.78, z - 0.025);          // eye line
+      box(0.05, 0.05, 0.02, glow, -0.15, 0.6, z - 0.025); box(0.05, 0.05, 0.02, glow, 0.15, 0.6, z - 0.025);
+      box(0.2, 0.02, 0.02, glow, 0, 0.6, z - 0.025);
+      break;
+  }
+}
+
+// Back items, in "blocky torso" coordinates: torso centre y 0.16, back at z +0.18.
+function addBack(look, box, mat, visor) {
+  const glow = new THREE.MeshBasicMaterial({ color: visor });
+  switch (look.back || 'noback') {
+    case 'backpack':
+      box(0.42, 0.46, 0.18, mat('#6b5a3a'), 0, 0.18, 0.27);
+      box(0.34, 0.16, 0.06, mat('#5a4a2e'), 0, 0.02, 0.38);
+      box(0.06, 0.5, 0.04, mat('#3a3020'), -0.16, 0.2, 0.17); box(0.06, 0.5, 0.04, mat('#3a3020'), 0.16, 0.2, 0.17);
+      break;
+    case 'cape': {
+      const c = box(0.6, 0.95, 0.03, mat(new THREE.Color(look.shirt).multiplyScalar(0.6)), 0, -0.05, 0.24);
+      c.rotation.x = 0.12;
+      box(0.62, 0.06, 0.06, mat('#d8b84a'), 0, 0.52, 0.2);
+      break;
+    }
+    case 'jetpack':
+      for (const x of [-0.13, 0.13]) {
+        box(0.16, 0.48, 0.16, mat('#8a8f9c'), x, 0.18, 0.28);
+        box(0.12, 0.08, 0.12, mat('#3a3d48'), x, -0.1, 0.28);
+        box(0.08, 0.12, 0.08, glow, x, -0.2, 0.28);              // flame
+      }
+      break;
+    case 'wings':
+      for (const sx of [-1, 1]) {
+        const w = box(0.7, 0.32, 0.03, mat('#f4f4ff'), sx * 0.42, 0.34, 0.26);
+        w.rotation.z = sx * 0.45; w.rotation.y = sx * -0.35;
+        const tip = box(0.4, 0.18, 0.03, glow, sx * 0.72, 0.6, 0.3);
+        tip.rotation.z = sx * 0.6; tip.rotation.y = sx * -0.35;
+      }
+      break;
+    case 'katana': {
+      const blade = box(0.05, 1.05, 0.03, mat('#cfd6e0'), 0, 0.16, 0.24);
+      blade.rotation.z = 0.7;
+      const hilt = box(0.07, 0.26, 0.05, mat('#2a1a10'), 0.36, 0.56, 0.24);
+      hilt.rotation.z = 0.7;
+      break;
+    }
+  }
 }
 
 function addHat(g, look, box, mat, visor) {

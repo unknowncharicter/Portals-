@@ -244,19 +244,28 @@ export class Match {
     }
   }
 
+  // Top-of-screen scoreboard. Updated every frame in respawn modes and on every kill otherwise.
   updateScore() {
+    const p = this.player;
+    const kd = `<div class="sb-kd">⚔ ${p.kills} kills · ☠ ${p.deaths || 0} deaths</div>`;
+    const teamKills = (t) => this.chars.filter(c => c.team === t).reduce((n, c) => n + c.kills, 0);
+    const side = (label, big, small, color, cls) => `<div class="sb-side ${cls}" style="--c:${color}"><span class="sb-name">${label}</span><b>${big}</b><small>${small}</small></div>`;
+    let html;
     if (this.mode.koth) {
-      const my = this.player.team, other = 1 - my, s = this.scores || {};
-      this.hud.setScore(`<span style="color:${TEAM_COLORS[my]}">YOU ${Math.floor(s[my] || 0)}</span> — <span style="color:${TEAM_COLORS[other]}">${Math.floor(s[other] || 0)} ENEMY</span> <span style="opacity:.7;font-size:14px">/ ${this.mode.target} · Hill: ${this.hillText || 'EMPTY'}</span>`);
-    } else if (this.mode.gungame) {
+      const my = p.team, other = 1 - my, s = this.scores || {};
+      html = `<div class="sb-row">${side('YOU', Math.floor(s[my] || 0), `${teamKills(my)} kills`, TEAM_COLORS[my], 'l')}<div class="sb-mid">KING OF THE HILL<small>first to ${this.mode.target} · hill: ${this.hillText || 'EMPTY'}</small></div>${side('ENEMY', Math.floor(s[other] || 0), `${teamKills(other)} kills`, TEAM_COLORS[other], 'r')}</div>${kd}`;
+    } else if (this.mode.gungame || this.mode.ffa) {
       const n = GUN_LADDER.length;
-      this.hud.setScore(this.chars.map(c => `<span style="color:${c.color}">${c.name} ${Math.min(c.gunLevel, n - 1) + 1}/${n}</span>`).join(' · '));
-    } else if (this.mode.ffa) {
-      this.hud.setScore(this.chars.map(c => `<span style="color:${c.color}">${c.name} ${this.wins[c.team]}</span>`).join(' · '));
+      const rows = [...this.chars].sort((a, b) => (this.mode.gungame ? b.gunLevel - a.gunLevel : 0) || b.kills - a.kills).map(c => {
+        const extra = this.mode.gungame ? `gun ${Math.min(c.gunLevel, n - 1) + 1}/${n}` : `${'★'.repeat(this.wins[c.team] || 0) || '☆'}`;
+        return `<div class="sb-ffa${c === p ? ' me' : ''}" style="--c:${c.color}"><span>${c === p ? 'YOU' : c.name}</span><b>${c.kills}</b><small>${extra}</small></div>`;
+      }).join('');
+      html = `<div class="sb-row ffa">${rows}</div>${kd}`;
     } else {
-      const my = this.player.team, other = 1 - my;
-      this.hud.setScore(`<span style="color:${TEAM_COLORS[my]}">YOU ${this.wins[my]}</span> — <span style="color:${TEAM_COLORS[other]}">${this.wins[other]} ENEMY</span> <span style="opacity:.6;font-size:14px">Round ${this.round}</span>`);
+      const my = p.team, other = 1 - my;
+      html = `<div class="sb-row">${side('YOU', this.wins[my], `${teamKills(my)} kills`, TEAM_COLORS[my], 'l')}<div class="sb-mid">ROUND ${this.round}<small>first to ${ROUNDS_TO_WIN}</small></div>${side('ENEMY', this.wins[other], `${teamKills(other)} kills`, TEAM_COLORS[other], 'r')}</div>${kd}`;
     }
+    this.hud.setScore(html);
   }
 
   // ---------- Actions shared by player and bots ----------
@@ -396,6 +405,7 @@ export class Match {
     const self = killer === victim;
     this.hud.kill(killer, victim, self, info);
     if (!self) killer.kills++;
+    victim.deaths = (victim.deaths || 0) + 1;
     if (killer === this.player && !self) {
       this.earned.kills++;
       if (info.head) this.earned.headshots++;
@@ -404,6 +414,7 @@ export class Match {
       else { this.hud.killPop(victim.name, info.head ? 'HEADSHOT' : 'ELIMINATED'); Sfx.kill(); }
     }
     if (this.onKillHook) this.onKillHook(killer, victim, info);
+    this.updateScore(); // kills/deaths show up straight away
     if (this.mode.respawn) victim.respawnT = victim === this.player ? 4.5 : 3;
     if (this.mode.gungame && !self && killer.alive && this.state === 'fight') {
       killer.gunLevel++;

@@ -336,12 +336,18 @@ export class Character {
 
   // ---------- Combat ----------
 
+  // Hit test against the body only. The boxes turn with the character and fit the body
+  // tightly, so hats, masks, backpacks, capes and wings are NOT part of them: bullets pass
+  // straight through accessories (and hit whatever is behind).
   rayHit(o, d) {
-    const p = this.pos, hh = this.halfHeight, neck = p.y + hh - 0.4;
-    const headMin = new THREE.Vector3(p.x - 0.23, neck, p.z - 0.23), headMax = new THREE.Vector3(p.x + 0.23, p.y + hh + 0.05, p.z + 0.23);
-    const bodyMin = new THREE.Vector3(p.x - 0.36, p.y - hh, p.z - 0.36), bodyMax = new THREE.Vector3(p.x + 0.36, neck, p.z + 0.36);
-    const h = rayBox(o, d, headMin, headMax);
-    const b = rayBox(o, d, bodyMin, bodyMax);
+    const p = this.pos, hh = this.halfHeight;
+    const c = Math.cos(-this.yaw), s = Math.sin(-this.yaw);
+    const rot = (v) => new THREE.Vector3(v.x * c + v.z * s, v.y, -v.x * s + v.z * c);
+    const lo = rot(new THREE.Vector3(o.x - p.x, o.y - p.y, o.z - p.z));
+    const ld = rot(d);
+    const neck = hh - 0.34;
+    const h = rayBox(lo, ld, new THREE.Vector3(-0.16, neck, -0.16), new THREE.Vector3(0.16, hh, 0.16));
+    const b = rayBox(lo, ld, new THREE.Vector3(-0.3, -hh, -0.32), new THREE.Vector3(0.3, neck, 0.18));
     let best = null;
     if (h) best = { t: h.t, head: true };
     if (b && (!best || b.t < best.t)) best = { t: b.t, head: false };
