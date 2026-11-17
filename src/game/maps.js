@@ -128,7 +128,7 @@ export const MAPS = {
 
   village: {
     name: 'Village',
-    hill: { x: 0, y: 0.8, z: 0, r: 4 },
+    hill: { x: 0, y: 0, z: 0, r: 5.5 },
     theme: { sky: '#f2c890', fog: [60, 170], hemi: 1.6, sun: 2.0 },
     view: { r: 30, h: 13 },
     spawns: {
@@ -171,11 +171,11 @@ export const MAPS = {
   },
 
   towers: {
-    name: 'Twin Towers',
+    name: 'Sunset Spires',
     theme: { sky: '#ffb48a', fog: [70, 190], hemi: 1.6, sun: 1.9 },
     view: { r: 36, h: 20 },
     killY: -25,
-    hill: { x: 0, y: 4, z: -5, r: 3 },
+    hill: { x: 0, y: 0, z: 6, r: 4 },
     spawns: {
       0: [V(-24, 0, 4), V(-22, 0, 0)],
       1: [V(24, 0, -4), V(22, 0, 0)],

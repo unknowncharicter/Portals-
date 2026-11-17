@@ -30,7 +30,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
   - **Gun Game:** free for all with respawns. Every kill gives you the next gun.
   - **Portal Only:** damage only counts if the shot went through a portal.
   - **Tutorial:** an 11-step "How to play" lesson.
-- **Maps:** Arena, Sky Islands, Warehouse, Village, Twin Towers, Canyon, or Random.
+- **Maps:** Arena, Sky Islands, Warehouse, Village, Sunset Spires, Canyon, or Random.
 - **Weapons:**
   - Primary: Assault Rifle, SMG, Shotgun, Sniper (scope), Burst Rifle, Crossbow, Rocket Launcher (rocket jumps!).
   - Secondary: Pistol, Revolver.

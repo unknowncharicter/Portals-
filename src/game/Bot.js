@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _s = new THREE.Vector3(), _o = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0), DOWN = new THREE.Vector3(0, -1, 0);
 
 function angleDiff(a, b) {
   let d = b - a;
@@ -34,6 +35,7 @@ export class BotBrain {
   reset() {
     this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null;
     this.lastKnown = null; this.searchGoal = null; this.searchT = 0;
+    this.hillGoal = null; this.escapeT = 0; this.steerT = 0; this.progPos = null;
   }
 
   // Heard a gunshot or got hit: remember roughly where it came from.
@@ -115,6 +117,7 @@ export class BotBrain {
     // Reload when empty or idle.
     if (c.weapon.ammo === 0 || (!this.aimDir && c.weapon.ammo < c.weapon.mag * 0.5)) m.reload(c);
 
+    this.checkStuck(dt);
     if (this.aimDir) this.combat(dt); else this.hunt(dt);
 
     // Unstick: if we barely moved while wanting to, jump.
@@ -165,6 +168,16 @@ export class BotBrain {
     const side = new THREE.Vector3(-to.z, 0, to.x).multiplyScalar(this.strafeSign);
     const approach = dist > 18 ? 0.7 : dist < 8 ? -0.6 : 0;
     this.wish.copy(side).addScaledVector(to, approach).normalize();
+    // King of the Hill: fight from inside the zone. Outside it, push in while strafing;
+    // inside, drift back toward the middle instead of wandering out.
+    if (m.mode.koth && m.hill) {
+      this.hillT = (this.hillT || 0) - dt;
+      if (!this.hillGoal || this.hillT <= 0) this.pickHillGoal();
+      const toHill = _v.set(m.hill.x - c.pos.x, 0, m.hill.z - c.pos.z);
+      const d = toHill.length();
+      if (!m.inHill(c)) this.wish.multiplyScalar(0.35).add(this.hillGoal.clone().sub(c.pos).setY(0).normalize()).normalize();
+      else if (d > m.hill.r * 0.55) this.wish.addScaledVector(toHill.normalize(), 0.9).normalize();
+    }
     this.avoid();
     if (Math.random() < dt * 0.5 && this.groundAhead(this.wish, [2, 4, 6.5])) this.jump = true;
     // Better bots dodge with dashes, especially right after getting hit.
@@ -179,12 +192,8 @@ export class BotBrain {
     let goal;
     if (m.mode.koth && m.hill) {
       // King of the Hill: head for the zone.
-      this.searchT -= dt;
-      if (!this.hillGoal || this.searchT <= 0) {
-        const a = Math.random() * Math.PI * 2, r = Math.random() * m.hill.r * 0.6;
-        this.hillGoal = new THREE.Vector3(m.hill.x + Math.cos(a) * r, m.hill.y + 1, m.hill.z + Math.sin(a) * r);
-        this.searchT = 3 + Math.random() * 3;
-      }
+      this.hillT = (this.hillT || 0) - dt;
+      if (!this.hillGoal || this.hillT <= 0) this.pickHillGoal();
       goal = this.hillGoal;
     } else if (this.lastKnown && this.lastKnown.distanceTo(c.pos) > 2) goal = this.lastKnown;
     else {
@@ -369,38 +378,95 @@ export class BotBrain {
   }
 
   // Steer around obstacles and edges in front of us.
+  // A random reachable spot inside the King of the Hill zone (standing on the floor, not in a box).
+  pickHillGoal() {
+    const h = this.m.hill, w = this.m.world;
+    this.hillT = 3 + Math.random() * 3;
+    for (let i = 0; i < 8; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.random() * h.r * 0.6;
+      const top = new THREE.Vector3(h.x + Math.cos(a) * r, h.y + 2.5, h.z + Math.sin(a) * r);
+      const g = w.raycast(top, new THREE.Vector3(0, -1, 0), 4);
+      const p = top.clone().setY(h.y + 0.6);
+      if (w.boxes.some(b => b.containsPoint ? b.containsPoint(p) : (p.x > b.min.x && p.x < b.max.x && p.y > b.min.y && p.y < b.max.y && p.z > b.min.z && p.z < b.max.z))) continue;
+      if (g && Math.abs(g.point.y - h.y) < 0.6) { this.hillGoal = g.point.clone().setY(h.y + 1); return; }
+    }
+    this.hillGoal = new THREE.Vector3(h.x, h.y + 1, h.z);
+  }
+
+  // Is walking in direction d blocked by a wall (or, on the ground, a drop)?
+  // Checks the body's left and right edges too, so bots don't snag on corners.
+  blocked(d, info) {
+    const c = this.c, w = this.m.world;
+    const ignored = this.m.portals.ignoredBoxes(c);
+    const feet = c.pos.y - c.halfHeight;
+    const side = _s.set(-d.z, 0, d.x).multiplyScalar(0.32);
+    for (const [o, y] of [[0, -0.3], [1, -0.3], [-1, -0.3], [0, 0.5]]) {
+      _o.copy(c.pos).addScaledVector(side, o); _o.y = c.pos.y + y;
+      const h = w.raycast(_o, d, 1.3);
+      if (h && !ignored.has(h.box) && h.box.max.y - feet > 0.55) return true;
+    }
+    if (!c.grounded) return false;
+    const ahead = c.pos.clone().addScaledVector(d, 1.4);
+    if (!w.raycast(ahead, DOWN, 8) && !this.wantsPortalDrop(ahead)) { if (info) info.ledge = true; return true; }
+    return false;
+  }
+
   avoid() {
     const c = this.c, w = this.m.world;
     if (!c.grounded) {
       // In the air over nothing? Steer back the way we came.
       const hv = new THREE.Vector3(c.vel.x, 0, c.vel.z);
       const land = c.pos.clone().addScaledVector(hv, 0.35);
-      if (hv.lengthSq() > 1 && !w.raycast(land, new THREE.Vector3(0, -1, 0), 30) && !this.wantsPortalDrop(land)) {
+      if (hv.lengthSq() > 1 && !w.raycast(land, DOWN, 30) && !this.wantsPortalDrop(land)) {
         this.wish.copy(hv.normalize().negate());
         return;
       }
     }
-    if (this.wish.lengthSq() === 0) return;
-    const origin = c.pos.clone().setY(c.pos.y - 0.3);
-    const ignored = this.m.portals.ignoredBoxes(c);
-    const down = new THREE.Vector3(0, -1, 0);
-    let ledge = false;
-    const blocked = (d) => {
-      const h = w.raycast(origin, d, 1.3);
-      if (h && !ignored.has(h.box) && h.box.max.y - (c.pos.y - c.halfHeight) > 0.55) return true;
-      // Don't walk off edges (unless it's into a portal on purpose).
-      if (!c.grounded) return false;
-      const ahead = c.pos.clone().addScaledVector(d, 1.4);
-      const g = w.raycast(ahead, down, 4);
-      if (!g && !this.wantsPortalDrop(ahead)) { ledge = true; return true; }
-      return false;
-    };
-    if (!blocked(this.wish)) return;
-    for (const a of [0.6, -0.6, 1.2, -1.2, 1.8, -1.8]) {
-      const d = _v.copy(this.wish).applyAxisAngle(new THREE.Vector3(0, 1, 0), a * this.strafeSign);
-      if (!blocked(d)) { this.wish.copy(d); return; }
+    // Escaping after getting stuck: keep going the escape way for a moment.
+    if (this.escapeT > 0) {
+      if (!this.blocked(this.escape)) { this.wish.copy(this.escape); return; }
+      this.escapeT = 0;
     }
-    if (ledge) this.wish.set(0, 0, 0); // stand still instead of jumping off
-    else if (this.groundAhead(this.wish, [2, 4], false)) this.jump = true;
+    if (this.wish.lengthSq() === 0) return;
+    const want = _w.copy(this.wish).setY(0).normalize();
+    // Keep a detour we picked recently while it's free and still roughly useful.
+    if (this.steerT > 0 && this.steer.dot(want) > -0.2 && !this.blocked(this.steer)) { this.wish.copy(this.steer); return; }
+    const info = { ledge: false };
+    if (!this.blocked(want, info)) { this.wish.copy(want); return; }
+    // Blocked: try 16 directions around us and take the free one closest to where we want to go.
+    let best = null, bestScore = -Infinity;
+    for (let i = 1; i < 16; i++) {
+      const a = (i % 2 ? 1 : -1) * Math.ceil(i / 2) * (Math.PI / 8) * this.strafeSign;
+      const d = new THREE.Vector3().copy(want).applyAxisAngle(UP, a);
+      const score = d.dot(want);
+      if (score <= bestScore) continue;
+      if (this.blocked(d, info)) continue;
+      best = d; bestScore = score;
+    }
+    if (best) { this.steer = best; this.steerT = 0.5; this.wish.copy(best); return; }
+    if (info.ledge) this.wish.set(0, 0, 0); // stand still instead of jumping off
+    else if (this.groundAhead(want, [2, 4], false)) this.jump = true;
+  }
+
+  // Called every frame: if we've been trying to move but haven't got anywhere, pick a random
+  // free direction and go that way for a bit.
+  checkStuck(dt) {
+    const c = this.c;
+    this.steerT = Math.max(0, (this.steerT || 0) - dt);
+    this.escapeT = Math.max(0, (this.escapeT || 0) - dt);
+    this.progT = (this.progT || 0) + dt;
+    if (!this.progPos) this.progPos = c.pos.clone();
+    if (this.progT < 1.5) return;
+    const moved = Math.hypot(c.pos.x - this.progPos.x, c.pos.z - this.progPos.z);
+    if (moved < 0.5 && this.wish.lengthSq() > 0 && this.escapeT <= 0 && c.grounded) {
+      const off = Math.random() * Math.PI * 2;
+      for (let i = 0; i < 8; i++) {
+        const d = new THREE.Vector3(Math.sin(off + i * Math.PI / 4), 0, Math.cos(off + i * Math.PI / 4));
+        if (!this.blocked(d)) { this.escape = d; this.escapeT = 1.2; break; }
+      }
+      this.strafeSign *= -1;
+    }
+    this.progT = 0;
+    this.progPos.copy(c.pos);
   }
 }
