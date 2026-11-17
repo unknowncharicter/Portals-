@@ -70,6 +70,29 @@ export function loadModels() {
   return loading;
 }
 
+// Map models are loaded on demand (only when that map is picked) and kept afterwards.
+const mapModels = {}, loadedMaps = {};
+export const mapModelLoaded = (file) => loadedMaps[file] || null;
+export function mapModel(file) {
+  if (!mapModels[file]) {
+    const loader = new GLTFLoader();
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    mapModels[file] = loader.loadAsync(`models/${file}`).then(g => {
+      g.scene.traverse(o => {
+        if (!o.isMesh) return;
+        o.castShadow = o.receiveShadow = false;
+        // Same simple lighting as the box maps.
+        const old = o.material;
+        o.material = new THREE.MeshLambertMaterial({ color: old.color, map: old.map || null });
+        old.dispose();
+      });
+      loadedMaps[file] = g.scene;
+      return g.scene;
+    }).catch(e => { console.warn('Could not load map model', file, e); return null; });
+  }
+  return mapModels[file];
+}
+
 function box(g, w, h, d, color, x, y, z, emissive) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color, emissive: emissive || '#000000' }));
   m.position.set(x, y, z); g.add(m); return m;

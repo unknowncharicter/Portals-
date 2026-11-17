@@ -15,7 +15,7 @@ import { TouchControls, isTouchDevice } from './touch.js';
 import { MAPS, MAP_IDS } from './game/maps.js';
 import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
 import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
-import { loadModels, gunModel } from './game/Models.js';
+import { loadModels, gunModel, mapModel } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
 import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo } from './progress.js';
@@ -661,10 +661,11 @@ models.then(() => {
   if (state === 'lobby') { rebuildPreview(); buildLobby(); }
 });
 // Map pictures: rendered once, shortly after start (uses the main renderer).
-setTimeout(() => {
+// Maps made from a 3D model wait for it first.
+Promise.all(MAP_IDS.filter(id => MAPS[id].model).map(id => mapModel(MAPS[id].model.file))).then(() => setTimeout(() => {
   try { makeMapThumbs(renderer, world, scene, MAPS, MAP_IDS); } catch (e) { console.warn('map thumbnails failed', e); }
   if (state === 'lobby') buildLobby();
-}, 300);
+}, 300));
 applySettings();
 buildSettings();
 showScreen('menu');

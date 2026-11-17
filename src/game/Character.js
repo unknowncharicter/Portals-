@@ -141,7 +141,7 @@ export class Character {
     this.jumped = false;
     this.dashed = false;
     this.slid = false;
-    const solid = world.boxes.filter(b => !ignored.has(b));
+    const solid = world.near(this.pos, 3 + Math.hypot(this.vel.x, this.vel.z) * dt).filter(b => !ignored.has(b));
     this._solid = solid;
     const hs = Math.hypot(this.vel.x, this.vel.z);
 

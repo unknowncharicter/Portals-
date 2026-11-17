@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { MAPS } from './maps.js';
+import { mapModel, mapModelLoaded } from './Models.js';
 
 // The map is built only from axis-aligned boxes. That keeps collision, raycasts and
 // portal placement simple and exact.
@@ -58,6 +59,7 @@ export class World {
     // Clear the old map.
     for (const child of [...this.group.children]) {
       this.group.remove(child);
+      if (child.userData.mapModel) continue; // shared model: keep it for next time
       child.geometry.dispose();
       child.material.dispose();
     }
@@ -75,6 +77,17 @@ export class World {
     const toV = (p) => new THREE.Vector3(p.x, p.y, p.z);
     this.spawns = { 0: map.spawns[0].map(toV), 1: map.spawns[1].map(toV), ffa: map.spawns.ffa.map(toV) };
     this.buildMeshes();
+    // Maps made from a 3D model: show it (once it has loaded).
+    const show = (model) => {
+      if (!model || this.mapId !== id || model.parent === this.group) return;
+      model.scale.setScalar(map.model.scale);
+      model.userData.mapModel = true;
+      this.group.add(model);
+    };
+    if (map.model) {
+      const ready = mapModelLoaded(map.model.file);
+      if (ready) show(ready); else mapModel(map.model.file).then(show);
+    }
   }
 
   addBox(min, max, color) {
@@ -87,9 +100,38 @@ export class World {
     this.addBox([-max[0], min[1], min[2]], [-min[0], max[1], max[2]], color);
   }
 
+  // Spatial grid (XZ cells) so rays and movement only test nearby boxes.
+  buildGrid() {
+    const C = this.cell = 4;
+    this.grid = new Map();
+    this.stamp = 0;
+    for (const b of this.boxes) {
+      b._s = 0;
+      for (let cx = Math.floor(b.min.x / C); cx <= Math.floor(b.max.x / C); cx++)
+        for (let cz = Math.floor(b.min.z / C); cz <= Math.floor(b.max.z / C); cz++) {
+          const k = cellKey(cx, cz);
+          if (!this.grid.has(k)) this.grid.set(k, []);
+          this.grid.get(k).push(b);
+        }
+    }
+  }
+
+  // Boxes within r (XZ) of a point.
+  near(p, r) {
+    const C = this.cell, out = [], st = ++this.stamp;
+    for (let cx = Math.floor((p.x - r) / C); cx <= Math.floor((p.x + r) / C); cx++)
+      for (let cz = Math.floor((p.z - r) / C); cz <= Math.floor((p.z + r) / C); cz++) {
+        const list = this.grid.get(cellKey(cx, cz));
+        if (list) for (const b of list) if (b._s !== st) { b._s = st; out.push(b); }
+      }
+    return out;
+  }
+
   buildMeshes() {
+    this.buildGrid();
     const byColor = new Map();
     for (const b of this.boxes) {
+      if (!b.color) continue; // invisible collision box (the map has its own model)
       const s = new THREE.Vector3().subVectors(b.max, b.min);
       const c = new THREE.Vector3().addVectors(b.max, b.min).multiplyScalar(0.5);
       const geo = worldBoxGeometry(s.x, s.y, s.z, c.x, c.y, c.z);
@@ -103,17 +145,34 @@ export class World {
     }
   }
 
-  // Ray vs all boxes. Returns { t, point, normal, box } or null.
+  // Ray vs the boxes, walking the grid cells along the ray (nearest first).
+  // Returns { t, point, normal, box } or null.
   raycast(origin, dir, maxDist = 500) {
     let best = null;
-    for (const b of this.boxes) {
-      const hit = rayBox(origin, dir, b.min, b.max);
-      if (hit && hit.t >= 0 && hit.t <= maxDist && (!best || hit.t < best.t)) best = { ...hit, box: b };
+    const C = this.cell, st = ++this.stamp;
+    let cx = Math.floor(origin.x / C), cz = Math.floor(origin.z / C);
+    const sx = Math.sign(dir.x), sz = Math.sign(dir.z);
+    let tx = sx ? ((cx + (sx > 0 ? 1 : 0)) * C - origin.x) / dir.x : Infinity;
+    let tz = sz ? ((cz + (sz > 0 ? 1 : 0)) * C - origin.z) / dir.z : Infinity;
+    const dx = sx ? C / Math.abs(dir.x) : Infinity, dz = sz ? C / Math.abs(dir.z) : Infinity;
+    for (let i = 0; i < 400; i++) {
+      const list = this.grid.get(cellKey(cx, cz));
+      if (list) for (const b of list) {
+        if (b._s === st) continue;
+        b._s = st;
+        const hit = rayBox(origin, dir, b.min, b.max);
+        if (hit && hit.t >= 0 && hit.t <= maxDist && (!best || hit.t < best.t)) best = { ...hit, box: b };
+      }
+      const exit = Math.min(tx, tz);
+      if ((best && best.t <= exit) || exit > maxDist) break;
+      if (tx < tz) { cx += sx; tx += dx; } else { cz += sz; tz += dz; }
     }
     if (best) best.point = origin.clone().addScaledVector(dir, best.t);
     return best;
   }
 }
+
+const cellKey = (cx, cz) => (cx + 2048) * 4096 + (cz + 2048);
 
 // Slab method. Only reports hits where the ray starts outside the box.
 export function rayBox(o, d, min, max) {

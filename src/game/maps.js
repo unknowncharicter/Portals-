@@ -1,3 +1,4 @@
+import COMPOUND_BOXES from './compound-boxes.json';
 // Map layouts. Every map is built only from boxes: build(m) gets helpers
 // m.box(min, max, color) and m.mirror(min, max, color) (adds the box and its mirror across X).
 // Portal-friendly surfaces need to be at least 1.6 m wide and 2.6 m tall.
@@ -249,6 +250,29 @@ export const MAPS = {
       m.box([-18, 4.6, -18.5], [18, 5, -16.5], wood);
       m.box([-18, 5, -18.6], [18, 5.9, -18.5], wood);
     },
+  },
+};
+
+// Desert compound: a real 3D model ("fps tps Map" by theking1322), shown as-is, with
+// collision boxes generated from it (compound-boxes.json, 5 cm voxels, model scaled 2x).
+MAPS.compound = {
+  name: 'Desert Compound',
+  model: { file: 'maps/compound.glb', scale: 2 },
+  theme: { sky: '#f4d6a6', fog: [60, 160], hemi: 1.7, sun: 2.0 },
+  view: { r: 30, h: 15 },
+  hill: { x: 0, y: 0.08, z: 0, r: 4.5 },
+  spawns: {
+    0: [V(-22, 0.08, -3), V(-22, 0.08, 3)],
+    1: [V(22, 0.08, 3), V(22, 0.08, -3)],
+    ffa: [V(-22, 0.08, -3), V(22, 0.08, 3), V(0, 0.08, 13.5), V(0, 0.08, -13.5)],
+  },
+  build(m) {
+    for (const b of COMPOUND_BOXES) m.box([b[0], b[1], b[2]], [b[3], b[4], b[5]], null);
+    // Invisible walls a little above the real ones, so nobody jumps out from the roofs.
+    m.box([-26.5, 0, -18], [-25.1, 30, 18], null);
+    m.box([25.1, 0, -18], [26.5, 30, 18], null);
+    m.box([-26.5, 0, -18], [26.5, 30, -16.75], null);
+    m.box([-26.5, 0, 16.66], [26.5, 30, 18], null);
   },
 };
 
