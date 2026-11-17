@@ -19,14 +19,24 @@ export const HATS = [
 
 // Character models (free, no price). 'robot' is the original Mixamo robot.
 export const BODIES = [
-  { id: 'swat',  name: 'SWAT',  icon: '🪖' },
-  { id: 'punk',  name: 'Punk',  icon: '🧑‍🎤' },
-  { id: 'robot', name: 'Robot', icon: '🤖' },
+  { id: 'swat',       name: 'SWAT',       icon: '🪖', price: 0 },
+  { id: 'punk',       name: 'Punk',       icon: '🧑‍🎤', price: 0 },
+  { id: 'robot',      name: 'Robot',      icon: '🤖', price: 0 },
+  { id: 'casual',     name: 'Casual',     icon: '👕', price: 100 },
+  { id: 'hoodie',     name: 'Hoodie',     icon: '🧥', price: 150 },
+  { id: 'farmer',     name: 'Farmer',     icon: '👨‍🌾', price: 150 },
+  { id: 'worker',     name: 'Worker',     icon: '👷', price: 200 },
+  { id: 'beach',      name: 'Beach',      icon: '🏖️', price: 250 },
+  { id: 'business',   name: 'Business',   icon: '💼', price: 350 },
+  { id: 'adventurer', name: 'Adventurer', icon: '🧭', price: 450 },
+  { id: 'astronaut',  name: 'Astronaut',  icon: '👨‍🚀', price: 700 },
+  { id: 'king',       name: 'King',       icon: '🤴', price: 1000 },
 ];
 // Where hats/masks and back items sit on each model (head: scale, height above the head bone;
 // back: scale, y, z from the upper spine).
 const RIG = {
   robot: { head: [0.62, 0.12], back: [0.8, -0.26, -0.03] },
+  default: { head: [0.72, 0.15], back: [0.85, -0.24, -0.05] },
   swat:  { head: [0.74, 0.15], back: [0.85, -0.24, -0.06] },
   punk:  { head: [0.7, 0.14], back: [0.85, -0.24, -0.05] },
 };
@@ -53,12 +63,13 @@ export const BACKS = [
 
 export const DEFAULT_LOOK = { name: 'Player', model: 'swat', shirt: SHIRTS[3], pants: PANTS[0], skin: SKINS[1], hat: 'none', face: 'nofaceitem', back: 'noback' };
 
+const HELMETED = new Set(['swat', 'astronaut', 'king']);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function randomLook(name) {
-  const model = pick(['swat', 'punk']);
+  const model = pick(['swat', 'swat', 'punk', ...BODIES.filter(b => b.id !== 'robot').map(b => b.id)]);
   return { name, model, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)),
-    hat: model === 'swat' ? pick(['none', 'none', 'none', 'headphones', 'horns']) : pick(['none', 'none', ...HATS.map(h => h.id)]),
-    face: model === 'swat' ? 'nofaceitem' : pick(['nofaceitem', 'nofaceitem', 'shades', 'ninja', 'skull', 'gasmask']),
+    hat: HELMETED.has(model) ? 'none' : pick(['none', 'none', 'none', ...HATS.map(h => h.id)]),
+    face: HELMETED.has(model) ? 'nofaceitem' : pick(['nofaceitem', 'nofaceitem', 'shades', 'ninja', 'skull', 'gasmask']),
     back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
 }
 
@@ -98,7 +109,7 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
   const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
   const body = new AnimatedBody({ body: look.shirt, joints: look.pants, skin: look.skin }, look.model || 'swat');
   g.add(body.root);
-  const rig = RIG[body.modelId] || RIG.robot;
+  const rig = RIG[body.modelId] || RIG.default;
 
   // Head socket: reuse the blocky hat shapes, scaled to the model's head.
   const head = body.socket('Head');

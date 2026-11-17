@@ -10,7 +10,17 @@ import { retargetClips, MIXAMO_TO_QUAT, fixQuaterniusRig } from './Retarget.js';
 const CHARACTERS = {
   swat: { file: 'chars/swat.glb', tint: { Swat: 'body', Swat_Black: 'joints', Skin: 'skin' } },
   punk: { file: 'chars/punk.glb', tint: { White: 'body', LightBlue: 'joints', Skin: 'skin' } },
+  casual:     { file: 'chars/casual.glb',     tint: { White: 'body', LightBlue: 'joints', Skin: 'skin' } },
+  hoodie:     { file: 'chars/hoodie.glb',     tint: { Purple: 'body', LightBlue: 'joints', Skin: 'skin' } },
+  farmer:     { file: 'chars/farmer.glb',     tint: { LightBlue: 'body', Brown: 'joints', Skin: 'skin' } },
+  worker:     { file: 'chars/worker.glb',     tint: { Worker_Vest: 'body', Grey: 'joints', Skin: 'skin' } },
+  beach:      { file: 'chars/beach.glb',      tint: { White: 'body', Red_Dark: 'joints', Skin: 'skin' } },
+  business:   { file: 'chars/business.glb',   tint: { Suit: 'body', Tie: 'joints', Skin: 'skin' } },
+  adventurer: { file: 'chars/adventurer.glb', tint: { Green: 'body', Brown: 'joints', Skin: 'skin' } },
+  astronaut:  { file: 'chars/astronaut.glb',  tint: { SciFi_Main: 'body', SciFi_MainDark: 'joints' } },
+  king:       { file: 'chars/king.glb',       tint: { Blue: 'body', DarkBrown: 'joints', Skin: 'skin' } },
 };
+export const CHARACTER_IDS = Object.keys(CHARACTERS);
 
 // Gun models (GLB). The source models point their barrel along +X; we turn them to face -Z
 // (forward in three.js), scale them to a real-world length, and put the grip at the origin.
@@ -39,6 +49,7 @@ export function loadModels() {
         try {
           const g = await loader.loadAsync(`models/${cfg.file}`);
           fixQuaterniusRig(g.scene);
+          // All these characters share one skeleton: copy the clips once, reuse for all.
           if (!clips) clips = retargetClips(SkeletonUtils.clone(robot.scene), SkeletonUtils.clone(g.scene), robot.animations, MIXAMO_TO_QUAT);
           addCharacterTemplate(id, { scene: g.scene, clips, boneMap: MIXAMO_TO_QUAT, scale: 1, tint: cfg.tint });
         } catch (e) { console.warn('Could not load character', id, e); }
