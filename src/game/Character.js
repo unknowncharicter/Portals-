@@ -86,6 +86,7 @@ export class Character {
     this.legL = parts.legL;
     this.legR = parts.legR;
     this.body = parts.body || null;
+    this.tagSprite = parts.tag || null;
     this.gunHolder = parts.gunHolder;
     return parts.group;
   }
@@ -101,6 +102,8 @@ export class Character {
     this.hp = this.maxHp;
     this.alive = true;
     this.mesh.visible = true;
+    if (this.body) this.body.reset();
+    if (this.tagSprite) this.tagSprite.visible = true;
     this.healCd = 0; this.portalCd = 0; this.grenades = 2; this.grenadeCd = 0;
     this.slot = 0; this.switchT = 0;
     this.updateGun();
@@ -300,6 +303,16 @@ export class Character {
   }
 
   animate(dt) {
+    if (!this.alive && this.body) {
+      // Dead: let the fall play out, then hide the body.
+      this.corpseT -= dt;
+      this.body.updateDead(dt);
+      this.mesh.updateMatrixWorld(true);
+      this.body.handIn(this.mesh, this.gunHolder.position); // the gun falls with the hand
+      this.gunHolder.rotation.x += (0.6 - this.gunHolder.rotation.x) * Math.min(1, dt * 3);
+      if (this.corpseT <= 0) this.mesh.visible = false;
+      return;
+    }
     this.mesh.position.copy(this.pos);
     if (this.body) {
       // Animated body: the crouch clip already lowers it, so no squash. Feet stay on the ground.
@@ -345,7 +358,12 @@ export class Character {
     if (this.hp <= 0) {
       this.hp = 0;
       this.alive = false;
-      this.mesh.visible = false;
+      if (this.body && this.body.actions.die) {
+        // Play the fall, leave the body on the ground for a moment.
+        this.body.die();
+        this.corpseT = 3;
+        if (this.tagSprite) this.tagSprite.visible = false;
+      } else this.mesh.visible = false;
       return true;
     }
     return false;

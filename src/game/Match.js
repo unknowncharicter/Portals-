@@ -546,7 +546,7 @@ export class Match {
     for (const b of this.bots) { if (fighting) b.update(dt); else { b.wish.set(0, 0, 0); b.jump = false; } }
 
     for (const c of this.chars) {
-      if (!c.alive) continue;
+      if (!c.alive) { if (c.body && c.mesh.visible) c.animate(dt); continue; } // death fall
       const brain = this.bots.find(b => b.c === c);
       const w = brain ? brain.wish : wish;
       const j = brain ? brain.jump && c.grounded : jump;

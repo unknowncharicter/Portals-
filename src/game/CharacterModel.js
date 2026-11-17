@@ -14,7 +14,9 @@ export const hasCharacterModel = () => !!template;
 
 // How fast each clip moves when played at normal speed (m/s), measured from the original
 // root motion. Used to match the leg speed to the real movement speed.
-const CLIP_SPEED = { run: 5.95, walk: 1.81, back: 1.1, runback: 3.19, crouch: 1.23, stairs: 0.9 };
+const CLIP_SPEED = { run: 5.95, rifleRun: 3.18, strafe: 4.84, walk: 1.81, back: 1.1, runback: 3.19, crouch: 1.23, stairs: 0.9 };
+// Clips that already hold the rifle: keep their arms, just bend the upper body to aim up/down.
+const RIFLE = new Set(['rifleRun', 'strafeL', 'strafeR', 'start', 'die']);
 
 // Arm directions for a rifle hold, in character space (forward = -Z, right = +X, up = +Y).
 const AIM = {
@@ -52,7 +54,28 @@ export class AnimatedBody {
     this.actions = {};
     for (const clip of template.clips) this.actions[clip.name] = this.mixer.clipAction(clip);
     this.current = null;
-    this.play('walk', 0);
+    this.dead = false;
+    this.play(this.actions.start ? 'start' : 'walk', 0);
+  }
+
+  // Fall over (plays once and stays down).
+  die() {
+    if (!this.actions.die) return;
+    this.dead = true;
+    const a = this.actions.die;
+    a.setLoop(THREE.LoopOnce, 1);
+    a.clampWhenFinished = true;
+    this.play('die', 1);
+  }
+
+  updateDead(dt) { this.mixer.update(dt); }
+
+  // Back to normal after a respawn.
+  reset() {
+    this.dead = false;
+    for (const a of Object.values(this.actions)) { a.stop(); a.setLoop(THREE.LoopRepeat, Infinity); a.clampWhenFinished = false; }
+    this.current = null;
+    this.play(this.actions.start ? 'start' : 'walk', 0);
   }
 
   // Attach something to a bone in metres, facing our -Z forward.
@@ -85,21 +108,44 @@ export class AnimatedBody {
     if (s.sliding) this.play('crouch', 0);
     else if (s.crouched) this.play('crouch', hs > 0.3 ? THREE.MathUtils.clamp(hs / CLIP_SPEED.crouch, 0.6, 2.2) * (fwd < -0.3 ? -1 : 1) : 0);
     else if (s.climbing && fwd > 0.5 * hs) this.play('stairs', THREE.MathUtils.clamp(hs / 5, 0.9, 1.7)); // going up steps
-    else if (!s.grounded) this.play('run', 0.25);
-    else if (hs < 0.6) this.play('walk', 0);
+    else if (!s.grounded) this.play('rifleRun', 0.3);
+    else if (hs < 0.6) this.play('start', 0);                 // rifle-ready stance
     else if (fwd < -0.5 * hs) {
       // Backpedal: walk backwards when slow, run backwards when fast.
       if (hs < 2.5) this.play('back', THREE.MathUtils.clamp(hs / CLIP_SPEED.back, 0.8, 2.2));
       else this.play('runback', THREE.MathUtils.clamp(hs / CLIP_SPEED.runback, 0.8, 2.3));
       legYaw = THREE.MathUtils.clamp(Math.atan2(side, -fwd), -1, 1) * -0.8;
     } else {
-      this.play('run', THREE.MathUtils.clamp(hs / CLIP_SPEED.run, 0.7, 1.6));
-      // Strafing: turn the legs toward the movement (up to ~70°).
-      legYaw = THREE.MathUtils.clamp(Math.atan2(side, fwd), -1.2, 1.2) * -1;
+      const ang = Math.atan2(side, fwd); // 0 = forward, +90° = moving right
+      if (Math.abs(ang) > 0.9) {
+        // Mostly sideways: run-left / run-right clips.
+        this.play(ang > 0 ? 'strafeR' : 'strafeL', THREE.MathUtils.clamp(hs / CLIP_SPEED.strafe, 0.8, 1.9));
+        legYaw = -(ang - Math.sign(ang) * Math.PI / 2) * 0.6;
+      } else {
+        this.play('rifleRun', THREE.MathUtils.clamp(hs / CLIP_SPEED.rifleRun, 0.8, 2.4));
+        legYaw = -THREE.MathUtils.clamp(ang, -0.8, 0.8);   // diagonal: turn the legs a little
+      }
     }
     this.model.rotation.y += (Math.PI + legYaw - this.model.rotation.y) * Math.min(1, dt * 12);
     this.mixer.update(dt);
-    this.pose(s.pitch || 0);
+    if (this.current && RIFLE.has(this.current.getClip().name)) this.bendSpine(s.pitch || 0);
+    else this.pose(s.pitch || 0);
+  }
+
+  // Aim up/down with a rifle clip: bend the spine instead of re-posing the arms.
+  bendSpine(pitch) {
+    this.root.updateMatrixWorld(true);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion()));
+    for (const name of ['Spine1', 'Spine2']) {
+      const bone = this.bones[name];
+      if (!bone) continue;
+      bone.getWorldQuaternion(_q);
+      _d.setFromAxisAngle(right, pitch * 0.5);
+      _q.premultiply(_d);
+      bone.parent.getWorldQuaternion(_pq);
+      bone.quaternion.copy(_pq.invert().multiply(_q));
+      bone.updateMatrixWorld(true);
+    }
   }
 
   // Point the arms where the character is aiming (after the animation has moved them).
