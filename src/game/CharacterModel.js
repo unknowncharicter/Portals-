@@ -14,7 +14,7 @@ export const hasCharacterModel = () => !!template;
 
 // How fast each clip moves when played at normal speed (m/s), measured from the original
 // root motion. Used to match the leg speed to the real movement speed.
-const CLIP_SPEED = { run: 5.95, walk: 1.81, back: 1.1, crouch: 1.23 };
+const CLIP_SPEED = { run: 5.95, walk: 1.81, back: 1.1, runback: 3.19, crouch: 1.23, stairs: 0.9 };
 
 // Arm directions for a rifle hold, in character space (forward = -Z, right = +X, up = +Y).
 const AIM = {
@@ -74,7 +74,7 @@ export class AnimatedBody {
     this.current = a;
   }
 
-  // s: { vel, yaw, pitch, grounded, crouched, sliding }
+  // s: { vel, yaw, pitch, grounded, crouched, sliding, climbing }
   update(dt, s) {
     const fwdX = -Math.sin(s.yaw), fwdZ = -Math.cos(s.yaw);
     const fwd = s.vel.x * fwdX + s.vel.z * fwdZ;
@@ -84,12 +84,13 @@ export class AnimatedBody {
 
     if (s.sliding) this.play('crouch', 0);
     else if (s.crouched) this.play('crouch', hs > 0.3 ? THREE.MathUtils.clamp(hs / CLIP_SPEED.crouch, 0.6, 2.2) * (fwd < -0.3 ? -1 : 1) : 0);
+    else if (s.climbing && fwd > 0.5 * hs) this.play('stairs', THREE.MathUtils.clamp(hs / 5, 0.9, 1.7)); // going up steps
     else if (!s.grounded) this.play('run', 0.25);
     else if (hs < 0.6) this.play('walk', 0);
     else if (fwd < -0.5 * hs) {
-      // Backpedal: a slow walk backwards, or the run played in reverse when fast.
-      if (hs < 3) this.play('back', THREE.MathUtils.clamp(hs / CLIP_SPEED.back, 0.8, 2.4));
-      else this.play('run', -THREE.MathUtils.clamp(hs / CLIP_SPEED.run, 0.7, 1.6));
+      // Backpedal: walk backwards when slow, run backwards when fast.
+      if (hs < 2.5) this.play('back', THREE.MathUtils.clamp(hs / CLIP_SPEED.back, 0.8, 2.2));
+      else this.play('runback', THREE.MathUtils.clamp(hs / CLIP_SPEED.runback, 0.8, 2.3));
       legYaw = THREE.MathUtils.clamp(Math.atan2(side, -fwd), -1, 1) * -0.8;
     } else {
       this.play('run', THREE.MathUtils.clamp(hs / CLIP_SPEED.run, 0.7, 1.6));

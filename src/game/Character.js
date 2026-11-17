@@ -264,6 +264,7 @@ export class Character {
         const rise = b.max.y - feet;
         if (canStep && rise > 0 && rise <= STEP_HEIGHT && this.freeAt(p.x, b.max.y + this.halfHeight + EPS, p.z, solid)) {
           p.y = b.max.y + this.halfHeight + EPS;
+          this.climbT = 0.3; // stepped up: play the stairs animation for a moment
           continue;
         }
         const r = this.radius;
@@ -305,7 +306,7 @@ export class Character {
       this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;
       this.mesh.rotation.set(this.slideT > 0 ? 0.25 : 0, this.yaw, 0, 'YXZ');
       if (this.mesh.visible) {
-        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0 });
+        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0, climbing: this.climbT > 0 });
         this.body.handIn(this.mesh, this.gunHolder.position);
         this.gunHolder.rotation.set(this.pitch, 0, 0);
       }
@@ -370,6 +371,7 @@ export class Character {
     this.portalCd = Math.max(0, this.portalCd - dt);
     this.switchT = Math.max(0, this.switchT - dt);
     this.dashCd = Math.max(0, this.dashCd - dt);
+    this.climbT = Math.max(0, (this.climbT || 0) - dt);
     this.grenadeCd = Math.max(0, this.grenadeCd - dt);
     this.slideCd = Math.max(0, this.slideCd - dt);
     for (const w of this.weapons) w.update(dt);
