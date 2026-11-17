@@ -597,7 +597,9 @@ export class Match {
     this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id);
     this.adsT += ((this.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
-    p.aiming = this.ads || this.input.mouseDown; // your body (seen through portals) raises the gun
+    if (this.ads || this.input.mouseDown) this.aimHold = 1.2;
+    this.aimHold = Math.max(0, (this.aimHold || 0) - dt);
+    p.aiming = this.aimHold > 0; // your body (seen through portals) raises the gun, and keeps it up briefly
     this.hud.aiming(this.ads);
     this.viewmodel.update(dt, { ads: this.adsT, moving: p.grounded && wish.lengthSq() > 0, switching: p.switchT / SWITCH_TIME, reloading: p.weapon.reloading, lookX: inp.dx, lookY: inp.dy });
     this.hud.update(p, this.portals.ownerCount(p));

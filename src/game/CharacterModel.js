@@ -58,6 +58,8 @@ export class AnimatedBody {
     for (const clip of template.clips) this.actions[clip.name] = this.mixer.clipAction(clip);
     this.current = null;
     this.dead = false;
+    this.held = 0;
+    this.bend = 0;        // smoothed upper-body bend (aim up/down)
     this.play('idle', 1);
   }
 
@@ -70,7 +72,7 @@ export class AnimatedBody {
     this.dead = true;
     a.setLoop(THREE.LoopOnce, 1);
     a.clampWhenFinished = true;
-    this.play(name, 1);
+    this.play(name, 1, true);
   }
 
   updateDead(dt) { this.mixer.update(dt); }
@@ -80,7 +82,8 @@ export class AnimatedBody {
     this.dead = false;
     for (const a of Object.values(this.actions)) { a.stop(); a.setLoop(THREE.LoopRepeat, Infinity); a.clampWhenFinished = false; }
     this.current = null;
-    this.play('idle', 1);
+    this.held = 0;
+    this.play('idle', 1, true);
   }
 
   // Attach something to a bone in metres, facing our -Z forward.
@@ -92,18 +95,28 @@ export class AnimatedBody {
     return s;
   }
 
-  play(name, timeScale) {
+  // Switch animation with a short blend. Unless forced, an animation is kept for at least a
+  // moment, so tiny wobbles in state (a frame off the ground, a single click) can't make the
+  // body flicker between two poses.
+  play(name, timeScale, force = false) {
     const a = this.actions[name];
     if (!a) return;
+    if (this.current === a) { a.timeScale = timeScale; return; }
+    if (this.current && !force && this.held < 0.18) return;
     a.timeScale = timeScale;
-    if (this.current === a) return;
-    a.reset().setEffectiveWeight(1).fadeIn(this.current ? 0.15 : 0).play();
-    if (this.current) this.current.fadeOut(0.15);
+    a.reset().setEffectiveWeight(1).fadeIn(this.current ? 0.18 : 0).play();
+    if (this.current) this.current.fadeOut(0.18);
     this.current = a;
+    this.held = 0;
   }
 
-  // s: { vel, yaw, pitch, grounded, crouched, sliding, climbing, aiming }
+  // s: { vel, yaw, pitch, grounded, airT, crouched, sliding, climbing, aiming }
   update(dt, s) {
+    this.held += dt;
+    // Keep the gun raised for a moment after aiming/shooting stops (no up-down-up flapping).
+    this.aimHold = s.aiming ? 0.8 : Math.max(0, (this.aimHold || 0) - dt);
+    s = { ...s, aiming: this.aimHold > 0 };
+    const airborne = !s.grounded && (s.airT === undefined || s.airT > 0.2); // ignore single frames off the ground
     const fwdX = -Math.sin(s.yaw), fwdZ = -Math.cos(s.yaw);
     const fwd = s.vel.x * fwdX + s.vel.z * fwdZ;
     const side = s.vel.x * -fwdZ + s.vel.z * fwdX;
@@ -120,25 +133,28 @@ export class AnimatedBody {
       else this.play(s.aiming ? 'crouchIdleAim' : 'crouchIdle', 1);
     }
     else if (s.climbing && fwd > 0.5 * hs) this.play('stairs', THREE.MathUtils.clamp(hs / 5, 0.9, 1.7)); // going up steps
-    else if (!s.grounded) this.play('jump', 1);
+    else if (airborne) this.play('jump', 1);
     else if (hs < 0.6) this.play(s.aiming ? 'idleAim' : 'idle', 1);
     else { this.play('s_' + DIRS[k], THREE.MathUtils.clamp(hs / SPRINT_SPEED, 0.7, 1.6)); legYaw = -off; }
 
     this.model.rotation.y += (Math.PI + legYaw - this.model.rotation.y) * Math.min(1, dt * 12);
     this.mixer.update(dt);
-    if (this.current && POSED_ARMS.has(this.current.getClip().name)) this.pose(s.pitch || 0);
-    else this.bendSpine(s.pitch || 0);
+    // Smooth and limit the aim bend: looking far up/down no longer folds the body in half.
+    const target = THREE.MathUtils.clamp(s.pitch || 0, -0.7, 0.7) * 0.85;
+    this.bend += (target - this.bend) * Math.min(1, dt * 10);
+    if (this.current && POSED_ARMS.has(this.current.getClip().name)) this.pose(this.bend);
+    else this.bendSpine(this.bend);
   }
 
   // Aim up/down with a rifle clip: bend the spine instead of re-posing the arms.
   bendSpine(pitch) {
     this.root.updateMatrixWorld(true);
     const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.root.getWorldQuaternion(new THREE.Quaternion()));
-    for (const name of ['Spine1', 'Spine2']) {
+    for (const name of ['Spine', 'Spine1', 'Spine2']) {
       const bone = this.bones[name];
       if (!bone) continue;
       bone.getWorldQuaternion(_q);
-      _d.setFromAxisAngle(right, pitch * 0.5);
+      _d.setFromAxisAngle(right, pitch / 3); // spread the bend over three spine bones
       _q.premultiply(_d);
       bone.parent.getWorldQuaternion(_pq);
       bone.quaternion.copy(_pq.invert().multiply(_q));

@@ -319,9 +319,9 @@ export class Character {
       this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;
       this.mesh.rotation.set(this.slideT > 0 ? 0.25 : 0, this.yaw, 0, 'YXZ');
       if (this.mesh.visible) {
-        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0, climbing: this.climbT > 0, aiming: this.aiming });
+        this.body.update(dt, { vel: this.vel, yaw: this.yaw, pitch: this.pitch, grounded: this.grounded, crouched: this.crouched, sliding: this.slideT > 0, climbing: this.climbT > 0, aiming: this.aiming, airT: this.airT });
         this.body.handIn(this.mesh, this.gunHolder.position);
-        this.gunHolder.rotation.set(this.pitch, 0, 0);
+        this.gunHolder.rotation.set(this.body.bend, 0, 0); // gun follows the (limited) body bend
       }
       return;
     }
