@@ -15,7 +15,7 @@ export const COLORS = ['#33aaff', '#ff44cc', '#44ff88', '#ffcc22', '#ff5533', '#
 import { DEFAULT_LOOK } from './game/Look.js';
 
 const DEFAULT = {
-  coins: 0, xp: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'normal', map: 'arena',
+  coins: 0, xp: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'ranked', rating: 800, map: 'arena',
   gunSkin: 'default', killFx: 'sparks',
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },

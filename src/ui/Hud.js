@@ -63,10 +63,11 @@ export class Hud {
     this._kpT = setTimeout(() => k.classList.remove('show'), 1400);
   }
 
-  killcam(title, sub = '') {
+  killcam(title, sub = '', label = 'KILL CAM') {
     const el = document.getElementById('killcam');
     if (!title) { el.classList.add('hidden'); return; }
-    el.innerHTML = `<span>KILL CAM</span><b>${title}</b><small>${sub}</small>`;
+    el.classList.toggle('spec', label !== 'KILL CAM');
+    el.innerHTML = `<span>${label}</span><b>${title}</b><small>${sub}</small>`;
     el.classList.remove('hidden');
   }
 

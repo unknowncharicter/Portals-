@@ -7,7 +7,7 @@ import { World } from './game/World.js';
 import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
-import { Match, MODES, DIFFICULTIES } from './game/Match.js';
+import { Match, MODES, DIFFICULTIES, matchDifficulty } from './game/Match.js';
 import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, cleanName } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
@@ -18,7 +18,7 @@ import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
-import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch } from './progress.js';
+import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -327,9 +327,10 @@ function buildLobby() {
   // Difficulty: segmented control.
   const diff = $('difficulty');
   diff.innerHTML = '';
-  for (const [id, d] of Object.entries(DIFFICULTIES)) {
+  for (const [id, d] of Object.entries({ ranked: { label: '🏆 Ranked' }, ...DIFFICULTIES })) {
     const b = document.createElement('button');
     b.textContent = d.label;
+    if (id === 'ranked') b.title = 'Bots match your rank. Win to climb, lose to drop.';
     if (id === (save.difficulty || 'normal')) b.classList.add('sel');
     b.onclick = () => { save.difficulty = id; writeSave(save); Sfx.click(); buildLobby(); };
     diff.appendChild(b);
@@ -359,7 +360,7 @@ function buildLobby() {
   $('hero-name').textContent = save.look.name;
   $('hero-sub').textContent = `${WEAPONS[save.loadout.primary].name} · ${WEAPONS[save.loadout.secondary].name}`;
   const mapName = save.map === 'random' ? 'Random map' : (MAPS[save.map] || MAPS.arena).name;
-  $('hero-mode').textContent = `${MODES[save.mode].label} · ${mapName} · ${(DIFFICULTIES[save.difficulty] || DIFFICULTIES.normal).label} bots`;
+  $('hero-mode').textContent = `${MODES[save.mode].label} · ${mapName} · ${save.difficulty === 'ranked' ? `Ranked · ${rankInfo(save.rating).name}` : matchDifficulty(save).label + ' bots'}`;
   $('mode-desc').textContent = (MODES[save.mode] || MODES['1v1']).desc || '';
   $('btn-tutorial').classList.toggle('new', !save.tutorialDone);
 }
@@ -395,6 +396,12 @@ function buildLevel() {
   $('lvl-num').textContent = li.level;
   $('xp-fill').style.width = (100 * li.into / li.need) + '%';
   $('xp-text').textContent = `Level ${li.level} · ${li.into} / ${li.need} XP`;
+  const rk = rankInfo(save.rating);
+  $('rank-icon').textContent = rk.icon;
+  $('rank-icon').style.background = rk.color;
+  $('rank-text').textContent = `${rk.name} · ${rk.rp} RP`;
+  $('rank-fill').style.width = (100 * rk.into) + '%';
+  $('rank-fill').style.background = rk.color;
   $('daily-dot').classList.toggle('hidden', !dailyReward(save).canClaim);
 }
 
@@ -518,6 +525,7 @@ function onMatchEnd(res) {
   }
   save.coins += res.coins;
   const prog = applyMatch(save, res);
+  const ranked = save.difficulty === 'ranked' ? applyRanked(save, res) : null;
   writeSave(save);
   SDK.gameplayStop();
   if (res.won) SDK.happyTime();
@@ -530,6 +538,13 @@ function onMatchEnd(res) {
   let html = `<div>Kills <b>${e.kills}</b> · Portal kills <b>${e.portalKills}</b> 🌀 · Headshots <b>${e.headshots}</b> · Rounds won <b>${e.rounds}</b></div>`;
   html += `<div>🪙 <b>+${res.coins}</b> coins · ⭐ <b>+${prog.xp}</b> XP</div>`;
   html += `<div class="xpbar"><i style="width:${100 * li.into / li.need}%"></i></div><small>Level ${li.level} · ${li.into} / ${li.need} XP</small>`;
+  if (ranked) {
+    const r = ranked.rank;
+    html += `<div class="rp ${ranked.delta >= 0 ? 'up' : 'down'}">${r.icon} <b style="color:${r.color}">${r.name}</b> · ${ranked.after} RP <b>${ranked.delta >= 0 ? '+' : ''}${ranked.delta}</b></div>`;
+    html += `<div class="xpbar rpbar"><i style="width:${100 * r.into}%;background:${r.color}"></i></div>`;
+    if (ranked.rankUp) html += `<div class="lvlup">RANK UP! ${r.icon} ${r.name}</div>`;
+    if (ranked.rankDown) html += `<div class="ch">Dropped to ${r.name}</div>`;
+  }
   for (const l of prog.levelUps) html += `<div class="lvlup">LEVEL UP! Level ${l.level} · +🪙${l.coins}</div>`;
   for (const c of prog.challengesDone) html += `<div class="ch">✅ Challenge done: ${c.text} · +🪙${c.reward}</div>`;
   $('results-detail').innerHTML = html;
@@ -622,7 +637,7 @@ function frame() {
   }
   // Mouse players: if the game doesn't have the mouse yet, ask for a click.
   // Only while actually playing (the match may have just ended during update()).
-  $('lockprompt').classList.toggle('hidden', state !== 'playing' || touchMode || input.locked);
+  $('lockprompt').classList.toggle('hidden', state !== 'playing' || touchMode || input.locked || match?.state === 'outro');
 
   if (match && (state === 'playing' || state === 'paused' || state === 'results')) {
     match.render();

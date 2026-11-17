@@ -131,3 +131,34 @@ export function applyMatch(save, res) {
   }
   return out;
 }
+
+// ---------- Ranked ----------
+// Rank points (RP): win to climb, lose to drop. Ranked bots get tougher as you climb.
+export const START_RP = 800;
+export const RANKS = [
+  { name: 'Bronze',   min: 0,    color: '#c98a4b', icon: '🥉' },
+  { name: 'Silver',   min: 800,  color: '#c8d0dc', icon: '🥈' },
+  { name: 'Gold',     min: 1000, color: '#ffcf3a', icon: '🥇' },
+  { name: 'Platinum', min: 1200, color: '#5ce0d0', icon: '💠' },
+  { name: 'Diamond',  min: 1400, color: '#6aa8ff', icon: '💎' },
+  { name: 'Master',   min: 1600, color: '#c45cff', icon: '🔮' },
+  { name: 'Legend',   min: 1800, color: '#ff5c7a', icon: '👑' },
+];
+
+export function rankInfo(rp = START_RP) {
+  let i = 0;
+  while (i + 1 < RANKS.length && rp >= RANKS[i + 1].min) i++;
+  const r = RANKS[i], next = RANKS[i + 1];
+  return { ...r, index: i, rp, next, into: next ? (rp - r.min) / (next.min - r.min) : 1 };
+}
+
+// Rating change for one ranked match. Bots are matched to you, so it's roughly even:
+// a win is worth a bit more than a loss costs, and kills soften a loss / boost a win.
+export function applyRanked(save, res) {
+  const before = save.rating ?? START_RP;
+  const k = Math.min(res.earned.kills || 0, 6);
+  const delta = res.won ? 22 + k : -Math.max(8, 22 - k * 2);
+  save.rating = Math.max(0, before + delta);
+  const a = rankInfo(before), b = rankInfo(save.rating);
+  return { before, after: save.rating, delta, rankUp: b.index > a.index, rankDown: b.index < a.index, rank: b };
+}

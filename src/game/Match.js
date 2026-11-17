@@ -15,6 +15,17 @@ export const DIFFICULTIES = {
   normal: { label: 'Normal', skill: 0.5,  coins: 1,    botDamage: 0.75, guns: ['ar', 'ar', 'smg', 'shotgun', 'burst'] },
   hard:   { label: 'Hard',   skill: 0.85, coins: 1.5,  botDamage: 0.95, guns: ['ar', 'ar', 'smg', 'shotgun', 'sniper', 'burst', 'crossbow'] },
 };
+// Ranked bots scale with your rating: Bronze is like Easy, Gold like Normal, Master+ is beyond Hard.
+export function rankedDifficulty(rp = 800) {
+  const t = Math.min(1, Math.max(0, (rp - 600) / 1400));
+  const guns = rp < 900 ? DIFFICULTIES.easy.guns : rp < 1300 ? DIFFICULTIES.normal.guns : DIFFICULTIES.hard.guns;
+  return { label: 'Ranked', skill: 0.22 + t * 0.78, coins: 1 + t * 0.6, botDamage: 0.55 + t * 0.5, guns, ranked: true };
+}
+export function matchDifficulty(save) {
+  if (save.difficulty === 'ranked') return rankedDifficulty(save.rating ?? 800);
+  return DIFFICULTIES[save.difficulty] || DIFFICULTIES.normal;
+}
+
 const shadowTex = (() => {
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const g = c.getContext('2d');
@@ -100,7 +111,7 @@ export class Match {
 
   setup() {
     const botColors = COLORS.filter(c => c !== this.save.color);
-    const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
+    const diff = matchDifficulty(this.save);
     const make = (i, team, bodyColor) => {
       const isBot = i !== 0;
       const name = isBot ? BOT_NAMES[(i - 1) % BOT_NAMES.length] : this.save.look.name;
@@ -148,6 +159,7 @@ export class Match {
     this.endKillcam();
     this.projectiles.clear();
     this.deathCam = null;
+    this.hud.killcam(null);
     const teamIdx = {};
     for (const c of this.chars) {
       let at, yaw;
@@ -187,7 +199,7 @@ export class Match {
     c.animate(0);
     const brain = this.bots.find(b => b.c === c);
     if (brain) brain.reset();
-    if (c === this.player) { this.endKillcam(); this.deathCam = null; this.hud.centerText(''); }
+    if (c === this.player) { this.endKillcam(); this.deathCam = null; this.hud.killcam(null); this.hud.centerText(''); }
   }
 
   setGunGameWeapon(c) {
@@ -541,6 +553,8 @@ export class Match {
   // ---------- Main update ----------
 
   update(dt) {
+    if (this.state === 'outro') { this.updateOutro(dt); return; }
+    if (this.state === 'done') return;
     const fighting = this.state === 'fight';
     const p = this.player;
     for (const c of this.chars) c.tick(dt);
@@ -655,14 +669,66 @@ export class Match {
   }
 
   finish(winnerTeam) {
-    if (this.state === 'done') return;
-    this.state = 'done';
+    if (this.state === 'done' || this.state === 'outro') return;
     this.hud.setTimer(null);
     const won = winnerTeam === this.player.team;
-    const diff = DIFFICULTIES[this.save.difficulty] || DIFFICULTIES.normal;
+    const diff = matchDifficulty(this.save);
     const e = this.earned;
     const coins = Math.round((20 + e.kills * 10 + e.portalKills * 15 + e.headshots * 3 + e.rounds * 20 + (won ? 100 : 0)) * diff.coins);
-    this.onEnd({ won, coins, kills: e.kills, rounds: e.rounds, earned: { ...e } });
+    this.startOutro(winnerTeam, { won, coins, kills: e.kills, rounds: e.rounds, earned: { ...e } });
+  }
+
+  // End of match: the winners line up and emote at the camera, then the results show.
+  startOutro(team, res) {
+    this.state = 'outro';
+    this.outroT = 4.5;
+    this.outroRes = res;
+    this.endKillcam(); this.deathCam = null; this.hud.killcam(null);
+    this.setScope(false); this.ads = false;
+    this.portals.clear(); this.projectiles.clear(); this.ghost.hide();
+    const winners = team === undefined ? [] : this.chars.filter(c => c.team === team);
+    const anchor = (this.mode.ffa ? this.world.spawns.ffa[team] : this.world.spawns[team]?.[0]) || new THREE.Vector3();
+    const yaw = Math.atan2(anchor.x, anchor.z); // facing the map centre
+    const fwd = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const kinds = [0, 1, 2].sort(() => Math.random() - 0.5);
+    winners.forEach((c, i) => {
+      c.spawn(anchor.clone().addScaledVector(right, (i - (winners.length - 1) / 2) * 1.6), yaw);
+      c.emote = { t: Math.random() * 0.3, kind: kinds[i % 3] };
+    });
+    for (const c of this.chars) if (!winners.includes(c)) { c.mesh.visible = false; c.shadow.visible = false; c.alive = false; c.corpseT = 0; }
+    // Camera in front of them, pulled in if something is in the way.
+    const head = anchor.clone().setY(anchor.y + 1.1);
+    let dist = 4.2;
+    const hit = this.world.raycast(head, fwd, dist + 0.3);
+    if (hit) dist = Math.max(1.5, hit.t - 0.4);
+    this.outroCam = { head, fwd, right, dist };
+    this.camera.layers.enable(1); // show your own body
+    this.camera.fov = 50; this.camera.updateProjectionMatrix();
+    document.getElementById('hud').classList.add('outro');
+    const name = team === undefined ? null : this.mode.ffa ? winners[0].name : res.won ? 'YOUR TEAM' : 'ENEMY TEAM';
+    this.hud.centerText(team === undefined ? 'DRAW' : res.won ? 'VICTORY!' : `${name} WINS`, 4000, res.won ? '#7f7' : '#f77');
+    res.won ? Sfx.win() : Sfx.lose();
+  }
+
+  updateOutro(dt) {
+    this.outroT -= dt;
+    for (const c of this.chars) { if (c.emote) { c.animate(dt); c.shadow.position.set(c.pos.x, c.pos.y - c.halfHeight + 0.03, c.pos.z); } }
+    const o = this.outroCam, cam = this.camera;
+    const sway = Math.sin((4.5 - this.outroT) * 0.6) * 0.35;
+    const want = o.head.clone().addScaledVector(o.fwd, o.dist).addScaledVector(o.right, sway * 1.5).add(new THREE.Vector3(0, 0.3, 0));
+    cam.position.lerp(want, Math.min(1, dt * 3));
+    cam.lookAt(o.head);
+    cam.updateMatrixWorld();
+    // Done (or skipped with a click after a moment).
+    if (this.outroT <= 0 || (this.outroT < 3 && this.input.mouseClicked)) {
+      this.state = 'done';
+      this.camera.layers.disable(1);
+      this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix();
+      document.getElementById('hud').classList.remove('outro');
+      this.hud.centerText('');
+      this.onEnd(this.outroRes);
+    }
   }
 
   updateCamera(dt = 0) {
@@ -712,17 +778,51 @@ export class Match {
       if (cam.fov !== this.baseFov) { cam.fov = this.baseFov; cam.updateProjectionMatrix(); }
       if (k.t <= 0) this.endKillcam();
     } else if (this.deathCam) {
-      // Float up and look down at where you died.
-      cam.position.lerp(this.deathCam.pos.clone().add(new THREE.Vector3(0, 6, 0)), 0.02);
-      cam.lookAt(this.deathCam.pos);
+      const dc = this.deathCam;
+      dc.t = (dc.t || 0) + dt;
+      // After a moment, spectate a living teammate (or anyone still alive). Click / FIRE switches.
+      const mates = this.chars.filter(c => c.alive && c !== p && c.team === p.team);
+      const pool = mates.length ? mates : this.chars.filter(c => c.alive && c !== p);
+      if (dc.t > 1.2 && pool.length && this.state !== 'done') {
+        let i = pool.indexOf(dc.spec);
+        if (i < 0 || this.input.mouseClicked || this.input.pressed.has('Space')) {
+          dc.spec = pool[(i + 1) % pool.length];
+          dc.snap = i < 0;
+          this.hud.killcam(dc.spec.name, pool.length > 1 ? 'click to switch player' : (dc.spec.team === p.team ? 'teammate' : ''), 'SPECTATING');
+        }
+        this.followCam(dc.spec, dt, dc.snap);
+        dc.snap = false;
+      } else {
+        // Float up and look down at where you died.
+        if (dc.spec) { dc.spec = null; this.hud.killcam(null); }
+        cam.position.lerp(dc.pos.clone().add(new THREE.Vector3(0, 6, 0)), 0.02);
+        cam.lookAt(dc.pos);
+      }
     }
     cam.updateMatrixWorld();
+  }
+
+  // Third-person camera over a character's shoulder, pulled in if a wall is behind them.
+  followCam(c, dt, snap = false) {
+    const cam = this.camera;
+    const eye = c.eyePos();
+    const fwd = new THREE.Vector3(-Math.sin(c.yaw) * Math.cos(c.pitch * 0.6), Math.sin(c.pitch * 0.6), -Math.cos(c.yaw) * Math.cos(c.pitch * 0.6));
+    const back = fwd.clone().negate().add(new THREE.Vector3(0, 0.35, 0)).normalize();
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x).normalize();
+    const origin = eye.clone().addScaledVector(right, 0.45);
+    let dist = 3;
+    const hit = this.world.raycast(origin, back, dist + 0.3);
+    if (hit) dist = Math.max(0.4, hit.t - 0.3);
+    const want = origin.clone().addScaledVector(back, dist);
+    if (snap) cam.position.copy(want); else cam.position.lerp(want, Math.min(1, dt * 10));
+    cam.lookAt(eye.clone().addScaledVector(fwd, 8));
+    if (cam.fov !== this.baseFov) { cam.fov = this.baseFov; cam.updateProjectionMatrix(); }
   }
 
   render() {
     this.portals.renderViews(this.camera);
     this.renderer.render(this.scene, this.camera);
-    if (this.player.alive) {
+    if (this.player.alive && this.state !== 'outro' && this.state !== 'done') {
       this.renderer.autoClear = false;
       this.viewmodel.render(this.renderer);
       this.renderer.autoClear = true;
@@ -733,6 +833,8 @@ export class Match {
     if (this.tutorial) this.tutorial.dispose();
     if (this.hillMesh) this.scene.remove(this.hillMesh);
     this.endKillcam();
+    this.camera.layers.disable(1);
+    document.getElementById('hud').classList.remove('outro');
     this.projectiles.clear();
     this.setScope(false);
     this.portals.clear();

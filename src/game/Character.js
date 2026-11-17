@@ -101,6 +101,7 @@ export class Character {
     this.yaw = yaw; this.pitch = 0;
     this.hp = this.maxHp;
     this.alive = true;
+    this.emote = null;
     this.mesh.visible = true;
     if (this.body) this.body.reset();
     if (this.tagSprite) this.tagSprite.visible = true;
@@ -314,6 +315,22 @@ export class Character {
       return;
     }
     this.mesh.position.copy(this.pos);
+    if (this.emote) {
+      // Victory emote: hop (and spin for kind 1) while the body cheers.
+      const e = this.emote;
+      e.t += dt;
+      const ph = (e.t * 1.25) % 1; // spin hop: up and one full turn in the first half of each beat
+      const hop = e.kind === 1 ? (ph < 0.5 ? Math.sin(ph * 2 * Math.PI) * 0.55 : 0) : Math.abs(Math.sin(e.t * 4.5)) * 0.12;
+      const spin = e.kind === 1 && ph < 0.5 ? ph * 4 * Math.PI : 0;
+      this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF + hop;
+      this.mesh.rotation.set(0, this.yaw + spin, 0, 'YXZ');
+      if (this.body) {
+        this.body.emote(dt, e.t, e.kind);
+        this.body.handIn(this.mesh, this.gunHolder.position);
+        this.gunHolder.rotation.set(e.kind === 1 ? -1.1 : 0, 0, 0);
+      }
+      return;
+    }
     if (this.body) {
       // Animated body: the crouch clip already lowers it, so no squash. Feet stay on the ground.
       this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;

@@ -83,6 +83,7 @@ export class AnimatedBody {
     for (const a of Object.values(this.actions)) { a.stop(); a.setLoop(THREE.LoopRepeat, Infinity); a.clampWhenFinished = false; }
     this.current = null;
     this.held = 0;
+    this.emoting = false;
     this.play('idle', 1, true);
   }
 
@@ -155,6 +156,44 @@ export class AnimatedBody {
       if (!bone) continue;
       bone.getWorldQuaternion(_q);
       _d.setFromAxisAngle(right, pitch / 3); // spread the bend over three spine bones
+      _q.premultiply(_d);
+      bone.parent.getWorldQuaternion(_pq);
+      bone.quaternion.copy(_pq.invert().multiply(_q));
+      bone.updateMatrixWorld(true);
+    }
+  }
+
+  // Victory emote after a match. kind 0: cheer with both arms pumping, 1: gun raised high
+  // with spin hops, 2: wave with the free hand.
+  emote(dt, t, kind) {
+    this.held += dt;
+    this.play('idle', 1, !this.emoting);
+    this.emoting = true;
+    this.model.rotation.y = Math.PI;
+    this.mixer.update(dt);
+    const pump = Math.sin(t * 9);
+    if (kind === 0) this.poseArms({
+      RightArm: [0.35, 0.95, -0.1], RightForeArm: [0.1, 1, 0.25 * pump],
+      LeftArm: [-0.35, 0.95, -0.1], LeftForeArm: [-0.1, 1, 0.25 * pump],
+    });
+    else if (kind === 1) this.pose(1.25);
+    else this.poseArms({
+      RightArm: [0.85, 0.5, -0.15], RightForeArm: [0.55 * Math.sin(t * 7), 1, -0.1],
+      LeftArm: AIM.LeftArm, LeftForeArm: AIM.LeftForeArm,
+    });
+  }
+
+  // Point arm bones along directions given in character space.
+  poseArms(dirs) {
+    this.root.updateMatrixWorld(true);
+    const parentQ = this.root.getWorldQuaternion(new THREE.Quaternion());
+    for (const [name, d] of Object.entries(dirs)) {
+      const bone = this.bones[name];
+      if (!bone) continue;
+      const target = (Array.isArray(d) ? _v.set(...d) : _v.copy(d)).normalize().applyQuaternion(parentQ);
+      bone.getWorldQuaternion(_q);
+      _w.copy(Y).applyQuaternion(_q);
+      _d.setFromUnitVectors(_w, target);
       _q.premultiply(_d);
       bone.parent.getWorldQuaternion(_pq);
       bone.quaternion.copy(_pq.invert().multiply(_q));
