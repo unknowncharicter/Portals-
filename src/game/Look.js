@@ -17,6 +17,20 @@ export const HATS = [
   { id: 'crown',      name: 'Crown',      price: 500 },
 ];
 
+// Character models (free, no price). 'robot' is the original Mixamo robot.
+export const BODIES = [
+  { id: 'swat',  name: 'SWAT',  icon: '🪖' },
+  { id: 'punk',  name: 'Punk',  icon: '🧑‍🎤' },
+  { id: 'robot', name: 'Robot', icon: '🤖' },
+];
+// Where hats/masks and back items sit on each model (head: scale, height above the head bone;
+// back: scale, y, z from the upper spine).
+const RIG = {
+  robot: { head: [0.62, 0.12], back: [0.8, -0.26, -0.03] },
+  swat:  { head: [0.74, 0.15], back: [0.85, -0.24, -0.06] },
+  punk:  { head: [0.7, 0.14], back: [0.85, -0.24, -0.05] },
+};
+
 // Face accessories (on the head, in front of the face).
 export const FACES = [
   { id: 'nofaceitem', name: 'None',       icon: '🙂', price: 0 },
@@ -37,12 +51,15 @@ export const BACKS = [
   { id: 'wings',    name: 'Wings',    icon: '🪽', price: 600 },
 ];
 
-export const DEFAULT_LOOK = { name: 'Player', shirt: SHIRTS[3], pants: PANTS[0], skin: SKINS[1], hat: 'cap', face: 'visor', back: 'noback' };
+export const DEFAULT_LOOK = { name: 'Player', model: 'swat', shirt: SHIRTS[3], pants: PANTS[0], skin: SKINS[1], hat: 'none', face: 'nofaceitem', back: 'noback' };
 
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function randomLook(name) {
-  return { name, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)), hat: pick(HATS).id,
-    face: pick(['visor', 'visor', 'shades', 'ninja', 'skull', 'gasmask']), back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
+  const model = pick(['swat', 'punk']);
+  return { name, model, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)),
+    hat: model === 'swat' ? pick(['none', 'none', 'none', 'headphones', 'horns']) : pick(['none', 'none', ...HATS.map(h => h.id)]),
+    face: model === 'swat' ? 'nofaceitem' : pick(['nofaceitem', 'nofaceitem', 'shades', 'ninja', 'skull', 'gasmask']),
+    back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
 }
 
 export function cleanName(s) {
@@ -79,14 +96,15 @@ export function buildCharacterMesh(look, opts = {}) {
 function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {
   const g = new THREE.Group();
   const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
-  const body = new AnimatedBody({ body: look.shirt, joints: look.pants });
+  const body = new AnimatedBody({ body: look.shirt, joints: look.pants, skin: look.skin }, look.model || 'swat');
   g.add(body.root);
+  const rig = RIG[body.modelId] || RIG.robot;
 
-  // Head socket: reuse the blocky hat shapes, scaled to the smaller head.
+  // Head socket: reuse the blocky hat shapes, scaled to the model's head.
   const head = body.socket('Head');
   const hatRoot = new THREE.Group();
-  hatRoot.scale.setScalar(0.62);
-  hatRoot.position.y = 0.12 - 0.72 * 0.62;   // blocky head centre (0.72) -> 12 cm above the head bone
+  hatRoot.scale.setScalar(rig.head[0]);
+  hatRoot.position.y = rig.head[1] - 0.72 * rig.head[0];   // blocky head centre (0.72) -> above the head bone
   head.add(hatRoot);
   const box = (w, h, d, m, x, y, z, parent = hatRoot) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
@@ -97,8 +115,8 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
 
   // Back socket (on the upper spine): same "blocky torso" coordinates, scaled to the robot.
   const back = new THREE.Group();
-  back.scale.setScalar(0.8);
-  back.position.set(0, -0.26, -0.03);
+  back.scale.setScalar(rig.back[0]);
+  back.position.set(0, rig.back[1], rig.back[2]);
   body.socket('Spine2').add(back);
   const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, back);
   addBack(look, bbox, mat, visor);

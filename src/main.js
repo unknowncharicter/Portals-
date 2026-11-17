@@ -8,7 +8,7 @@ import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
 import { Match, MODES, DIFFICULTIES, matchDifficulty } from './game/Match.js';
-import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, cleanName } from './game/Look.js';
+import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, cleanName } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
@@ -203,6 +203,7 @@ function buildCharacterPanel() {
   // Accessory shops: hats, face and back. Free items are always owned.
   const HAT_ICONS = { none: '🚫', cap: '🧢', beanie: '🧶', helmet: '⛑️', headphones: '🎧', tophat: '🎩', horns: '😈', crown: '👑' };
   const slots = [
+    ['bodies', 'model', BODIES],
     ['hats', 'hat', HATS.map(h => ({ ...h, icon: HAT_ICONS[h.id] || '🎩' }))],
     ['faces', 'face', FACES],
     ['backs', 'back', BACKS],

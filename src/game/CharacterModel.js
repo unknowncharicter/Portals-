@@ -5,12 +5,19 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 // Legs come from the animation clips; the arms are posed every frame to hold the gun and
 // follow where the character is aiming.
 
-let template = null; // { scene, clips }
+// Character models. 'robot' is the Mixamo rig the clips were made for; the others get the
+// same clips copied onto their own skeleton (see Retarget.js).
+const templates = {};       // id -> { scene, clips, boneMap, scale, tint }
+let template = null;        // the robot (source of the animation clips)
 
 export function setCharacterTemplate(gltf) {
   template = { scene: gltf.scene, clips: gltf.animations };
+  templates.robot = { scene: gltf.scene, clips: gltf.animations, boneMap: null, scale: 0.01 };
 }
+export function addCharacterTemplate(id, t) { templates[id] = t; }
 export const hasCharacterModel = () => !!template;
+export const hasModel = (id) => !!templates[id];
+export const robotTemplate = () => template;
 
 // How fast each clip moves when played at normal speed (m/s), measured from the original
 // root motion. Used to match the leg speed to the real movement speed.
@@ -34,28 +41,47 @@ const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 export class AnimatedBody {
   // colors: { body, joints }
-  constructor(colors) {
+  constructor(colors, modelId = 'robot') {
     this.root = new THREE.Group();
-    const model = SkeletonUtils.clone(template.scene);
-    model.scale.setScalar(0.01);            // the rig is in centimetres
-    model.rotation.y = Math.PI;              // Mixamo faces +Z; our characters face -Z
+    const t = templates[modelId] || templates.robot;
+    this.modelId = templates[modelId] ? modelId : 'robot';
+    const model = SkeletonUtils.clone(t.scene);
+    model.scale.setScalar(t.scale);          // the robot rig is in centimetres
+    model.rotation.y = Math.PI;              // the models face +Z; our characters face -Z
     model.position.y = -0.9;                 // feet at the bottom of the 1.8 m body
     this.model = model;
     this.root.add(model);
 
+    // Bones by their Mixamo names, so the rest of the code works with every model.
+    const byName = {};
+    model.traverse(o => { if (o.isBone) byName[o.name.replace('mixamorig', '')] = o; });
     this.bones = {};
+    if (t.boneMap) { for (const [mx, own] of Object.entries(t.boneMap)) if (byName[own]) this.bones[mx] = byName[own]; }
+    else this.bones = byName;
+
     model.traverse(o => {
-      if (o.isBone) this.bones[o.name.replace('mixamorig', '')] = o;
-      if (o.isSkinnedMesh) {
+      if (!o.isMesh) return;
+      o.frustumCulled = false;               // skinned bounds don't follow the animation
+      o.castShadow = false;
+      if (!t.tint) {
         const joints = /joint/i.test(o.material.name);
         o.material = new THREE.MeshLambertMaterial({ color: joints ? colors.joints : colors.body });
-        o.frustumCulled = false;             // skinned bounds don't follow the animation
+        return;
       }
+      // Textured/coloured models: keep their look, recolour the parts the player customises.
+      const recolor = (m) => {
+        const role = t.tint[m.name];
+        const c = new THREE.MeshLambertMaterial({ color: m.color, map: m.map || null });
+        if (role && colors[role]) c.color.set(colors[role]);
+        c.name = m.name;
+        return c;
+      };
+      o.material = Array.isArray(o.material) ? o.material.map(recolor) : recolor(o.material);
     });
 
     this.mixer = new THREE.AnimationMixer(model);
     this.actions = {};
-    for (const clip of template.clips) this.actions[clip.name] = this.mixer.clipAction(clip);
+    for (const clip of t.clips) this.actions[clip.name] = this.mixer.clipAction(clip);
     this.current = null;
     this.dead = false;
     this.held = 0;
@@ -88,11 +114,16 @@ export class AnimatedBody {
   }
 
   // Attach something to a bone in metres, facing our -Z forward.
+  // The socket is lined up with the character (not the bone) in the rest pose, and in metres.
   socket(boneName) {
     const s = new THREE.Group();
-    s.scale.setScalar(100);
-    s.rotation.y = Math.PI;
-    this.bones[boneName].add(s);
+    const bone = this.bones[boneName];
+    this.root.updateMatrixWorld(true);
+    const rootQ = this.root.getWorldQuaternion(new THREE.Quaternion());
+    const boneQ = bone.getWorldQuaternion(new THREE.Quaternion());
+    s.quaternion.copy(boneQ.invert().multiply(rootQ));
+    s.scale.setScalar(1 / bone.getWorldScale(new THREE.Vector3()).x * this.root.getWorldScale(new THREE.Vector3()).x);
+    bone.add(s);
     return s;
   }
 

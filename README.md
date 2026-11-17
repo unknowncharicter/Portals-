@@ -58,8 +58,14 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 | `src/game/Bot.js` | Bot AI: vision, aiming, hunting, portal flanking, objectives, portal shots |
 | `src/game/Tutorial.js` | The step-by-step tutorial |
 | `src/game/maps.js` / `World.js` | Map layouts / loading and raycasts |
-| `src/game/CharacterModel.js` | Animated character (Mixamo rig in `public/models/character.glb`): picks run/back/crouch clips from movement, poses the arms to hold the gun |
+| `src/game/CharacterModel.js` | Animated character: SWAT and Punk (`public/models/chars/`) or the Mixamo robot (`public/models/character.glb`, also the source of all animation clips); picks run/back/crouch clips from movement |
+| `src/game/Retarget.js` | Copies the Mixamo clips onto the SWAT/Punk skeleton at load time |
 | `src/game/Look.js`, `Models.js`, `Viewmodel.js`, `Effects.js` | Characters and hats, gun models and skins, first-person gun, effects and kill effects |
 | `src/progress.js` | XP, levels, daily reward, challenges, stats, cosmetics catalogue |
 | `src/audio.js` | Synthesized sound effects and music |
 | `src/main.js` | Menus, lobby tabs, settings, game loop |
+
+## Credits
+
+- SWAT and Punk characters by Quaternius (CC0).
+- Animations from Mixamo.

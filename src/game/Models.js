@@ -1,7 +1,16 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { setCharacterTemplate } from './CharacterModel.js';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { setCharacterTemplate, addCharacterTemplate } from './CharacterModel.js';
+import { retargetClips, MIXAMO_TO_QUAT, fixQuaterniusRig } from './Retarget.js';
+
+// Character models (Quaternius, CC0). They share one skeleton, so the robot's animation clips
+// are copied onto it once and used by both. tint: material name -> look colour it takes.
+const CHARACTERS = {
+  swat: { file: 'chars/swat.glb', tint: { Swat: 'body', Swat_Black: 'joints', Skin: 'skin' } },
+  punk: { file: 'chars/punk.glb', tint: { White: 'body', LightBlue: 'joints', Skin: 'skin' } },
+};
 
 // Gun models (GLB). The source models point their barrel along +X; we turn them to face -Z
 // (forward in three.js), scale them to a real-world length, and put the grip at the origin.
@@ -23,7 +32,18 @@ export function loadModels() {
   const loader = new GLTFLoader();
   loader.setMeshoptDecoder(MeshoptDecoder);
   const character = loader.loadAsync('models/character.glb')
-    .then(setCharacterTemplate)
+    .then(async (robot) => {
+      setCharacterTemplate(robot);
+      let clips = null;
+      await Promise.all(Object.entries(CHARACTERS).map(async ([id, cfg]) => {
+        try {
+          const g = await loader.loadAsync(`models/${cfg.file}`);
+          fixQuaterniusRig(g.scene);
+          if (!clips) clips = retargetClips(SkeletonUtils.clone(robot.scene), SkeletonUtils.clone(g.scene), robot.animations, MIXAMO_TO_QUAT);
+          addCharacterTemplate(id, { scene: g.scene, clips, boneMap: MIXAMO_TO_QUAT, scale: 1, tint: cfg.tint });
+        } catch (e) { console.warn('Could not load character', id, e); }
+      }));
+    })
     .catch(e => console.warn('Could not load character model (using blocky bodies)', e));
   loading = Promise.all([character, ...Object.entries(GUNS).map(async ([id, cfg]) => {
     try {
