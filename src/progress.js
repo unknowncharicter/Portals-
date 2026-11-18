@@ -23,7 +23,15 @@ export const GUN_SKINS = [
   { id: 'neon',    name: 'Neon',     price: 450, color: 'portal', emissive: 'portal' },
   { id: 'void',    name: 'Void',     price: 600, color: '#1a0d2e', emissive: '#40108a' },
   { id: 'rainbow', name: 'Rainbow',  level: 10, color: 'rainbow' },
+  // Exclusive: one per week, the reward for finishing all three weekly challenges.
+  { id: 'lava',    name: 'Lava',     weekly: true, color: '#ff5a1f', emissive: '#7a1800' },
+  { id: 'galaxy',  name: 'Galaxy',   weekly: true, color: '#4a2aa8', emissive: '#2a0f7a' },
+  { id: 'frost',   name: 'Frost',    weekly: true, color: '#d8f4ff', emissive: '#2a5a7a' },
+  { id: 'toxic',   name: 'Toxic',    weekly: true, color: '#8cff3a', emissive: '#205a00' },
+  { id: 'chrome',  name: 'Chrome',   weekly: true, color: '#e8ecf4', emissive: '#1a1e28' },
+  { id: 'cyber',   name: 'Cyber',    weekly: true, color: '#ff3ad8', emissive: '#5a0050' },
 ];
+const WEEKLY_SKINS = GUN_SKINS.filter(s => s.weekly);
 
 export const KILL_FX = [
   { id: 'sparks',   name: 'Sparks',   price: 0 },
@@ -34,6 +42,7 @@ export const KILL_FX = [
 ];
 
 export function owns(save, item) {
+  if (item.weekly) return (save.owned || []).includes(item.id);
   if (!item.price && !item.level) return true;
   if (item.level && levelInfo(save.xp || 0).level >= item.level) return true;
   return (save.owned || []).includes(item.id);
@@ -79,6 +88,38 @@ function seeded(str) {
   return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 10000) / 10000; };
 }
 
+// ---------- Weekly challenges ----------
+// Monday-based week number, so everyone gets the same set (and the same exclusive skin).
+export function weekKey(d = new Date()) {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const monday = new Date(t); monday.setDate(t.getDate() - ((t.getDay() + 6) % 7));
+  return Math.floor((monday - new Date(2024, 0, 1)) / (7 * 864e5));
+}
+export function daysLeftInWeek(d = new Date()) { return 7 - ((d.getDay() + 6) % 7); }
+const WEEK_POOL = [
+  { stat: 'kills',       text: n => `Get ${n} kills`,              ns: [50, 70],  reward: 300 },
+  { stat: 'portalKills', text: n => `Get ${n} portal kills 🌀`,    ns: [10, 15],  reward: 400 },
+  { stat: 'wins',        text: n => `Win ${n} matches`,            ns: [6, 8],    reward: 350 },
+  { stat: 'headshots',   text: n => `Get ${n} headshot kills`,     ns: [20, 30],  reward: 350 },
+  { stat: 'captures',    text: n => `Capture ${n} flags 🚩`,       ns: [4, 6],    reward: 400 },
+  { stat: 'matches',     text: n => `Play ${n} matches`,           ns: [12, 15],  reward: 250 },
+];
+export function weeklySkin(week = weekKey()) { return WEEKLY_SKINS[((week % WEEKLY_SKINS.length) + WEEKLY_SKINS.length) % WEEKLY_SKINS.length]; }
+export function weeklyChallenges(save) {
+  const week = weekKey();
+  if (!save.weekly || save.weekly.week !== week) {
+    const rnd = seeded('week' + week);
+    const pool = [...WEEK_POOL], list = [];
+    for (let i = 0; i < 3; i++) {
+      const c = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
+      const n = c.ns[Math.floor(rnd() * c.ns.length)];
+      list.push({ stat: c.stat, target: n, text: c.text(n), reward: c.reward, progress: 0, done: false });
+    }
+    save.weekly = { week, list, claimed: false };
+  }
+  return save.weekly;
+}
+
 export function dailyChallenges(save) {
   const today = dayKey();
   if (!save.challenges || save.challenges.day !== today) {
@@ -115,8 +156,8 @@ export function applyMatch(save, res) {
 
   // Lifetime stats
   const s = save.stats = { matches: 0, wins: 0, kills: 0, deaths: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, grenadeKills: 0, rounds: 0, ...(save.stats || {}) };
-  const add = { matches: 1, wins: res.won ? 1 : 0, kills: e.kills, deaths: e.deaths, portalKills: e.portalKills, headshots: e.headshots, shots: e.shots, hits: e.hits, grenadeKills: e.grenadeKills, rounds: e.rounds };
-  for (const k in add) s[k] += add[k];
+  const add = { matches: 1, wins: res.won ? 1 : 0, kills: e.kills, deaths: e.deaths, portalKills: e.portalKills, headshots: e.headshots, shots: e.shots, hits: e.hits, grenadeKills: e.grenadeKills, rounds: e.rounds, captures: e.captures || 0 };
+  for (const k in add) s[k] = (s[k] || 0) + add[k];
 
   // Challenges
   for (const c of dailyChallenges(save)) {
@@ -128,6 +169,20 @@ export function applyMatch(save, res) {
       save.xp += 50;
       out.challengesDone.push(c);
     }
+  }
+  // Weekly challenges (all three done: this week's exclusive gun skin)
+  out.weeklyDone = [];
+  const wk = weeklyChallenges(save);
+  for (const c of wk.list) {
+    if (c.done) continue;
+    c.progress = Math.min(c.target, c.progress + (add[c.stat] || 0));
+    if (c.progress >= c.target) { c.done = true; save.coins += c.reward; save.xp += 100; out.weeklyDone.push(c); }
+  }
+  if (!wk.claimed && wk.list.every(c => c.done)) {
+    wk.claimed = true;
+    const skin = weeklySkin(wk.week);
+    if (!save.owned.includes(skin.id)) save.owned.push(skin.id);
+    out.weeklySkin = skin;
   }
   return out;
 }

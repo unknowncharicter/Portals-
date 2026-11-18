@@ -424,3 +424,9 @@ body.touch .sb-kd { display: none; }
 body.touch #score { transform: translateX(-50%) scale(.78); transform-origin: top center; }
 body.touch #bottom-left { transform: scale(.7); }
 body.touch .hp-wrap { width: 180px; }
+
+/* Weekly reward */
+.weekly-reward { display: flex; gap: 12px; align-items: center; margin-top: 8px; padding: 12px 14px; border-radius: 12px; background: linear-gradient(90deg, rgba(182,92,255,.25), rgba(54,181,255,.15)); border: 1px solid rgba(182,92,255,.5); }
+.weekly-reward .swatch { width: 54px; height: 30px; border-radius: 8px; flex: none; box-shadow: 0 0 14px rgba(255,255,255,.25); }
+.weekly-reward small { display: block; opacity: .8; font-size: 12px; }
+.weekly-reward.got { border-color: #7f7; }

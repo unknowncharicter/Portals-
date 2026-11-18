@@ -19,7 +19,7 @@ import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel, mapModel } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
-import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo } from './progress.js';
+import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo, weeklyChallenges, weeklySkin, daysLeftInWeek } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('game');
@@ -419,6 +419,7 @@ function shopItem(item, equipped, swatch, onEquip) {
   if (equipped) { b.textContent = 'Equipped'; b.disabled = true; }
   else if (have) { b.textContent = 'Equip'; b.onclick = () => { onEquip(); writeSave(save); Sfx.click(); buildLobby(); }; }
   else if (item.level) { b.textContent = `🔒 Level ${item.level}`; b.disabled = true; }
+  else if (item.weekly) { b.textContent = '🏆 Weekly reward'; b.disabled = true; }
   else {
     b.textContent = `🪙 ${item.price}`;
     b.disabled = save.coins < item.price;
@@ -464,6 +465,19 @@ function buildDaily() {
     d.innerHTML = `<div class="t">${c.done ? '✅ ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">🪙${c.reward}</span>`;
     ch.appendChild(d);
   }
+  // Weekly: bigger challenges, and an exclusive gun skin for finishing all three.
+  const wk = weeklyChallenges(save), skin = weeklySkin(wk.week), left = daysLeftInWeek();
+  const wEl = $('weekly'); wEl.innerHTML = '';
+  for (const c of wk.list) {
+    const d = document.createElement('div');
+    d.className = 'challenge' + (c.done ? ' done' : '');
+    d.innerHTML = `<div class="t">${c.done ? '✅ ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">🪙${c.reward}</span>`;
+    wEl.appendChild(d);
+  }
+  const r = document.createElement('div');
+  r.className = 'weekly-reward' + (wk.claimed ? ' got' : '');
+  r.innerHTML = `<span class="swatch" style="background:${skin.color}"></span><div><b>${wk.claimed ? 'Unlocked: ' : 'Finish all 3: '}${skin.name} gun skin</b><small>${wk.claimed ? 'Equip it in the Shop.' : `Exclusive — only this week · ${left} day${left > 1 ? 's' : ''} left`}</small></div>`;
+  wEl.appendChild(r);
   writeSave(save);
 }
 
@@ -560,6 +574,8 @@ function onMatchEnd(res) {
     if (ranked.rankDown) html += `<div class="ch">Dropped to ${r.name}</div>`;
   }
   for (const l of prog.levelUps) html += `<div class="lvlup">LEVEL UP! Level ${l.level} · +🪙${l.coins}</div>`;
+  for (const c of prog.weeklyDone || []) html += `<div class="ch">🏆 Weekly challenge done: ${c.text} · +🪙${c.reward}</div>`;
+  if (prog.weeklySkin) html += `<div class="lvlup">EXCLUSIVE UNLOCKED: ${prog.weeklySkin.name} gun skin!</div>`;
   for (const c of prog.challengesDone) html += `<div class="ch">✅ Challenge done: ${c.text} · +🪙${c.reward}</div>`;
   $('results-detail').innerHTML = html;
   if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);

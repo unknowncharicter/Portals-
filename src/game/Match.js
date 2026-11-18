@@ -80,7 +80,7 @@ export class Match {
     this.stateT = 0;
     this.round = 0;
     // Everything the player did this match (used for coins, XP, challenges and stats).
-    this.earned = { kills: 0, rounds: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, deaths: 0, grenadeKills: 0 };
+    this.earned = { kills: 0, rounds: 0, portalKills: 0, headshots: 0, shots: 0, hits: 0, deaths: 0, grenadeKills: 0, captures: 0 };
     this.killcam = null;
     this.projectiles = new Projectiles(this);
     this.ghostMode = false;
