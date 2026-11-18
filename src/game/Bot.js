@@ -33,7 +33,7 @@ export class BotBrain {
   }
 
   reset() {
-    this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null;
+    this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null; this.peek = null;
     this.lastKnown = null; this.searchGoal = null; this.searchT = 0;
     this.hillGoal = null; this.escapeT = 0; this.steerT = 0; this.progPos = null;
   }
@@ -46,7 +46,8 @@ export class BotBrain {
   }
 
   // Can we hit `t` — directly or through any linked portal? Returns aim direction or null.
-  findShot(t) {
+  // accept(dir): optional extra check (e.g. "is it in front of us"); lines it rejects are skipped.
+  findShot(t, accept = null) {
     const eye = this.c.eyePos();
     const chest = t.pos.clone().setY(t.pos.y + 0.25);
     // In Portal Only, a direct shot does nothing, so only look for shots through portals.
@@ -58,10 +59,11 @@ export class BotBrain {
       if (p.partner.local(chest).z <= 0) continue;
       candidates.push(chest.clone().applyMatrix4(m));
     }
-    for (const point of candidates) {
-      const dir = point.clone().sub(eye).normalize();
+    for (let i = 0; i < candidates.length; i++) {
+      const dir = candidates[i].clone().sub(eye).normalize();
+      if (accept && !accept(dir)) continue;
       const tr = this.m.portals.trace(eye, dir, 200, { characters: [t] });
-      if (tr.hit && tr.hit.type === 'character' && tr.hit.character === t) return dir;
+      if (tr.hit && tr.hit.type === 'character' && tr.hit.character === t) { this.viaPortal = tr.segments.length > 1; return dir; }
     }
     return null;
   }
@@ -88,13 +90,13 @@ export class BotBrain {
       const now = performance.now();
       for (const e of enemies) {
         if (e.pos.distanceTo(c.pos) > 70) continue;
-        const dir = this.findShot(e);
-        if (!dir) continue;
         // Bots only notice you in front of them (about 120° view), unless they are already
-        // fighting you or you just shot them.
+        // fighting you or you just shot them. Every line of sight counts (direct or through
+        // any portal), so a peek through our portal works even if you're also behind us.
         const tracking = this.target === e && this.seenT > 0;
         const justHit = c.lastAttacker === e && now - (c.hurtAt || 0) < 2500;
-        if (!tracking && !justHit && dir.dot(look) < 0.5) continue;
+        const dir = this.findShot(e, tracking || justHit ? null : (d) => d.dot(look) >= 0.5);
+        if (!dir) continue;
         found = { e, dir }; break;
       }
       if (found) {
@@ -168,6 +170,8 @@ export class BotBrain {
     const side = new THREE.Vector3(-to.z, 0, to.x).multiplyScalar(this.strafeSign);
     const approach = dist > 18 ? 0.7 : dist < 8 ? -0.6 : 0;
     this.wish.copy(side).addScaledVector(to, approach).normalize();
+    // Shooting through a portal from cover: stay put (moving would lose the angle).
+    if (this.viaPortal) { this.wish.set(0, 0, 0); this.goingThrough = false; return; }
     // Capture the Flag: a carrier keeps running home while shooting; attackers keep pushing.
     if (m.mode.ctf && m.flags) {
       const g = this.ctfGoal();
@@ -258,10 +262,42 @@ export class BotBrain {
           return;
         }
       }
-    } else if (!this.flank && this.hiddenT > 2.5 && c.portalCd <= 0 && Math.random() < dt * 0.6) this.planFlank();
+    } else {
+      // Portal tactics: when we know roughly where an enemy is but can't see them, either set up
+      // a shot through a portal (peek) or a portal behind them to walk through (flank).
+      if (this.peek) {
+        this.peek.t += dt;
+        const mine = m.portals.byOwner.get(c) || [];
+        if (this.peek.t > 14 || !mine.length || !this.target.alive || (this.peek.stage === 2 && mine.length < 2)) this.peek = null;
+      }
+      if (!this.flank && !this.peek && this.lastKnown && this.hiddenT > 1.2 && c.portalCd <= 0
+        && this.lastKnown.distanceTo(c.pos) > 7 && Math.random() < dt * (0.6 + this.skill)) {
+        if (Math.random() < 0.35 + this.skill * 0.3) this.planPeek(); else this.planFlank();
+      }
+      if (this.peek) {
+        if (this.peek.stage === 1 && c.portalCd <= 0) this.placePeekEntrance();
+        const spot = this.peek && this.peek.stage === 2 ? this.portalShotSpot() : null;
+        if (spot) {
+          goal = spot;
+          if (Math.hypot(spot.x - c.pos.x, spot.z - c.pos.z) < 0.8) {
+            // In position: look into our portal and wait for the enemy to show up through it.
+            const dir = this.shotEntry.pos.clone().sub(c.eyePos()).normalize();
+            this.turnToward(dir, dt, 5);
+            this.wish.set(0, 0, 0);
+            return;
+          }
+        } else if (this.peek && this.peek.stage === 2) this.peek = null;
+      }
+      this.goingThrough = false;
+      if (!this.flank && !this.peek) {
+        // Our own portals as a shortcut: walk into one if its partner is much closer to the goal.
+        const sc = this.portalShortcut(goal);
+        if (sc) { goal = sc; this.goingThrough = true; }
+      }
+    }
     if (this.flank) {
       if (this.flank.stage === 1 && c.portalCd <= 0) this.placeEntrance();
-      if (this.flank && this.flank.stage === 2) goal = this.flank.entry;
+      if (this.flank && this.flank.stage === 2) { goal = this.flank.entry; this.goingThrough = true; }
     }
 
     // Somewhere high up (a roof)? Go via a ladder.
@@ -289,24 +325,119 @@ export class BotBrain {
     if (look.lengthSq() > 0) this.turnToward(look.normalize(), dt, 5);
   }
 
+  // The best wall near a position for an exit portal: from it you must be able to see that spot,
+  // and it's better if it is behind or beside the enemy (where they aren't looking) and not too
+  // close or far. Returns a pose or null.
+  bestExitNear(spot, look, allowFloor = false) {
+    const m = this.m, w = m.world, P = m.portals;
+    const chest = spot.clone().setY(spot.y + 0.25);
+    let best = null, bestS = -Infinity;
+    const off = Math.random() * Math.PI * 2;
+    for (let i = 0; i < 16; i++) {
+      const a = off + i * Math.PI / 8;
+      const dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const hit = w.raycast(spot.clone().setY(spot.y + 0.4), dir, 22);
+      if (!hit || Math.abs(hit.normal.y) > 0.5 || hit.t < 3.5) continue;
+      hit.point.y = Math.max(hit.point.y, 1.3);
+      const pose = P.poseFromHit(hit, dir);
+      if (!pose || !pose.valid) continue;
+      const eye = pose.pos.clone().addScaledVector(pose.normal, 0.6);
+      const to = chest.clone().sub(eye), d = to.length();
+      if (w.raycast(eye, to.normalize(), d - 0.4)) continue;      // can't see the spot from there
+      let score = -Math.abs(d - 8) * 0.2 + Math.random() * 0.3;
+      if (look) score -= look.dot(dir) * 1.5;                      // behind them is best
+      if (score > bestS) { bestS = score; best = pose; }
+    }
+    // Flanks can also come up out of the floor, a few metres behind or beside the enemy.
+    if (allowFloor) {
+      for (let i = 0; i < 8; i++) {
+        const a = off + i * Math.PI / 4, dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+        for (const r of [5, 7]) {
+          const top = spot.clone().addScaledVector(dir, r).setY(spot.y + 1.5);
+          if (w.raycast(spot.clone().setY(spot.y + 0.4), dir, r)) continue;    // a wall in between
+          const hit = w.raycast(top, new THREE.Vector3(0, -1, 0), 4);
+          if (!hit || hit.normal.y < 0.7) continue;
+          const pose = P.poseFromHit(hit, dir.clone().negate());
+          if (!pose || !pose.valid) continue;
+          let score = -1 + Math.random() * 0.3;                              // walls are a bit better
+          if (look) score -= look.dot(dir) * 1.5;
+          if (score > bestS) { bestS = score; best = pose; }
+        }
+      }
+    }
+    return best;
+  }
+
+  // Flank: exit portal behind the enemy, then an entrance at our feet, then walk through.
   planFlank() {
     const c = this.c, m = this.m, t = this.target;
-    // Exit portal: on a wall near the target, ideally behind it (away from us).
-    if (!this.lastKnown) return; // only flank someone we know about
-    const away = this.lastKnown.clone().sub(c.pos).setY(0).normalize();
-    for (let i = 0; i < 8; i++) {
-      const ang = (Math.random() - 0.5) * Math.PI * 1.2;
-      const dir = away.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);
-      const origin = this.lastKnown.clone().setY(t.pos.y);
-      const hit = m.world.raycast(origin, dir, 14);
-      if (!hit || Math.abs(hit.normal.y) > 0.5) continue;
-      hit.point.y = Math.max(hit.point.y, 1.2);
+    if (!this.lastKnown) return;
+    const look = t.alive ? t.lookDir().setY(0).normalize() : null;
+    const pose = this.bestExitNear(this.lastKnown, look, true);
+    if (!pose || !m.placePortal(c, pose)) return;
+    this.flank = { stage: 1, t: 0 };
+  }
+
+  // Peek: exit portal that sees the enemy, entrance on a wall near us, then shoot through it from
+  // a safe spot.
+  planPeek() {
+    const c = this.c, m = this.m, t = this.target;
+    if (!this.lastKnown) return;
+    const look = t.alive ? t.lookDir().setY(0).normalize() : null;
+    const pose = this.bestExitNear(this.lastKnown, look);
+    if (!pose || !m.placePortal(c, pose)) return;
+    this.peek = { stage: 1, t: 0 };
+  }
+
+  // Entrance for a peek: a wall 3-9 m from us that we can see, facing us.
+  placePeekEntrance() {
+    const c = this.c, m = this.m, w = m.world, eye = c.eyePos();
+    const toT = this.lastKnown ? this.lastKnown.clone().sub(c.pos).setY(0).normalize() : new THREE.Vector3(1, 0, 0);
+    const off = Math.random() * Math.PI * 2;
+    let best = null, bestS = -Infinity;
+    for (let i = 0; i < 12; i++) {
+      const a = off + i * Math.PI / 6, dir = new THREE.Vector3(Math.cos(a), 0, Math.sin(a));
+      const hit = w.raycast(eye, dir, 10);
+      if (!hit || Math.abs(hit.normal.y) > 0.5 || hit.t < 3) continue;
+      hit.point.y = Math.max(hit.point.y, 1.3);
       const pose = m.portals.poseFromHit(hit, dir);
       if (!pose || !pose.valid) continue;
-      m.placePortal(c, pose);
-      this.flank = { stage: 1, t: 0 };
-      return;
+      // Prefer walls away from the enemy (so we stay in cover while shooting).
+      const score = -dir.dot(toT) + Math.random() * 0.3 - Math.abs(hit.t - 5) * 0.1;
+      if (score > bestS) { bestS = score; best = pose; }
     }
+    if (best && m.placePortal(c, best)) this.peek.stage = 2;
+    else this.peek = null;
+  }
+
+  // If one of our linked portals is close and its partner is much closer to where we want to go,
+  // walk into it. Returns where to walk, or null.
+  portalShortcut(goal) {
+    const c = this.c, mine = this.m.portals.byOwner.get(c) || [];
+    if (mine.length < 2 || performance.now() - (this.tpAt || 0) < 6000) return null;
+    const here = c.pos.distanceTo(goal);
+    if (here < 12) return null;
+    for (const p of mine) {
+      if (!p.partner) continue;
+      const dIn = p.pos.distanceTo(c.pos);
+      if (dIn > 12 || dIn < 0.5) continue;
+      if (p.partner.pos.distanceTo(goal) + dIn + 4 < here) {
+        // Walk to just in front of it (floor portals: onto it).
+        return p.normal.y > 0.5 ? p.pos.clone() : p.pos.clone().addScaledVector(p.normal, -0.5).setY(c.pos.y);
+      }
+    }
+    return null;
+  }
+
+  // Is this point in the opening of one of our linked portals? (walking into it is fine)
+  inOwnOpening(pt) {
+    if (!this.goingThrough) return false;
+    for (const p of this.m.portals.byOwner.get(this.c) || []) {
+      if (!p.partner) continue;
+      const l = p.local(pt);
+      if (Math.abs(l.x) < 0.75 && Math.abs(l.y) < 1.25 && Math.abs(l.z) < 1.0) return true;
+    }
+    return false;
   }
 
   // Retreat: put an exit portal on a wall well away from the target (the entrance comes next).
@@ -428,7 +559,9 @@ export class BotBrain {
   }
 
   wantsPortalDrop(p) {
-    return !!(this.flank && this.flank.stage === 2 && this.flank.entry && this.flank.entry.distanceTo(p) < 2.5);
+    if (this.flank && this.flank.stage === 2 && this.flank.entry && this.flank.entry.distanceTo(p) < 2.5) return true;
+    for (const q of this.m.portals.byOwner.get(this.c) || []) if (q.partner && q.normal.y > 0.5 && q.pos.distanceTo(p) < 1.6) return true;
+    return false;
   }
 
   // Steer around obstacles and edges in front of us.
@@ -479,7 +612,7 @@ export class BotBrain {
     for (const [o, y] of [[0, -0.3], [1, -0.3], [-1, -0.3], [0, 0.5]]) {
       _o.copy(c.pos).addScaledVector(side, o); _o.y = c.pos.y + y;
       const h = w.raycast(_o, d, 1.3);
-      if (h && !ignored.has(h.box) && h.box.max.y - feet > 0.55) return true;
+      if (h && !ignored.has(h.box) && h.box.max.y - feet > 0.55 && !this.inOwnOpening(h.point)) return true;
     }
     if (!c.grounded) return false;
     const ahead = c.pos.clone().addScaledVector(d, 1.4);

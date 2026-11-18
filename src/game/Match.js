@@ -98,7 +98,7 @@ export class Match {
         if (c === this.player) Sfx.teleport();
         if (c === this.player && this.tutorial) this.tutorial.flags.teleported = true;
         const brain = this.bots.find(b => b.c === c);
-        if (brain) brain.flank = null;
+        if (brain) { brain.flank = null; brain.tpAt = performance.now(); }
       }
     };
     this.setup();
