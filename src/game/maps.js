@@ -273,6 +273,7 @@ MAPS.compound = {
   theme: { sky: '#f4d6a6', fog: [60, 160], hemi: 1.7, sun: 2.0 },
   view: { r: 30, h: 15 },
   hill: { x: 0, y: 0.08, z: 0, r: 4.5 },
+  perches: [[-6.5, 5.8, 6.5], [6.6, 5.8, -6.6]],    // roofs bots climb up to (by the ladders)
   spawns: {
     0: [V(-22, 0.08, -3), V(-22, 0.08, 3)],
     1: [V(22, 0.08, 3), V(22, 0.08, -3)],

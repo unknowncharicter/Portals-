@@ -199,10 +199,25 @@ export class BotBrain {
     else {
       this.lastKnown = null;
       this.searchT -= dt;
+      // Up on a lookout spot: stay a while and watch (turning slowly).
+      if (this.perched && this.searchGoal && this.searchGoal.distanceTo(c.pos) < 2.5) {
+        this.campT = (this.campT ?? 6 + Math.random() * 6) - dt;
+        if (this.campT > 0) { c.yaw += dt * 0.7; this.wish.set(0, 0, 0); return; }
+        this.perched = false; this.campT = undefined; this.searchT = 0;
+      }
       if (!this.searchGoal || this.searchT <= 0 || this.searchGoal.distanceTo(c.pos) < 2) {
-        const r = 14;
-        this.searchGoal = this.target.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * r * 2, 0, (Math.random() - 0.5) * r * 2));
-        this.searchT = 5 + Math.random() * 3;
+        const r = 14, perches = m.world.map.perches;
+        this.perched = false;
+        if (perches && Math.random() < 0.45) {
+          // Now and then go up to a lookout spot (a roof reached by a ladder).
+          const p = perches[Math.floor(Math.random() * perches.length)];
+          this.searchGoal = new THREE.Vector3(p[0], p[1] + 0.9, p[2]);
+          this.searchT = 15 + Math.random() * 6;
+          this.perched = true; this.campT = undefined;
+        } else {
+          this.searchGoal = this.target.pos.clone().add(new THREE.Vector3((Math.random() - 0.5) * r * 2, 0, (Math.random() - 0.5) * r * 2));
+          this.searchT = 5 + Math.random() * 3;
+        }
       }
       goal = this.searchGoal;
     }
@@ -235,6 +250,10 @@ export class BotBrain {
       if (this.flank && this.flank.stage === 2) goal = this.flank.entry;
     }
 
+    // Somewhere high up (a roof)? Go via a ladder.
+    const lr = this.ladderRoute(goal);
+    if (lr && lr.climb) { this.wish.copy(lr.climb); return; }
+    if (lr) goal = lr.point;
     const to = goal.clone().sub(c.pos).setY(0);
     const far = to.length();
     if (to.lengthSq() > 0.01) this.wish.copy(to.normalize());
@@ -448,6 +467,30 @@ export class BotBrain {
     else if (this.groundAhead(want, [2, 4], false)) this.jump = true;
   }
 
+  // Ladders: if the goal is well above us, walk to the nearest ladder that reaches that high,
+  // then push into it to climb. Returns { climb: direction } while on a ladder, { point } to
+  // walk to, or null when no ladder is needed.
+  ladderRoute(goal) {
+    const w = this.m.world, c = this.c;
+    if (!w.ladders || !w.ladders.length) return null;
+    const on = w.ladderAt(c);
+    const high = goal.y - c.pos.y > 2.5;
+    if (on && (high || this.climbing)) {
+      this.climbing = true;
+      return { climb: new THREE.Vector3(-on.n[0], 0, -on.n[2]) };
+    }
+    this.climbing = false;
+    if (!high || !c.grounded) return null;
+    let best = null, bestD = Infinity;
+    for (const l of w.ladders) {
+      if (l.max[1] < goal.y - 2.5) continue;          // doesn't reach that high
+      const p = new THREE.Vector3((l.min[0] + l.max[0]) / 2, c.pos.y, (l.min[2] + l.max[2]) / 2);
+      const d = p.distanceTo(c.pos) + p.distanceTo(goal);
+      if (d < bestD) { bestD = d; best = p; }
+    }
+    return best ? { point: best } : null;
+  }
+
   // Called every frame: if we've been trying to move but haven't got anywhere, pick a random
   // free direction and go that way for a bit.
   checkStuck(dt) {
@@ -458,7 +501,7 @@ export class BotBrain {
     if (!this.progPos) this.progPos = c.pos.clone();
     if (this.progT < 1.5) return;
     const moved = Math.hypot(c.pos.x - this.progPos.x, c.pos.z - this.progPos.z);
-    if (moved < 0.5 && this.wish.lengthSq() > 0 && this.escapeT <= 0 && c.grounded) {
+    if (moved < 0.5 && this.wish.lengthSq() > 0 && this.escapeT <= 0 && c.grounded && !c.onLadder) {
       const off = Math.random() * Math.PI * 2;
       for (let i = 0; i < 8; i++) {
         const d = new THREE.Vector3(Math.sin(off + i * Math.PI / 4), 0, Math.cos(off + i * Math.PI / 4));
