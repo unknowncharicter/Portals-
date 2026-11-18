@@ -9,6 +9,7 @@ import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
 import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES } from './game/Match.js';
 import { Room } from './net/Room.js';
+import { submitScore, fetchBoard, myTag } from './leaderboard.js';
 import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, cleanName, randomLook } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
@@ -492,6 +493,27 @@ function buildStats() {
     ['Accuracy', pct(s.hits, s.shots)], ['Rounds won', s.rounds],
   ];
   $('stats').innerHTML = rows.map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join('');
+  if (currentTab === 'stats') buildLeaderboard();
+}
+
+// ---------- Leaderboard ----------
+let lbKey = 'rp';
+async function buildLeaderboard(force = false) {
+  for (const b of document.querySelectorAll('#lb-seg button')) {
+    b.classList.toggle('sel', b.dataset.k === lbKey);
+    b.onclick = () => { lbKey = b.dataset.k; Sfx.click(); buildLeaderboard(); };
+  }
+  const el = $('leaderboard');
+  const data = await fetchBoard(force);
+  if (!data) { el.innerHTML = '<p class="hint left">The global leaderboard is coming soon.</p>'; return; }
+  const list = data[lbKey] || [], me = myTag(save);
+  if (!list.length) { el.innerHTML = '<p class="hint left">No scores yet — play a match to be first!</p>'; return; }
+  el.innerHTML = list.slice(0, 20).map((e, i) => {
+    const v = lbKey === 'rp' ? `${rankInfo(e.rp).icon} ${e.rp} RP` : `${e.kills} kills`;
+    return `<div class="${e.tag === me ? 'me' : ''}"><span class="n">${i + 1}</span><span class="who">${escapeHtml(e.name)}${e.tag === me ? ' (you)' : ''}</span><b>${v}</b></div>`;
+  }).join('');
+  const mine = list.findIndex(e => e.tag === me);
+  if (mine >= 20) el.innerHTML += `<div class="me"><span class="n">${mine + 1}</span><span class="who">${escapeHtml(save.look.name)} (you)</span><b>${lbKey === 'rp' ? save.rating : (save.stats || {}).kills}</b></div>`;
 }
 
 setAdAudioHooks(() => setMuted(true), () => setMuted(false));
@@ -555,6 +577,7 @@ function onMatchEnd(res) {
   const prog = applyMatch(save, res);
   const ranked = !online && save.difficulty === 'ranked' ? applyRanked(save, res) : null;
   writeSave(save);
+  submitScore(save).then(() => fetchBoard(true)); // global leaderboard (quietly does nothing if it isn't set up)
   SDK.gameplayStop();
   if (res.won) SDK.happyTime();
   state = 'results';

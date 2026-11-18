@@ -430,3 +430,11 @@ body.touch .hp-wrap { width: 180px; }
 .weekly-reward .swatch { width: 54px; height: 30px; border-radius: 8px; flex: none; box-shadow: 0 0 14px rgba(255,255,255,.25); }
 .weekly-reward small { display: block; opacity: .8; font-size: 12px; }
 .weekly-reward.got { border-color: #7f7; }
+
+/* Leaderboard */
+.leaderboard { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.leaderboard div { display: flex; gap: 10px; align-items: center; padding: 7px 12px; border-radius: 10px; background: rgba(255,255,255,.05); }
+.leaderboard div:nth-child(-n+3) .n { color: #ffd23a; }
+.leaderboard .n { width: 26px; font-weight: 800; opacity: .9; }
+.leaderboard .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaderboard .me { background: rgba(54,181,255,.18); border: 1px solid rgba(54,181,255,.5); }
