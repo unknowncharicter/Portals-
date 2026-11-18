@@ -185,6 +185,11 @@ export class BotBrain {
       if (!m.inHill(c)) this.wish.multiplyScalar(0.35).add(this.hillGoal.clone().sub(c.pos).setY(0).normalize()).normalize();
       else if (d > m.hill.r * 0.55) this.wish.addScaledVector(toHill.normalize(), 0.9).normalize();
     }
+    // Badly hurt: escape through a portal (exit far away from the enemy, entrance at our feet).
+    if (this.flank && this.flank.retreat) {
+      if (this.flank.stage === 1 && c.portalCd <= 0) this.placeEntrance();
+      if (this.flank && this.flank.stage === 2) this.wish.copy(this.flank.entry.clone().sub(c.pos).setY(0).normalize());
+    } else if (!this.flank && !m.mode.portalOnly && c.hp < c.maxHp * 0.35 && c.portalCd <= 0 && Math.random() < dt * (0.6 + this.skill)) this.planRetreat();
     this.avoid();
     if (Math.random() < dt * 0.5 && this.groundAhead(this.wish, [2, 4, 6.5])) this.jump = true;
     // Better bots dodge with dashes, especially right after getting hit.
@@ -304,6 +309,25 @@ export class BotBrain {
     }
   }
 
+  // Retreat: put an exit portal on a wall well away from the target (the entrance comes next).
+  planRetreat() {
+    const c = this.c, m = this.m, t = this.target;
+    if (!t) return;
+    const away = c.pos.clone().sub(t.pos).setY(0).normalize();
+    const eye = c.eyePos();
+    for (let i = 0; i < 10; i++) {
+      const dir = away.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), (Math.random() - 0.5) * 2);
+      const hit = m.world.raycast(eye, dir, 40);
+      if (!hit || hit.t < 9 || Math.abs(hit.normal.y) > 0.5) continue;
+      hit.point.y = Math.max(hit.point.y, 1.3);
+      const pose = m.portals.poseFromHit(hit, dir);
+      if (!pose || !pose.valid) continue;
+      m.placePortal(c, pose);
+      this.flank = { stage: 1, t: 0, retreat: true };
+      return;
+    }
+  }
+
   // Where to stand so a shot into our entrance portal comes out of our exit portal at the target.
   portalShotSpot() {
     const m = this.m, mine = m.portals.byOwner.get(this.c) || [];
@@ -370,7 +394,9 @@ export class BotBrain {
 
   placeEntrance() {
     const c = this.c, m = this.m;
+    // Flank: entrance toward the target. Retreat: entrance away from it (we're running).
     const fwd = this.target.pos.clone().sub(c.pos).setY(0).normalize();
+    if (this.flank && this.flank.retreat) fwd.negate();
     for (const dist of [3, 2.5, 4, 2]) {
       for (const ang of [0, 0.5, -0.5, 1, -1]) {
         const d = fwd.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), ang);

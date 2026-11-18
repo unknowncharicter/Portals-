@@ -438,3 +438,13 @@ body.touch .hp-wrap { width: 180px; }
 .leaderboard .n { width: 26px; font-weight: 800; opacity: .9; }
 .leaderboard .who { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .leaderboard .me { background: rgba(54,181,255,.18); border: 1px solid rgba(54,181,255,.5); }
+
+/* First-match welcome */
+.intro { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(8,10,20,.72); backdrop-filter: blur(6px); padding: 16px; }
+.intro.hidden { display: none; }
+.intro-card { max-width: 560px; width: 100%; text-align: center; background: var(--glass, rgba(20,24,40,.92)); border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+.intro-card h2 { margin: 0 0 14px; font-family: 'Russo One', sans-serif; letter-spacing: 1px; }
+.intro-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+.intro-steps div { background: rgba(255,255,255,.06); border-radius: 12px; padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 13px; }
+.intro-steps b { font-size: 26px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(54,181,255,.2); }
+.intro-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }

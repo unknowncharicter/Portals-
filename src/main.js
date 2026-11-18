@@ -662,6 +662,13 @@ $('btn-play').onclick = () => {
 };
 $('btn-start').onclick = async () => {
   Sfx.unlock();
+  // First match ever: offer the 1-minute tutorial first.
+  if (!save.tutorialDone && !save.tutorialOffered && !((save.stats || {}).matches)) {
+    save.tutorialOffered = true; writeSave(save);
+    if (touchMode) $('intro').querySelector('.intro-steps div').innerHTML = '<b>🌀</b><span>tap PORTAL to aim one<br>(tap again to place it)</span>';
+    $('intro').classList.remove('hidden');
+    return;
+  }
   const b = $('btn-start');
   b.disabled = true; b.textContent = 'LOADING...';
   await models;
@@ -669,6 +676,8 @@ $('btn-start').onclick = async () => {
   startMatch();
 };
 $('btn-start-top').onclick = () => $('btn-start').onclick();
+$('intro-tut').onclick = async () => { $('intro').classList.add('hidden'); Sfx.unlock(); await models; startMatch('tutorial'); };
+$('intro-skip').onclick = () => { $('intro').classList.add('hidden'); $('btn-start').onclick(); };
 $('btn-tutorial').onclick = async () => { Sfx.unlock(); await models; startMatch('tutorial'); };
 $('btn-resume').onclick = resume;
 $('btn-quit').onclick = () => {
