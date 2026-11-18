@@ -54,6 +54,10 @@ const surfaceFrag = /* glsl */`
 const ringGeo = new THREE.RingGeometry(0.975, 1.03, 96);
 const surfGeo = new THREE.PlaneGeometry(1, 1);
 
+// Offsets (along the surface) tried when looking for room for a portal around where you aimed.
+const SEARCH = [[0, 0]];
+for (const r of [0.3, 0.6, 0.9, 1.2]) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) SEARCH.push([a * r, b * r]);
+
 export class Portal {
   constructor(owner, pose, color) {
     this.owner = owner;
@@ -61,7 +65,7 @@ export class Portal {
     this.up = pose.up.clone();
     this.right = new THREE.Vector3().crossVectors(this.up, this.normal);
     this.pos = pose.pos.clone();
-    this.host = pose.box;
+    this.hosts = pose.boxes || (pose.box ? [pose.box] : []); // wall boxes you can walk into through this portal
     this.age = 0;
     this.partner = null;
     this.color = new THREE.Color(color);
@@ -198,19 +202,59 @@ export class PortalSystem {
     const right = new THREE.Vector3().crossVectors(up, n);
     const pos = hit.point.clone();
     const b = hit.box;
-    // Clamp along each in-plane axis.
+    const ni = Math.abs(n.x) > 0.5 ? 0 : Math.abs(n.y) > 0.5 ? 1 : 2;
+    // Fast path: the whole portal fits on the one box that was hit. Clamp along each axis.
+    let fits = true;
     for (const [axisVec, half] of [[right, PORTAL_W / 2], [up, PORTAL_H / 2]]) {
       const i = Math.abs(axisVec.x) > 0.5 ? 0 : Math.abs(axisVec.y) > 0.5 ? 1 : 2;
       const lo = b.min.getComponent(i) + half, hi = b.max.getComponent(i) - half;
-      if (lo > hi) return { pos, normal: n, up, box: b, valid: false };
+      if (lo > hi) { fits = false; break; }
       pos.setComponent(i, THREE.MathUtils.clamp(pos.getComponent(i), lo, hi));
     }
-    // Snap exactly onto the face.
-    const ni = Math.abs(n.x) > 0.5 ? 0 : Math.abs(n.y) > 0.5 ? 1 : 2;
-    pos.setComponent(ni, n.getComponent(ni) > 0 ? b.max.getComponent(ni) : b.min.getComponent(ni));
-    const pose = { pos, normal: n, up, box: b, valid: true };
+    if (fits) {
+      pos.setComponent(ni, n.getComponent(ni) > 0 ? b.max.getComponent(ni) : b.min.getComponent(ni));
+      const pose = { pos, normal: n, up, box: b, boxes: [b], valid: true };
+      pose.valid = !this.overlapsExisting(pose);
+      return pose;
+    }
+    // Otherwise the surface may be made of several boxes (3D-model maps): look for a spot
+    // near the hit where a flat surface covers the whole portal.
+    const start = hit.point.clone();
+    let found = null;
+    for (const [dx, dy] of SEARCH) {
+      const c = start.clone().addScaledVector(right, dx).addScaledVector(up, dy);
+      found = this.surfaceUnder(c, n, up, right);
+      if (found) break;
+    }
+    if (!found) return { pos: hit.point.clone(), normal: n, up, box: b, valid: false };
+    const pose = { pos: found.pos, normal: n, up, box: b, boxes: found.boxes, valid: true };
     pose.valid = !this.overlapsExisting(pose);
     return pose;
+  }
+
+  // Is there a flat surface facing n under the whole portal centred at c (and nothing sticking
+  // out in front of it)? Returns { pos (on the surface), boxes } or null.
+  surfaceUnder(c, n, up, right) {
+    const w = this.world, back = n.clone().negate();
+    const boxes = new Set();
+    let hi = -Infinity, lo = Infinity;
+    const plane = n.dot(c);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) {
+      const u = (i / 3 - 0.5) * (PORTAL_W - 0.2), v = (j / 5 - 0.5) * (PORTAL_H - 0.2);
+      if ((u / (PORTAL_W / 2)) ** 2 + (v / (PORTAL_H / 2)) ** 2 > 1.15) continue; // outside the oval
+      const s = c.clone().addScaledVector(right, u).addScaledVector(up, v);
+      const o = s.addScaledVector(n, 0.4);
+      const h = w.raycast(o, back, 0.8);
+      if (!h || h.normal.dot(n) < 0.99) return null;
+      const d = n.dot(h.point) - plane;
+      hi = Math.max(hi, d); lo = Math.min(lo, d);
+      if (hi - lo > 0.15) return null;                   // not flat enough
+      boxes.add(h.box);
+    }
+    // Nothing right in front of the portal (it must open onto open space).
+    const mid = c.clone().addScaledVector(n, hi + 0.05);
+    if (w.raycast(mid, n, 0.6)) return null;
+    return { pos: c.clone().addScaledVector(n, hi), boxes: [...boxes] };
   }
 
   overlapsExisting(pose, ignore = null) {
@@ -356,7 +400,7 @@ export class PortalSystem {
     for (const p of this.portals) {
       if (!p.partner) continue;
       const l = p.local(c.pos);
-      if (Math.abs(l.x) < PORTAL_W / 2 - 0.12 && Math.abs(l.y) < PORTAL_H / 2 - 0.12 && l.z > -1.2 && l.z < 1.3) set.add(p.host);
+      if (Math.abs(l.x) < PORTAL_W / 2 - 0.12 && Math.abs(l.y) < PORTAL_H / 2 - 0.12 && l.z > -1.2 && l.z < 1.3) for (const b of p.hosts) set.add(b);
     }
     return set;
   }

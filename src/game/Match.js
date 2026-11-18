@@ -1116,7 +1116,10 @@ export class Match {
     const pos = v3(msg.pos), normal = v3(msg.normal), up = v3(msg.up);
     const hit = this.world.raycast(pos.clone().addScaledVector(normal, 0.05), normal.clone().negate(), 0.3);
     if (!hit) return;
-    this.portals.place(c, { pos, normal, up, box: hit.box, valid: true });
+    // Which boxes it sits on (may be several on 3D-model maps).
+    const right = new THREE.Vector3().crossVectors(up, normal);
+    const under = this.portals.surfaceUnder(pos, normal, up, right);
+    this.portals.place(c, { pos, normal, up, box: hit.box, boxes: under ? under.boxes : [hit.box], valid: true });
   }
 
   // The host left (or the connection dropped).
