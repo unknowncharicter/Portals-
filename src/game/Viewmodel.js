@@ -53,6 +53,8 @@ export class Viewmodel {
     if (!this.guns[id]) {
       const m = gunModel(id);
       if (m) applySkin(m, this.skin, this.portalColor);
+      // Highest point of the gun (for aiming: keep all of it below the crosshair).
+      if (m) m.userData.top = new THREE.Box3().setFromObject(m).max.y;
       if (m) { this.guns[id] = m; this.root.add(m); }
     }
     for (const [k, g] of Object.entries(this.guns)) g.visible = k === id;
@@ -71,16 +73,16 @@ export class Viewmodel {
     const g = this.guns[this.current];
     if (!g) return;
     const hold = HOLD[this.current] || HOLD.ar;
-    // Aiming: slide the gun to the middle of the screen, sights in line with the crosshair.
-    const g0 = this.guns[this.current];
-    const aimY = -(g0 ? g0.userData.muzzle.y : 0) - 0.045;
+    // Aiming: slide the gun to the middle of the screen, just under the crosshair, so the top of
+    // the gun lines up with it and never covers what you're aiming at.
+    const aimY = -(g.userData.top ?? g.userData.muzzle.y) - 0.012;
     const bob = 1 - ads * 0.8;
     let y = THREE.MathUtils.lerp(hold.y, aimY, ads) + Math.sin(this.bobT * 2) * bobA * bob;
     const x = THREE.MathUtils.lerp(hold.x, 0, ads) + Math.cos(this.bobT) * bobA * bob;
     let rx = this.kick * 0.12;
     if (switching > 0) y -= switching * 0.5;
     if (reloading) { y -= 0.06; rx -= 0.45; }
-    this.root.position.set(x + this.swayX, y + this.swayY, hold.z + this.kick * 0.05);
+    this.root.position.set(x + this.swayX, y + this.swayY, hold.z - ads * 0.06 + this.kick * 0.05);
     this.root.rotation.set(rx * (1 - ads * 0.6), 0.04 * (1 - ads), reloading ? 0.35 : 0);
     this.root.updateMatrixWorld();
 

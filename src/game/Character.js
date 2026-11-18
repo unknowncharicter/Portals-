@@ -15,6 +15,7 @@ const SLIDE_BOOST = 4.5, SLIDE_MAX = 16, SLIDE_TIME = 0.8, SLIDE_FRICTION = 1.1;
 const DASH_SPEED = 17;
 export const DASH_COOLDOWN = 2.2;
 export const SWITCH_TIME = 0.18;
+const CLIMB_SPEED = 4.5; // ladders (m/s)
 const FULL_HALF = 0.9, CROUCH_HALF = 0.6;
 const STEP_HEIGHT = 0.55;
 const EPS = 0.001;
@@ -205,6 +206,17 @@ export class Character {
     }
     const g = this.dashT > 0 ? GRAVITY * 0.3 : GRAVITY;
     this.vel.y = Math.max(this.vel.y - g * dt, -55);
+    // Ladders: push into the ladder (or hold jump) to climb, crouch to slide down, else hang on.
+    const lad = world.ladderAt && world.ladderAt(this);
+    if (lad) {
+      const into = -(wish.x * lad.n[0] + wish.z * lad.n[2]);
+      if (jump || into > 0.2) this.vel.y = CLIMB_SPEED;
+      else if (act.crouch) this.vel.y = -CLIMB_SPEED;
+      else this.vel.y = 0;
+      this.vel.x *= 0.5; this.vel.z *= 0.5;
+      this.climbT = 0.2;
+      this.onLadder = true;
+    } else this.onLadder = false;
     const vyBefore = this.vel.y;
 
     this.unstick(solid);

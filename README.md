@@ -78,5 +78,6 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - Warehouse map: "Warehouse" by Lavender Harmony.
 - Colosseum map: "Colosseum" by CreativeTrio.
 - Sky Islands props: Small Platformer Kit (Quaternius). Shipping Container by Clint Chilcott.
+- Back items: Wings by Michael Fuchs, Jetpack by Roman Miller, Katana by dook, Backpack by Quaternius.
 - Face items: Gas mask by Marisha, Pixel Sunglasses by TRASH - TANUKI, Glasses by iPoly3D, Skull by Quaternius.
 - Extra characters from the Ultimate Modular Men pack by Quaternius (CC0).

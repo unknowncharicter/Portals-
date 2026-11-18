@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AnimatedBody, hasCharacterModel } from './CharacterModel.js';
-import { hatModel, faceModel } from './Models.js';
+import { hatModel, faceModel, backModel } from './Models.js';
 
 // Character customization: colours, hats and the blocky body model.
 export const SHIRTS = ['#e8e8f0', '#2b2d3a', '#d84a4a', '#3a6fd8', '#3ab060', '#e0a030', '#9a5ad8', '#e070b0', '#30c0c0', '#7a5030'];
@@ -311,6 +311,9 @@ function visorTexture() {
 
 // Back items, in "blocky torso" coordinates: torso centre y 0.16, back at z +0.18.
 function addBack(look, box, mat, visor) {
+  // 3D models where we have them.
+  const model = backModel(look.back || 'noback');
+  if (model) { box(0.001, 0.001, 0.001, mat('#000000'), 0, 0.16, 0).parent.add(model); return; }
   const glow = new THREE.MeshBasicMaterial({ color: visor });
   switch (look.back || 'noback') {
     case 'backpack':

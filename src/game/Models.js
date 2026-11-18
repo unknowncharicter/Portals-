@@ -52,7 +52,15 @@ const FACE_MODELS = {
   glasses: { file: 'faces/glasses.glb', rotY: Math.PI, width: 0.48, cy: 0.67, front: -0.26 },
   skull:   { file: 'faces/skull.glb',   rotY: Math.PI, width: 0.56, cy: 0.71, front: -0.31 },
 };
-const hatTemplates = {}, faceTemplates = {};
+// Back items, in "blocky torso" units (torso centre y 0.16, back surface z +0.18, 0.62 wide).
+// front: where the side touching the back goes (z). rotZ tilts it (the katana across the back).
+const BACK_MODELS = {
+  backpack: { file: 'backs/backpack.glb', rotY: 0,            width: 0.5,  cy: 0.2,  front: 0.17 },
+  jetpack:  { file: 'backs/jetpack.glb',  rotY: -Math.PI / 2, width: 0.52, cy: 0.18, front: 0.16 },
+  katana:   { file: 'backs/katana.glb',   rotY: 0, rotZ: Math.PI - 0.55, height: 1.1, cy: 0.2, front: 0.2 },
+  wings:    { file: 'backs/wings.glb',    rotY: 0,            width: 1.5,  cy: 0.32, front: 0.2 },
+};
+const hatTemplates = {}, faceTemplates = {}, backTemplates = {};
 
 const templates = {};
 let loading = null;
@@ -84,7 +92,11 @@ export function loadModels() {
     try { faceTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
     catch (e) { console.warn('Could not load face item', id, e); }
   });
-  loading = Promise.all([character, ...hats, ...faces, ...Object.entries(GUNS).map(async ([id, cfg]) => {
+  const backs = Object.entries(BACK_MODELS).map(async ([id, cfg]) => {
+    try { backTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
+    catch (e) { console.warn('Could not load back item', id, e); }
+  });
+  loading = Promise.all([character, ...hats, ...faces, ...backs, ...Object.entries(GUNS).map(async ([id, cfg]) => {
     try {
       const gltf = await loader.loadAsync(`models/guns/${cfg.file}`);
       templates[id] = normalize(gltf.scene, cfg);
@@ -102,12 +114,12 @@ function fitHat(scene, cfg) {
   if (cfg.drop) { const gone = []; scene.traverse(o => { if (cfg.drop.test(o.name)) gone.push(o); }); for (const o of gone) o.removeFromParent(); }
   const inner = new THREE.Group();
   inner.add(scene);
-  inner.rotation.y = cfg.rotY;
+  inner.rotation.set(0, cfg.rotY || 0, cfg.rotZ || 0);
   const root = new THREE.Group();
   root.add(inner);
   root.updateMatrixWorld(true);
   let box = new THREE.Box3().setFromObject(root);
-  inner.scale.setScalar(cfg.width / (box.max.x - box.min.x));
+  inner.scale.setScalar(cfg.height ? cfg.height / (box.max.y - box.min.y) : cfg.width / (box.max.x - box.min.x));
   root.updateMatrixWorld(true);
   box = new THREE.Box3().setFromObject(root);
   const c = box.getCenter(new THREE.Vector3());
@@ -124,6 +136,11 @@ function fitHat(scene, cfg) {
 }
 
 // A copy of a hat model (null if there is none for that hat), tinted for the look.
+export function backModel(id) {
+  const t = backTemplates[id];
+  return t ? t.root.clone(true) : null;
+}
+
 export function faceModel(id) {
   const t = faceTemplates[id];
   return t ? t.root.clone(true) : null;

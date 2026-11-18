@@ -280,6 +280,9 @@ MAPS.compound = {
   },
   build(m) {
     for (const b of COMPOUND_BOXES) m.box([b[0], b[1], b[2]], [b[3], b[4], b[5]], null);
+    // The two ladders up to the flat roofs (climbable).
+    m.ladder([-6.75, 0, 0.9], [-5.45, 6.3, 2.5], [0, 0, -1]);
+    m.ladder([5.45, 0, -2.5], [6.75, 6.3, -0.9], [0, 0, 1]);
     // Invisible walls a little above the real ones, so nobody jumps out from the roofs.
     m.box([-26.5, 0, -18], [-25.1, 30, 18], null);
     m.box([25.1, 0, -18], [26.5, 30, 18], null);

@@ -72,7 +72,9 @@ export class World {
     this.sun.intensity = t.sun;
     this.killY = map.killY ?? -40;
     this.props = [];
+    this.ladders = [];
     map.build({
+      ladder: (min, max, n) => this.ladders.push({ min, max, n }),
       box: (min, max, color) => this.addBox(min, max, color),
       mirror: (min, max, color) => this.mirrorX(min, max, color),
       prop: (id, pos, scale, rot, opts) => this.addProp(id, pos, scale, rot, opts),
@@ -132,6 +134,15 @@ export class World {
       this.addBox([Math.min(...xs), (bx[1] - off[1]) * scale + pos[1], Math.min(...zs)], [Math.max(...xs), (bx[4] - off[1]) * scale + pos[1], Math.max(...zs)], null);
     }
     this.props.push({ id, pos, scale, rot, off, tint: opts.tint });
+  }
+
+  // A ladder zone the character is in (feet between its bottom and top), if any.
+  ladderAt(c) {
+    if (!this.ladders.length) return null;
+    const feet = c.pos.y - c.halfHeight;
+    for (const l of this.ladders)
+      if (c.pos.x > l.min[0] && c.pos.x < l.max[0] && c.pos.z > l.min[2] && c.pos.z < l.max[2] && feet > l.min[1] - 0.2 && feet < l.max[1]) return l;
+    return null;
   }
 
   addBox(min, max, color) {
