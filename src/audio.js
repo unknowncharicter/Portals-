@@ -1,5 +1,7 @@
-// All sound is generated in code (no audio files): layered gunshots, impacts, portal effects,
-// explosions, footsteps, plus a small music sequencer with a menu and a battle track.
+// Sound: recorded samples for guns, portals and menus (public/sfx, CC0: "The Free Firearm Sound
+// Library" and Kenney's Digital SFX / UI sets, via OpenGameArt). Everything else, and any sample
+// that hasn't loaded yet, is generated in code: impacts, explosions, footsteps, plus a small
+// music sequencer with a menu and a battle track.
 let ctx = null;
 let master = null, sfxBus = null, musicBus = null, comp = null;
 let noiseBuf = null;
@@ -22,6 +24,7 @@ function ac() {
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       applyVolumes();
+      loadSamples();
     } catch (e) { return null; }
   }
   if (ctx.state === 'suspended') ctx.resume();
@@ -37,6 +40,36 @@ function applyVolumes() {
 export function setVolume(v) { volume = v; applyVolumes(); }
 export function setMusicVolume(v) { musicVolume = v; applyVolumes(); }
 export function setMuted(m) { muted = m; applyVolumes(); }
+
+// ---------- Recorded samples ----------
+const SAMPLE_FILES = {
+  rifle: 'ar', smg: 'smg', shotgun: 'shotgun', sniper: 'sniper', pistol: 'pistol', revolver: 'revolver', burst: 'burst',
+  portalPlace: 'portal_place', teleport: 'teleport', portalClose: 'portal_close', portalDeny: 'portal_deny',
+  portalGhost: 'portal_ghost', coin: 'coin', levelUp: 'levelup', click: 'click', swap: 'swap',
+};
+const samples = {};
+let samplesRequested = false;
+function loadSamples() {
+  if (samplesRequested || !ctx) return;
+  samplesRequested = true;
+  for (const [name, file] of Object.entries(SAMPLE_FILES)) {
+    fetch(`sfx/${file}.mp3`).then(r => r.ok ? r.arrayBuffer() : Promise.reject())
+      .then(b => new Promise((res, rej) => ctx.decodeAudioData(b, res, rej)))
+      .then(buf => { samples[name] = buf; }).catch(() => {});
+  }
+}
+// Play a sample if it has loaded (returns false otherwise, so the generated sound plays instead).
+function sample(name, vol = 1, rate = 1) {
+  const b = samples[name];
+  if (!b) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = b; src.playbackRate.value = rate;
+  const g = ctx.createGain(); g.gain.value = vol;
+  src.connect(g); g.connect(sfxBus);
+  src.start();
+  return true;
+}
+const jitter = () => 0.94 + Math.random() * 0.12;
 
 // ---------- Building blocks ----------
 const now = () => ctx.currentTime;
@@ -92,13 +125,13 @@ const GUNS = {
 
 export const Sfx = {
   unlock: () => ac(),
-  rifle: play(v => gunshot(GUNS.rifle, v)),
-  smg: play(v => gunshot(GUNS.smg, v)),
-  shotgun: play(v => gunshot(GUNS.shotgun, v)),
-  sniper: play(v => gunshot(GUNS.sniper, v)),
-  pistol: play(v => gunshot(GUNS.pistol, v)),
-  revolver: play(v => gunshot(GUNS.revolver, v)),
-  burst: play(v => gunshot(GUNS.burst, v)),
+  rifle: play((v = 1) => sample('rifle', 0.7 * v, jitter()) || gunshot(GUNS.rifle, v)),
+  smg: play((v = 1) => sample('smg', 0.7 * v, jitter()) || gunshot(GUNS.smg, v)),
+  shotgun: play((v = 1) => sample('shotgun', 0.7 * v, jitter()) || gunshot(GUNS.shotgun, v)),
+  sniper: play((v = 1) => sample('sniper', 0.7 * v, jitter()) || gunshot(GUNS.sniper, v)),
+  pistol: play((v = 1) => sample('pistol', 0.7 * v, jitter()) || gunshot(GUNS.pistol, v)),
+  revolver: play((v = 1) => sample('revolver', 0.7 * v, jitter()) || gunshot(GUNS.revolver, v)),
+  burst: play((v = 1) => sample('burst', 0.7 * v, jitter()) || gunshot(GUNS.burst, v)),
   crossbow: play((v = 1) => {
     const t = now();
     tone({ t, freq: 220, to: 110, dur: 0.12, vol: 0.4 * v, type: 'triangle' });
@@ -127,17 +160,17 @@ export const Sfx = {
     noise({ t: t + 0.22, dur: 0.05, vol: 0.3, type: 'bandpass', freq: 1200, q: 3 });
     tone({ t: t + 0.22, freq: 600, to: 500, dur: 0.05, vol: 0.1, type: 'square' });
   }),
-  swap: play(() => noise({ dur: 0.08, vol: 0.2, type: 'bandpass', freq: 1500, q: 2, sweepTo: 2500 })),
-  portalGhost: play(() => { tone({ freq: 500, to: 800, dur: 0.15, vol: 0.12 }); tone({ freq: 750, to: 1200, dur: 0.15, vol: 0.06, detune: 8 }); }),
-  portalPlace: play(() => {
+  swap: play(() => sample('swap', 0.6) || noise({ dur: 0.08, vol: 0.2, type: 'bandpass', freq: 1500, q: 2, sweepTo: 2500 })),
+  portalGhost: play(() => { if (sample('portalGhost', 0.35)) return; tone({ freq: 500, to: 800, dur: 0.15, vol: 0.12 }); tone({ freq: 750, to: 1200, dur: 0.15, vol: 0.06, detune: 8 }); }),
+  portalPlace: play(() => { if (sample('portalPlace', 0.6)) return;
     const t = now();
     noise({ t, dur: 0.45, vol: 0.35, type: 'bandpass', freq: 400, q: 1.5, sweepTo: 3000, attack: 0.02 });
     for (const [f, d] of [[300, -10], [450, 10], [600, 0]]) tone({ t, freq: f, to: f * 3, dur: 0.4, vol: 0.09, type: 'sawtooth', detune: d, attack: 0.02 });
     tone({ t: t + 0.3, freq: 1500, to: 1400, dur: 0.6, vol: 0.06, attack: 0.02 });
   }),
-  portalDeny: play(() => { tone({ freq: 200, to: 120, dur: 0.18, vol: 0.2, type: 'square' }); }),
-  portalClose: play((v = 1) => noise({ dur: 0.3, vol: 0.2 * v, type: 'bandpass', freq: 2000, q: 1.2, sweepTo: 300 })),
-  teleport: play(() => {
+  portalDeny: play(() => { if (sample('portalDeny', 0.45)) return; tone({ freq: 200, to: 120, dur: 0.18, vol: 0.2, type: 'square' }); }),
+  portalClose: play((v = 1) => sample('portalClose', 0.5 * v) || noise({ dur: 0.3, vol: 0.2 * v, type: 'bandpass', freq: 2000, q: 1.2, sweepTo: 300 })),
+  teleport: play(() => { if (sample('teleport', 0.6)) return;
     const t = now();
     noise({ t, dur: 0.35, vol: 0.45, type: 'bandpass', freq: 3000, q: 1, sweepTo: 250, attack: 0.01 });
     tone({ t, freq: 1200, to: 300, dur: 0.3, vol: 0.12 });
@@ -166,9 +199,9 @@ export const Sfx = {
   }),
   hurt: play(() => { noise({ dur: 0.12, vol: 0.4, type: 'lowpass', freq: 700 }); tone({ freq: 160, to: 90, dur: 0.15, vol: 0.25, type: 'sawtooth' }); }),
   heal: play(() => { const t = now(); [523, 659, 784].forEach((f, i) => tone({ t: t + i * 0.07, freq: f, to: f * 1.5, dur: 0.3, vol: 0.12 })); }),
-  levelUp: play(() => { const t = now(); [523, 659, 784, 1046, 1318].forEach((f, i) => tone({ t: t + i * 0.08, freq: f, dur: 0.35, vol: 0.2, type: 'triangle' })); }),
-  coin: play(() => { const t = now(); tone({ t, freq: 1318, dur: 0.07, vol: 0.15, type: 'square' }); tone({ t: t + 0.07, freq: 1760, dur: 0.15, vol: 0.15, type: 'square' }); }),
-  click: play(() => tone({ freq: 900, dur: 0.03, vol: 0.08, type: 'triangle' })),
+  levelUp: play(() => { if (sample('levelUp', 0.6)) return; const t = now(); [523, 659, 784, 1046, 1318].forEach((f, i) => tone({ t: t + i * 0.08, freq: f, dur: 0.35, vol: 0.2, type: 'triangle' })); }),
+  coin: play(() => { if (sample('coin', 0.5)) return; const t = now(); tone({ t, freq: 1318, dur: 0.07, vol: 0.15, type: 'square' }); tone({ t: t + 0.07, freq: 1760, dur: 0.15, vol: 0.15, type: 'square' }); }),
+  click: play(() => sample('click', 0.5) || tone({ freq: 900, dur: 0.03, vol: 0.08, type: 'triangle' })),
   beep: play((hi) => tone({ freq: hi ? 1100 : 660, dur: 0.18, vol: 0.3, type: 'triangle' })),
   win: play(() => { const t = now(); [523, 659, 784, 1046].forEach((f, i) => tone({ t: t + i * 0.12, freq: f, dur: 0.3, vol: 0.25, type: 'triangle' })); }),
   lose: play(() => { const t = now(); [392, 330, 262].forEach((f, i) => tone({ t: t + i * 0.15, freq: f, dur: 0.35, vol: 0.25, type: 'triangle' })); }),
