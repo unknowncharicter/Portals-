@@ -49,17 +49,18 @@ export class Room {
   emit(type, ...args) { for (const fn of this.handlers[type] || []) fn(...args); }
 
   // ---------- Host ----------
-  host(me, tries = 3) {
+  // code: a fixed code (public rooms); otherwise a random one.
+  host(me, tries = 3, code = null) {
     return new Promise((resolve, reject) => {
       this.isHost = true;
-      this.code = makeCode();
+      this.code = code || makeCode();
       this.myId = 'h';
       this.players = [{ ...me, id: 'h' }];
       const peer = this.peer = new Peer(PREFIX + this.code, peerOptions());
       const fail = (e) => {
         peer.destroy();
-        if (e && e.type === 'unavailable-id' && tries > 0) this.host(me, tries - 1).then(resolve, reject);
-        else reject(new Error(niceError(e)));
+        if (e && e.type === 'unavailable-id' && tries > 0 && !code) this.host(me, tries - 1).then(resolve, reject);
+        else reject(err(niceError(e), e && e.type === 'unavailable-id' ? 'taken' : 'network'));
       };
       peer.once('open', () => { peer.off('error', fail); peer.on('error', (e) => this.emit('error', niceError(e))); resolve(this.code); });
       peer.once('error', fail);
@@ -73,13 +74,15 @@ export class Room {
     conn.on('data', (msg) => {
       if (!msg || typeof msg !== 'object') return;
       if (msg.t === 'hello') {
-        if (this.started || this.players.length >= 4) { conn.send({ t: 'kick', reason: this.started ? 'The match has already started.' : 'The room is full (4 players).' }); setTimeout(() => conn.close(), 300); return; }
+        // Players can join any time (mid-match they take over a bot), up to 4.
+        if (this.players.length >= 4) { conn.send({ t: 'kick', reason: 'The room is full (4 players).', code: 'full' }); setTimeout(() => conn.close(), 300); return; }
         id = 'p' + this.nextId++;
         this.conns.set(id, conn);
         this.players.push({ ...cleanMe(msg.me), id });
         conn.send({ t: 'welcome', id });
         this.sendLobby();
         this.emit('players', this.players);
+        this.emit('joined', id);
         return;
       }
       if (!id) return;
@@ -109,21 +112,21 @@ export class Room {
   }
 
   // ---------- Player ----------
-  join(code, me) {
+  join(code, me, timeoutMs = 12000) {
     return new Promise((resolve, reject) => {
       this.isHost = false;
       this.code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const peer = this.peer = new Peer(peerOptions());
       let done = false;
-      const timer = setTimeout(() => { if (!done) { done = true; peer.destroy(); reject(new Error('Could not reach that room. Check the code and try again.')); } }, 12000);
-      peer.once('error', (e) => { if (done) return; done = true; clearTimeout(timer); peer.destroy(); reject(new Error(niceError(e))); });
+      const timer = setTimeout(() => { if (!done) { done = true; peer.destroy(); reject(err('Could not reach that room. Check the code and try again.', 'timeout')); } }, timeoutMs);
+      peer.once('error', (e) => { if (done) return; done = true; clearTimeout(timer); peer.destroy(); reject(err(niceError(e), e && e.type === 'peer-unavailable' ? 'not-found' : 'network')); });
       peer.once('open', () => {
         const conn = this.hostConn = peer.connect(PREFIX + this.code, { reliable: true });
         conn.on('open', () => conn.send({ t: 'hello', me: cleanMe(me) }));
         conn.on('data', (msg) => {
           if (!msg || typeof msg !== 'object') return;
           if (msg.t === 'welcome') { this.myId = msg.id; if (!done) { done = true; clearTimeout(timer); resolve(this.code); } return; }
-          if (msg.t === 'kick') { done = true; clearTimeout(timer); reject(new Error(msg.reason)); this.leave(); return; }
+          if (msg.t === 'kick') { done = true; clearTimeout(timer); reject(err(msg.reason, msg.code || 'kicked')); this.leave(); return; }
           if (msg.t === 'closed') { if (!this.closed) { this.closed = true; this.emit('closed', 'The host closed the room.'); } return; }
           if (msg.t === 'lobby') { this.players = msg.players; this.mode = msg.mode; this.map = msg.map; this.emit('players', this.players); return; }
           this.emit('message', msg, 'h');
@@ -158,6 +161,8 @@ export class Room {
     this.handlers = {};
   }
 }
+
+function err(message, code) { const e = new Error(message); e.code = code; return e; }
 
 function cleanMe(me = {}) {
   return {

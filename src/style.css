@@ -419,3 +419,4 @@ body.touch .sb-kd { display: none; }
 .room-settings { display: flex; gap: 10px; flex-wrap: wrap; }
 .room-settings select { padding: 9px 12px; border-radius: 10px; background: #1c2133; color: #fff; border: 1px solid var(--line, #445); font-family: inherit; font-size: 15px; }
 #on-status.err { color: #ff8a8a; }
+.online-panel .quick-mode { padding: 12px 14px; border-radius: 12px; background: #1c2133; color: #fff; border: 1px solid var(--line, #445); font-family: inherit; font-size: 16px; }

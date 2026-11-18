@@ -30,6 +30,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
   - **Gun Game:** free for all with respawns. Every kill gives you the next gun.
   - **Portal Only:** damage only counts if the shot went through a portal.
   - **Tutorial:** an 11-step "How to play" lesson.
+- **Quick match:** Online tab → pick a mode → Quick match. Joins a public room with other players, or opens one (you play bots until someone joins; joiners take over a bot). Public rooms roll into the next match by themselves.
 - **Online:** Online tab → Create room, send the 5-letter code, friends Join. Up to 4 players, bots fill empty spots. Works in every mode except the tutorial. Uses free PeerJS (WebRTC); the host's browser runs the bots and the rounds.
 - **Maps:** Arena, Sky Islands, Warehouse, Village, Sunset Spires, Canyon, Desert Compound, or Random.
 - **Weapons:**

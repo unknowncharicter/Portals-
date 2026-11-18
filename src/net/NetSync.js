@@ -11,6 +11,7 @@ import * as THREE from 'three';
 //  - The host decides rounds, scores and the end of the match.
 
 const SEND_RATE = 1 / 20;
+const HOST_ONLY = ['round', 'finish', 'score', 'takeover'];
 const r2 = (v) => Math.round(v * 100) / 100;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
@@ -99,7 +100,7 @@ export class NetSync {
   }
 
   // ---------- Events ----------
-  send(ev) {
+  send(ev, except = null) {
     const msg = { t: 'ev', ...ev };
     if (ev.e === 'hit') {
       const victim = this.m.byNet[ev.v];
@@ -108,7 +109,7 @@ export class NetSync {
       else this.room.broadcast(msg);                       // to the host, who passes it on
       return;
     }
-    this.room.broadcast(msg);
+    this.room.broadcast(msg, except);
   }
 
   receive(msg, from) {
@@ -127,23 +128,18 @@ export class NetSync {
       if (msg.e === 'hit') {
         const victim = this.m.byNet[msg.v];
         if (victim && victim.owner !== 'h') { this.room.sendTo(victim.owner, msg); return; }
-      } else if (!['round', 'finish', 'score'].includes(msg.e)) this.room.broadcast(msg, from);
-      // Only the host may control rounds.
-      if (['round', 'finish', 'score'].includes(msg.e)) return;
+      } else if (!HOST_ONLY.includes(msg.e)) this.room.broadcast(msg, from);
+      // Only the host may control rounds and who plays which character.
+      if (HOST_ONLY.includes(msg.e)) return;
     }
     this.m.netEvent(msg);
   }
 
+  // Host: a player left mid-match, a bot takes over their character.
   playerLeft(id) {
-    if (this.isHost) this.send({ e: 'gone', id });
-    for (const c of this.m.chars) if (c.owner === id) {
-      c.gone = true;
-      if (c.alive) { c.alive = false; c.mesh.visible = false; }
-      if (c.tagSprite) c.tagSprite.visible = false;
-      this.m.portals.removeOwner(c);
-    }
-    this.m.hud.toast(`${this.room.players.find(p => p.id === id)?.name || 'A player'} left`, '#f99');
-    this.m.updateScore();
+    if (!this.isHost) return;
+    for (const c of [...this.m.chars]) if (c.owner === id) this.m.botTakeover(c);
+    this.m.hud.toast('A player left, a bot took over', '#f99');
   }
 
   dispose() {

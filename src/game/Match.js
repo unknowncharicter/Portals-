@@ -118,22 +118,102 @@ export class Match {
 
   // Online: characters come from the host's roster (players + bots), in the same order everywhere.
   setupOnline(roster) {
+    for (const e of roster) this.addChar(this.makeOnlineChar(e));
+    this.player = this.chars.find(c => c.owner === this.online.room.myId && !c.isBot);
+  }
+
+  // A character from a roster entry (and its bot brain if this browser runs it).
+  makeOnlineChar(e) {
     const myId = this.online.room.myId;
     const diff = matchDifficulty(this.save);
-    for (const e of roster) {
-      const local = e.owner === myId, isMe = local && !e.bot;
-      const c = new Character({
-        name: e.name, look: e.look, team: e.team, color: e.bodyColor, portalColor: e.color, isBot: e.bot,
-        skin: GUN_SKINS.find(s => s.id === e.gunSkin) || null,
-        stats: isMe ? buildStats(this.save) : e.bot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(null),
-        loadout: e.loadout,
-      });
-      c.netId = e.id; c.owner = e.owner; c.remote = !local;
-      this.byNet[e.id] = c;
-      this.addChar(c);
-      if (e.bot && local) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
+    const local = e.owner === myId, isMe = local && !e.bot;
+    const c = new Character({
+      name: e.name, look: e.look, team: e.team, color: e.bodyColor, portalColor: e.color, isBot: e.bot,
+      skin: GUN_SKINS.find(s => s.id === e.gunSkin) || null,
+      stats: isMe ? buildStats(this.save) : e.bot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(null),
+      loadout: e.loadout,
+    });
+    c.netId = e.id; c.owner = e.owner; c.remote = !local;
+    this.byNet[e.id] = c;
+    if (e.bot && local) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
+    return c;
+  }
+
+  // Swap the character in a roster slot (a player taking over a bot, or a bot replacing a
+  // player who left). The new one keeps the old one's place, score and life.
+  replaceChar(entry) {
+    const old = this.byNet[entry.id];
+    if (!old) return;
+    const i = this.chars.indexOf(old);
+    this.scene.remove(old.mesh); this.scene.remove(old.shadow);
+    this.portals.removeOwner(old);
+    this.bots = this.bots.filter(b => b.c !== old);
+    const c = this.makeOnlineChar(entry);
+    this.scene.add(c.mesh);
+    c.shadow = old.shadow; this.scene.add(c.shadow);
+    this.chars[i] = c;
+    const k = this.online.roster.findIndex(e => e.id === entry.id);
+    if (k >= 0) this.online.roster[k] = entry;
+    if (this.net) this.net.states.delete(entry.id);
+    c.kills = old.kills; c.deaths = old.deaths; c.gunLevel = old.gunLevel; c.respawnT = old.respawnT;
+    if (this.mode.gungame) this.setGunGameWeapon(c);
+    if (old.alive) { c.spawn(old.pos.clone().setY(old.pos.y - old.halfHeight), old.yaw); c.hp = old.hp; }
+    else { c.alive = false; c.mesh.visible = false; if (c.tagSprite) c.tagSprite.visible = false; if (!c.respawnT) c.respawnT = 2; }
+    c.animate(0);
+    for (const b of this.bots) if (b.target === old) { b.target = null; b.aimDir = null; }
+    if (this.deathCam && this.deathCam.spec === old) this.deathCam.spec = null;
+    this.updateScore();
+    return c;
+  }
+
+  // Host: a player joined mid-match. They take over a bot (on the team with fewer players).
+  // Returns false if there is no bot to take over.
+  lateJoin(p) {
+    const humans = (t) => this.online.roster.filter(e => !e.bot && e.team === t).length;
+    const slots = this.online.roster.filter(e => e.bot).sort((a, b) => humans(a.team) - humans(b.team));
+    if (!slots.length) return false;
+    const old = slots[0];
+    const entry = { ...old, owner: p.id, bot: false, name: p.name, look: p.look, color: p.color, loadout: p.loadout, gunSkin: p.gunSkin };
+    this.replaceChar(entry);
+    this.net.send({ e: 'takeover', entry }, p.id);
+    this.hud.toast(`${p.name} joined`, '#9f9');
+    return true;
+  }
+
+  // Host: a player left, a bot carries on in their place.
+  botTakeover(c) {
+    const e = this.online.roster.find(r => r.id === c.netId);
+    if (!e) return;
+    const used = new Set(this.chars.map(o => o.name));
+    const name = BOT_NAMES.map(n => n + ' (bot)').find(n => !used.has(n)) || 'Bot';
+    const diff = matchDifficulty(this.save);
+    const entry = { ...e, owner: 'h', bot: true, name, look: randomLook(name), gunSkin: null,
+      loadout: { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' } };
+    this.replaceChar(entry);
+    this.net.send({ e: 'takeover', entry });
+  }
+
+  // Where the match is at, for someone joining late.
+  snapshot() {
+    return { round: this.round, wins: this.wins, scores: this.scores, state: this.state, roundT: this.roundT,
+      chars: this.chars.map(c => [c.netId, c.alive ? 1 : 0, c.kills, c.deaths || 0, c.gunLevel || 0]) };
+  }
+
+  applySnapshot(s) {
+    this.round = s.round; this.wins = s.wins; this.scores = s.scores || {}; this.roundT = s.roundT;
+    if (s.state === 'fight' || s.state === 'roundEnd') { this.state = s.state; this.stateT = 0.5; this.hud.centerText(''); }
+    for (const [id, alive, kills, deaths, gunLevel] of s.chars) {
+      const c = this.byNet[id];
+      if (!c) continue;
+      c.kills = kills; c.deaths = deaths;
+      if (this.mode.gungame && gunLevel !== (c.gunLevel || 0)) { c.gunLevel = gunLevel; this.setGunGameWeapon(c); }
+      if (!alive && c.alive) {
+        c.alive = false; c.mesh.visible = false; if (c.tagSprite) c.tagSprite.visible = false;
+        c.respawnT = 2;
+        if (c === this.player) this.deathCam = { pos: this.camera.position.clone(), t: 1.2 };
+      }
     }
-    this.player = this.chars.find(c => c.owner === myId && !c.isBot);
+    this.updateScore();
   }
 
   addChar(c) {
@@ -898,7 +978,7 @@ export class Match {
         break;
       case 'finish': this.finish(msg.winner ?? undefined); break;
       case 'score': this.scores = msg.scores; break;
-      case 'gone': this.net.playerLeft(msg.id); break;
+      case 'takeover': this.replaceChar(msg.entry); break;
     }
   }
 

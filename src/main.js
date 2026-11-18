@@ -564,6 +564,8 @@ function onMatchEnd(res) {
   $('results-detail').innerHTML = html;
   if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);
   showScreen('results');
+  // Public room host: carry on by itself (other players are waiting for the next match).
+  if (online && room && room.isHost && room.isPublic) setTimeout(() => { if (state === 'results') $('btn-continue').onclick(); }, 9000);
 }
 
 function pause() {
@@ -644,6 +646,7 @@ $('btn-continue').onclick = async () => {
     if (room.isHost) { room.started = false; room.sendLobby(); }
     currentTab = 'online';
     goLobby();
+    scheduleAutoStart();
     return;
   }
   await SDK.midgameAd();
@@ -663,6 +666,7 @@ function onlineStatus(text, err = false) {
 }
 
 function leaveRoom() {
+  clearTimeout(autoStartT);
   if (room) room.leave();
   room = null;
 }
@@ -677,6 +681,13 @@ function bindRoom(r) {
     if (state === 'lobby') buildOnline();
   });
   r.on('error', (why) => onlineStatus(why, true));
+  // Host: someone joined while a match is on. They take over a bot straight away.
+  r.on('joined', (id) => {
+    if (!r.isHost || !match || !match.online || match.state === 'outro' || match.state === 'done') return;
+    const p = r.players.find(q => q.id === id);
+    if (!p || !match.lateJoin(p)) return; // no free spot: they wait for the next match
+    r.sendTo(id, { t: 'start', mode: match.modeId, map: world.mapId, roster: match.online.roster, snap: match.snapshot() });
+  });
 }
 
 // Who plays on which team. Players alternate teams; bots fill the empty spots.
@@ -706,7 +717,93 @@ function makeRoster(modeId, players) {
 
 async function startOnline(msg) {
   await models;
+  clearTimeout(autoStartT);
   startMatch(msg.mode, { map: msg.map, online: { room, roster: msg.roster } });
+  if (msg.snap) match.applySnapshot(msg.snap); // joined a match already going
+}
+
+// Host: start a match for everyone in the room.
+async function hostStart() {
+  if (!room || !room.isHost) return;
+  await models;
+  if (!room || room.players.length > slotsFor(room.mode)) return;
+  const map = room.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[room.map] ? room.map : 'arena');
+  const msg = { t: 'start', mode: room.mode, map, roster: makeRoster(room.mode, room.players) };
+  room.started = true;
+  room.broadcast(msg);
+  startOnline(msg);
+}
+
+// ---------- Quick match ----------
+// Public rooms have fixed codes per mode (e.g. QF1..QF8 for free for all). Try to join each in
+// turn; the first free code becomes your own public room, and other players drop into it.
+const QUICK_MODES = { ffa: 'F', '2v2': 'T', koth: 'K', gungame: 'G' };
+const QUICK_ROOMS = 8;
+let autoStartT = null, searching = false;
+
+async function quickMatch(mode) {
+  if (searching) return;
+  searching = true;
+  leaveRoom();
+  $('btn-quick').disabled = true;
+  try {
+    for (let n = 1; n <= QUICK_ROOMS; n++) {
+      const code = 'Q' + QUICK_MODES[mode] + n;
+      onlineStatus(`Looking for a match… (${n}/${QUICK_ROOMS})`);
+      const r = new Room();
+      bindRoom(r);
+      try {
+        await r.join(code, me(), 7000);
+        room = r;
+        onlineStatus('Joined! Getting you into the match…');
+        buildOnline();
+        return;
+      } catch (e) {
+        r.leave();
+        if (e.code === 'network') throw e;
+        if (e.code !== 'not-found') continue; // full or not answering: try the next one
+      }
+      // Nobody is using this code: open it as a public room and start playing (bots fill in).
+      const h = new Room();
+      bindRoom(h);
+      try {
+        await h.host(me(), 0, code);
+        h.isPublic = true;
+        h.setSettings(mode, 'random');
+        room = h;
+        buildOnline();
+        onlineStatus('No one around yet — you are playing bots. Players who join take over a bot.');
+        await hostStart();
+        return;
+      } catch (e) {
+        h.leave();
+        if (e.code === 'taken') { n--; continue; } // someone opened it a moment ago: join it instead
+        throw e;
+      }
+    }
+    onlineStatus('All public rooms are full. Try another mode or create a room.', true);
+  } catch (e) {
+    leaveRoom();
+    onlineStatus(e.message, true);
+  } finally {
+    searching = false;
+    $('btn-quick').disabled = false;
+  }
+}
+
+// Public rooms keep going on their own: the next match starts a few seconds after the last.
+function scheduleAutoStart() {
+  clearTimeout(autoStartT);
+  if (!room || !room.isHost || !room.isPublic) return;
+  let n = 5;
+  const tick = () => {
+    if (!room || !room.isPublic || state !== 'lobby') return;
+    if (n <= 0) { hostStart(); return; }
+    onlineStatus(`Next match in ${n}…`);
+    n--;
+    autoStartT = setTimeout(tick, 1000);
+  };
+  tick();
 }
 
 function buildOnline() {
@@ -732,11 +829,11 @@ function buildOnline() {
     const tooMany = room.players.length > slotsFor(room.mode);
     $('btn-room-start').classList.remove('hidden');
     $('btn-room-start').disabled = tooMany;
-    onlineStatus(tooMany ? `Too many players for ${mode.label}. Pick a bigger mode.` : room.players.length < 2 ? 'Waiting for friends to join… (or start now with bots)' : 'Ready!');
+    if (!room.isPublic) onlineStatus(tooMany ? `Too many players for ${mode.label}. Pick a bigger mode.` : room.players.length < 2 ? 'Waiting for friends to join… (or start now with bots)' : 'Ready!');
   } else {
     set.innerHTML = `<div class="hint left">${mode.label} · ${mapName} — the host picks the mode and map.</div>`;
     $('btn-room-start').classList.add('hidden');
-    onlineStatus('Waiting for the host to start…');
+    onlineStatus(room.code.startsWith('Q') ? 'Public room — the next match starts soon…' : 'Waiting for the host to start…');
   }
 }
 
@@ -772,16 +869,8 @@ $('btn-join').onclick = async () => {
 $('join-code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('btn-join').onclick(); };
 $('btn-copy').onclick = () => { navigator.clipboard?.writeText(room ? room.code : '').then(() => onlineStatus('Code copied! Send it to your friends.')).catch(() => {}); };
 $('btn-leave').onclick = () => { Sfx.click(); leaveRoom(); onlineStatus(''); buildOnline(); };
-$('btn-room-start').onclick = async () => {
-  if (!room || !room.isHost) return;
-  Sfx.unlock();
-  await models;
-  const map = room.map === 'random' ? MAP_IDS[Math.floor(Math.random() * MAP_IDS.length)] : (MAPS[room.map] ? room.map : 'arena');
-  const msg = { t: 'start', mode: room.mode, map, roster: makeRoster(room.mode, room.players) };
-  room.started = true;
-  room.broadcast(msg);
-  startOnline(msg);
-};
+$('btn-room-start').onclick = () => { Sfx.unlock(); hostStart(); };
+$('btn-quick').onclick = () => { Sfx.unlock(); quickMatch($('quick-mode').value); };
 
 // ---------- Loop ----------
 const clock = new THREE.Clock();
