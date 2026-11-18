@@ -8,6 +8,7 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 // Character models. 'robot' is the Mixamo rig the clips were made for; the others get the
 // same clips copied onto their own skeleton (see Retarget.js).
 const templates = {};       // id -> { scene, clips, boneMap, scale, tint }
+const measureCache = {};
 let template = null;        // the robot (source of the animation clips)
 
 export function setCharacterTemplate(gltf) {
@@ -114,6 +115,37 @@ export class AnimatedBody {
   }
 
   // Attach something to a bone in metres, facing our -Z forward.
+  // Size of a body part, measured from the mesh: the vertices that mostly follow one of
+  // `boneNames`, in the coordinates of `space` (a socket). Percentiles ignore spikes (hair).
+  // Cached per model, since every copy is the same.
+  measure(key, boneNames, space) {
+    const cacheKey = this.modelId + ':' + key;
+    if (measureCache[cacheKey]) return measureCache[cacheKey];
+    this.root.updateMatrixWorld(true);
+    const want = new Set(boneNames.map(n => this.bones[n]).filter(Boolean));
+    const xs = [], ys = [], zs = [];
+    const v = new THREE.Vector3();
+    this.model.traverse(o => {
+      if (!o.isSkinnedMesh) return;
+      const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight;
+      const bones = o.skeleton.bones;
+      for (let i = 0; i < si.count; i++) {
+        let best = 0, bi = -1;
+        for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > best) { best = w; bi = si.getComponent(i, k); } }
+        if (bi < 0 || !want.has(bones[bi])) continue;
+        o.getVertexPosition(i, v);
+        o.localToWorld(v);
+        space.worldToLocal(v);
+        xs.push(v.x); ys.push(v.y); zs.push(v.z);
+      }
+    });
+    if (xs.length < 10) return null;
+    const pc = (a, p) => { a.sort((m, n) => m - n); return a[Math.min(a.length - 1, Math.max(0, Math.round(p * (a.length - 1))))]; };
+    const r = { x0: pc(xs, 0.03), x1: pc(xs, 0.97), y0: pc(ys, 0.03), y1: pc(ys, 0.93), z0: pc(zs, 0.03), z1: pc(zs, 0.97) };
+    measureCache[cacheKey] = r;
+    return r;
+  }
+
   // The socket is lined up with the character (not the bone) in the rest pose, and in metres.
   socket(boneName) {
     const s = new THREE.Group();

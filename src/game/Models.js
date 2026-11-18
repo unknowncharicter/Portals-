@@ -39,8 +39,8 @@ const GUNS = {
 // tint: recolour with the look's shirt or pants colour.
 const HATS = {
   cap:        { file: 'hats/cap.glb',        rotY: Math.PI,     width: 0.5,  bottom: 0.68, tint: 'shirt' },
-  beanie:     { file: 'hats/beanie.glb',     rotY: 0,           width: 0.5,  bottom: 0.64, tint: 'pants' },
-  helmet:     { file: 'hats/hardhat.glb',    rotY: 0,           width: 0.68, bottom: 0.5 },
+  beanie:     { file: 'hats/beanie.glb',     rotY: 0,           width: 0.5,  bottom: 0.73, tint: 'pants' },
+  helmet:     { file: 'hats/hardhat.glb',    rotY: 0,           width: 0.66, bottom: 0.72, drop: /Box001/ },
   headphones: { file: 'hats/headphones.glb', rotY: Math.PI / 2, width: 0.56, top: 0.95 },
   tophat:     { file: 'hats/tophat.glb',     rotY: 0,           width: 0.62, bottom: 0.76 },
   crown:      { file: 'hats/crown.glb',      rotY: 0,           width: 0.46, bottom: 0.82 },
@@ -99,6 +99,7 @@ export function loadModels() {
 }
 
 function fitHat(scene, cfg) {
+  if (cfg.drop) { const gone = []; scene.traverse(o => { if (cfg.drop.test(o.name)) gone.push(o); }); for (const o of gone) o.removeFromParent(); }
   const inner = new THREE.Group();
   inner.add(scene);
   inner.rotation.y = cfg.rotY;

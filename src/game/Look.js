@@ -113,11 +113,19 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
   g.add(body.root);
   const rig = RIG[body.modelId] || RIG.default;
 
-  // Head socket: reuse the blocky hat shapes, scaled to the model's head.
+  // Head socket: the accessories are made for the blocky head (a 0.42 cube centred at 0.72).
+  // Fit that cube onto this model's real head, measured from its mesh.
   const head = body.socket('Head');
   const hatRoot = new THREE.Group();
-  hatRoot.scale.setScalar(rig.head[0]);
-  hatRoot.position.y = rig.head[1] - 0.72 * rig.head[0];   // blocky head centre (0.72) -> above the head bone
+  const hb = body.measure('head', ['Head'], head);
+  if (hb) {
+    const k = ((hb.x1 - hb.x0) + (hb.z1 - hb.z0)) / 2 / 0.42;
+    hatRoot.scale.setScalar(k);
+    hatRoot.position.set((hb.x0 + hb.x1) / 2, hb.y1 - 0.93 * k, (hb.z0 + hb.z1) / 2);
+  } else {
+    hatRoot.scale.setScalar(rig.head[0]);
+    hatRoot.position.y = rig.head[1] - 0.72 * rig.head[0];
+  }
   head.add(hatRoot);
   const box = (w, h, d, m, x, y, z, parent = hatRoot) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
@@ -126,19 +134,33 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
   addFace(look, box, mat, visor);
   addHat(hatRoot, look, box, mat, visor);
 
-  // Back socket (on the upper spine): same "blocky torso" coordinates, scaled to the robot.
+  // Back socket (upper spine): back items are made for the blocky torso (top at 0.55, back at
+  // z +0.18). Fit it to the model's chest. The measured part is the middle of the chest only
+  // (shoulders follow other bones), so the scale is calibrated on the robot: 0.255 m -> 0.8.
   const back = new THREE.Group();
-  back.scale.setScalar(rig.back[0]);
-  back.position.set(0, rig.back[1], rig.back[2]);
-  body.socket('Spine2').add(back);
+  const spine = body.socket('Spine2');
+  const cb = body.measure('chest', ['Spine2', 'Spine1'], spine);
+  if (cb) {
+    const k = THREE.MathUtils.clamp((cb.x1 - cb.x0) / 0.32, 0.65, 0.9); // (built-in gear like a bedroll can make it look wider)
+    back.scale.setScalar(k);
+    back.position.set((cb.x0 + cb.x1) / 2, cb.y1 - 0.55 * k, cb.z1 - 0.18 * k);
+  } else {
+    back.scale.setScalar(rig.back[0]);
+    back.position.set(0, rig.back[1], rig.back[2]);
+  }
+  spine.add(back);
   const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, back);
   addBack(look, bbox, mat, visor);
 
   if (teamColor) {
-    const hips = body.socket('Hips');
     const team = mat(teamColor);
-    const belt = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.07, 0.24), team);
-    belt.position.y = 0.06; hips.add(belt);
+    // Belt around the measured waist (bottom of the lower spine).
+    const waist = body.socket('Spine');
+    const wb = body.measure('waist', ['Spine'], waist);
+    const belt = new THREE.Mesh(new THREE.BoxGeometry(wb ? wb.x1 - wb.x0 + 0.04 : 0.36, 0.07, wb ? wb.z1 - wb.z0 + 0.04 : 0.24), team);
+    if (wb) belt.position.set((wb.x0 + wb.x1) / 2, wb.y0 + 0.02, (wb.z0 + wb.z1) / 2);
+    else belt.position.y = 0.06;
+    waist.add(belt);
     for (const side of ['LeftArm', 'RightArm']) {
       const pad = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.13), team);
       pad.position.y = 0.04; body.socket(side).add(pad);
@@ -260,12 +282,16 @@ function addFace(look, box, mat, visor) {
       box(0.05, 0.06, 0.02, black, 0, 0.69, z - 0.02);         // nose
       for (let i = -2; i <= 2; i++) box(0.035, 0.07, 0.02, i % 2 ? black : white, i * 0.045, 0.6, z - 0.02); // teeth
       break;
-    case 'cyber':
-      box(0.42, 0.42, 0.04, mat('#15161c'), 0, 0.72, z);
-      box(0.3, 0.05, 0.02, glow, 0, 0.78, z - 0.025);          // eye line
-      box(0.05, 0.05, 0.02, glow, -0.15, 0.6, z - 0.025); box(0.05, 0.05, 0.02, glow, 0.15, 0.6, z - 0.025);
-      box(0.2, 0.02, 0.02, glow, 0, 0.6, z - 0.025);
+    case 'cyber': {
+      // Curved dark faceplate with a glowing eye line and mouth grille.
+      const plate = mat('#15161c'); plate.side = THREE.DoubleSide;
+      const arc = (r, h, a) => new THREE.CylinderGeometry(r, r, h, 24, 1, true, Math.PI - a / 2, a);
+      add(arc(0.235, 0.36, 2.2), plate, 0, 0.7, 0);
+      const g2 = glow.clone(); g2.side = THREE.DoubleSide;
+      add(arc(0.24, 0.035, 1.2), g2, 0, 0.73, 0);                        // eye line
+      for (const y of [0.6, 0.575]) add(arc(0.24, 0.012, 0.5), g2, 0, y, 0); // grille
       break;
+    }
   }
 }
 
