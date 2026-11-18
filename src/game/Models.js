@@ -43,8 +43,16 @@ const HATS = {
   helmet:     { file: 'hats/hardhat.glb',    rotY: 0,           width: 0.68, bottom: 0.5 },
   headphones: { file: 'hats/headphones.glb', rotY: Math.PI / 2, width: 0.56, top: 0.95 },
   tophat:     { file: 'hats/tophat.glb',     rotY: 0,           width: 0.62, bottom: 0.76 },
+  crown:      { file: 'hats/crown.glb',      rotY: 0,           width: 0.46, bottom: 0.82 },
 };
-const hatTemplates = {};
+// Face items, same units. cy: centre height; front: where the front of the model goes (z).
+const FACE_MODELS = {
+  gasmask: { file: 'faces/gasmask.glb', rotY: 0,       width: 0.54, cy: 0.68, front: -0.36 },
+  shades:  { file: 'faces/shades.glb',  rotY: 0,       width: 0.5,  cy: 0.68, front: -0.26 },
+  glasses: { file: 'faces/glasses.glb', rotY: Math.PI, width: 0.48, cy: 0.67, front: -0.26 },
+  skull:   { file: 'faces/skull.glb',   rotY: Math.PI, width: 0.56, cy: 0.71, front: -0.31 },
+};
+const hatTemplates = {}, faceTemplates = {};
 
 const templates = {};
 let loading = null;
@@ -72,7 +80,11 @@ export function loadModels() {
     try { hatTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
     catch (e) { console.warn('Could not load hat', id, e); }
   });
-  loading = Promise.all([character, ...hats, ...Object.entries(GUNS).map(async ([id, cfg]) => {
+  const faces = Object.entries(FACE_MODELS).map(async ([id, cfg]) => {
+    try { faceTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
+    catch (e) { console.warn('Could not load face item', id, e); }
+  });
+  loading = Promise.all([character, ...hats, ...faces, ...Object.entries(GUNS).map(async ([id, cfg]) => {
     try {
       const gltf = await loader.loadAsync(`models/guns/${cfg.file}`);
       templates[id] = normalize(gltf.scene, cfg);
@@ -98,18 +110,24 @@ function fitHat(scene, cfg) {
   root.updateMatrixWorld(true);
   box = new THREE.Box3().setFromObject(root);
   const c = box.getCenter(new THREE.Vector3());
-  inner.position.set(-c.x, cfg.top !== undefined ? cfg.top - box.max.y : cfg.bottom - box.min.y, -c.z);
+  const y = cfg.cy !== undefined ? cfg.cy - c.y : cfg.top !== undefined ? cfg.top - box.max.y : cfg.bottom - box.min.y;
+  inner.position.set(-c.x, y, cfg.front !== undefined ? cfg.front - box.min.z : -c.z);
   root.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = false;
     if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); // some files have none (renders black)
     const old = o.material;
-    o.material = new THREE.MeshLambertMaterial({ color: old.color });
+    o.material = new THREE.MeshLambertMaterial({ color: old.color, map: old.map || null, transparent: old.transparent, opacity: old.opacity, depthWrite: !old.transparent });
   });
   return root;
 }
 
 // A copy of a hat model (null if there is none for that hat), tinted for the look.
+export function faceModel(id) {
+  const t = faceTemplates[id];
+  return t ? t.root.clone(true) : null;
+}
+
 export function hatModel(id, look) {
   const t = hatTemplates[id];
   if (!t) return null;

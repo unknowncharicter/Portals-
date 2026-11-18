@@ -73,5 +73,6 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - SWAT and Punk characters by Quaternius (CC0).
 - Animations from Mixamo.
 - Desert Compound map: "fps tps Map" by theking1322.
-- Hats: Top hat, Hard hat and Baseball cap by Poly by Google; Beanie and Headphones by J-Toastie.
+- Hats: Top hat, Hard hat and Baseball cap by Poly by Google; Beanie and Headphones by J-Toastie; Crown by Poly by Google.
+- Face items: Gas mask by Marisha, Pixel Sunglasses by TRASH - TANUKI, Glasses by iPoly3D, Skull by Quaternius.
 - Extra characters from the Ultimate Modular Men pack by Quaternius (CC0).

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AnimatedBody, hasCharacterModel } from './CharacterModel.js';
-import { hatModel } from './Models.js';
+import { hatModel, faceModel } from './Models.js';
 
 // Character customization: colours, hats and the blocky body model.
 export const SHIRTS = ['#e8e8f0', '#2b2d3a', '#d84a4a', '#3a6fd8', '#3ab060', '#e0a030', '#9a5ad8', '#e070b0', '#30c0c0', '#7a5030'];
@@ -46,7 +46,8 @@ const RIG = {
 export const FACES = [
   { id: 'nofaceitem', name: 'None',       icon: '🙂', price: 0 },
   { id: 'visor',      name: 'Visor',      icon: '🥽', price: 0 },
-  { id: 'shades',     name: 'Shades',     icon: '🕶️', price: 120 },
+  { id: 'shades',     name: 'Pixel shades', icon: '🕶️', price: 120 },
+  { id: 'glasses',    name: 'Sport glasses', icon: '👓', price: 100 },
   { id: 'ninja',      name: 'Ninja mask', icon: '🥷', price: 180 },
   { id: 'gasmask',    name: 'Gas mask',   icon: '😷', price: 260 },
   { id: 'skull',      name: 'Skull mask', icon: '💀', price: 350 },
@@ -200,17 +201,49 @@ function buildBlocky(look, { visor = '#33aaff', teamColor = null, tag = true } =
 function addFace(look, box, mat, visor) {
   const glow = new THREE.MeshBasicMaterial({ color: visor });
   const black = mat('#111116'), white = mat('#f2f0e6'), z = -0.225;
-  switch (look.face || 'visor') {
-    case 'visor': box(0.36, 0.1, 0.05, glow, 0, 0.76, -0.2); break;
+  const id = look.face || 'visor';
+  // 3D models for these.
+  const model = faceModel(id);
+  if (model) { box(0.001, 0.001, 0.001, black, 0, 0.72, 0).parent.add(model); return; }
+  const parent = box(0.001, 0.001, 0.001, black, 0, 0.72, 0).parent;
+  const add = (geo, m, x, y, zz) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, zz); parent.add(o); return o; };
+  switch (id) {
+    case 'visor': {
+      // Curved glowing band across the eyes, with a dark frame and little side pods.
+      const arc = (r, h) => new THREE.CylinderGeometry(r, r, h, 28, 1, true, Math.PI - 1.2, 2.4);
+      const glass = new THREE.MeshBasicMaterial({ color: visor, map: visorTexture(), side: THREE.DoubleSide });
+      const Y = 0.675;
+      add(arc(0.235, 0.1), glass, 0, Y, 0);
+      const frame = mat('#1a1c24');
+      frame.side = THREE.DoubleSide;
+      add(arc(0.243, 0.022), frame, 0, Y + 0.06, 0);
+      add(arc(0.243, 0.022), frame, 0, Y - 0.06, 0);
+      for (const sx of [-1, 1]) {
+        add(new THREE.CylinderGeometry(0.045, 0.045, 0.05, 12).rotateZ(Math.PI / 2), frame, sx * 0.225, Y, 0.03);
+        add(new THREE.CylinderGeometry(0.022, 0.022, 0.055, 10).rotateZ(Math.PI / 2), glow, sx * 0.226, Y, 0.03);
+      }
+      break;
+    }
     case 'shades':
       box(0.15, 0.08, 0.03, black, -0.09, 0.76, z); box(0.15, 0.08, 0.03, black, 0.09, 0.76, z);
       box(0.06, 0.02, 0.03, black, 0, 0.78, z); box(0.42, 0.02, 0.02, black, 0, 0.78, z + 0.01);
       break;
     case 'ninja': {
-      const cloth = mat('#1d1f2a');
-      box(0.44, 0.2, 0.44, cloth, 0, 0.62, 0);                 // lower face wrap
-      box(0.44, 0.08, 0.44, cloth, 0, 0.88, 0);                // forehead band
-      box(0.08, 0.06, 0.2, cloth, 0.1, 0.88, 0.28);            // knot tails
+      // Rounded hood and face wrap with an eye slit, a red headband with a metal plate, and tails.
+      const cloth = mat('#1b1d27'), band = mat('#c0303a'), metal = mat('#9aa3b0');
+      const R = 0.228, slitLo = 0.635, slitHi = 0.705;                    // eye slit between these heights
+      add(new THREE.CylinderGeometry(R, R * 0.86, 0.15, 20), cloth, 0, slitLo - 0.075, 0);            // face wrap
+      const hood = add(new THREE.SphereGeometry(R + 0.006, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), cloth, 0, slitHi, 0.004);
+      hood.scale.y = 0.95;
+      add(new THREE.CylinderGeometry(R + 0.002, R + 0.002, slitHi - slitLo, 20, 1, true, Math.PI * 1.35, Math.PI * 1.3), cloth, 0, (slitLo + slitHi) / 2, 0.004); // sides and back of the slit
+      add(new THREE.CylinderGeometry(R + 0.008, R + 0.008, 0.04, 20), band, 0, slitHi + 0.04, 0);   // headband
+      box(0.12, 0.05, 0.02, metal, 0, slitHi + 0.04, -R - 0.006);                                     // forehead plate
+      box(0.05, 0.012, 0.005, mat('#4a505c'), 0, slitHi + 0.04, -R - 0.018);
+      for (const sx of [-1, 1]) {
+        const t = box(0.045, 0.2, 0.012, band, sx * 0.04, slitHi - 0.06, R + 0.03);                  // knot tails
+        t.rotation.z = sx * 0.35; t.rotation.x = 0.35;
+      }
+      box(0.07, 0.06, 0.05, band, 0, slitHi + 0.04, R + 0.01);                                         // knot
       break;
     }
     case 'gasmask': {
@@ -234,6 +267,20 @@ function addFace(look, box, mat, visor) {
       box(0.2, 0.02, 0.02, glow, 0, 0.6, z - 0.025);
       break;
   }
+}
+
+// Soft vertical shine for the visor (a bright line across the middle).
+let _visorTex = null;
+function visorTexture() {
+  if (_visorTex) return _visorTex;
+  const c = document.createElement('canvas'); c.width = 4; c.height = 32;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 32);
+  grd.addColorStop(0, '#6a6a6a'); grd.addColorStop(0.35, '#ffffff'); grd.addColorStop(0.45, '#ffffff'); grd.addColorStop(1, '#5a5a5a');
+  g.fillStyle = grd; g.fillRect(0, 0, 4, 32);
+  _visorTex = new THREE.CanvasTexture(c);
+  _visorTex.colorSpace = THREE.SRGBColorSpace;
+  return _visorTex;
 }
 
 // Back items, in "blocky torso" coordinates: torso centre y 0.16, back at z +0.18.
