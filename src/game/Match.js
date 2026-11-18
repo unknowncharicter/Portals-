@@ -967,7 +967,7 @@ export class Match {
   // End of match: the winners line up and emote at the camera, then the results show.
   startOutro(team, res) {
     this.state = 'outro';
-    this.outroT = 4.5;
+    this.outroT = 3;
     this.outroRes = res;
     this.endKillcam(); this.deathCam = null; this.hud.killcam(null);
     this.setScope(false); this.ads = false;
@@ -980,7 +980,8 @@ export class Match {
     const kinds = [0, 1, 2].sort(() => Math.random() - 0.5);
     winners.forEach((c, i) => {
       c.spawn(anchor.clone().addScaledVector(right, (i - (winners.length - 1) / 2) * 1.6), yaw);
-      c.emote = { t: Math.random() * 0.3, kind: kinds[i % 3] };
+      const em = (c.look && c.look.emote) || 'cheer';
+      c.emote = { t: Math.random() * 0.3, kind: kinds[i % 3], clip: em !== 'cheer' ? 'emote_' + em : null };
     });
     for (const c of this.chars) if (!winners.includes(c)) { c.mesh.visible = false; c.shadow.visible = false; c.alive = false; c.corpseT = 0; }
     // Camera in front of them, pulled in if something is in the way.
@@ -1005,13 +1006,14 @@ export class Match {
     const want = o.head.clone().addScaledVector(o.fwd, o.dist).addScaledVector(o.right, sway * 1.5).add(new THREE.Vector3(0, 0.3, 0));
     if (!o.placed) { cam.position.copy(want); o.placed = true; } // start in place (no swoop from wherever we were)
     else cam.position.lerp(want, Math.min(1, dt * 3));
-    cam.lookAt(o.head);
+    // Once the results panel is up (right side), frame the dancers on the left.
+    o.shift = (o.shift || 0) + ((this.outroShown && innerWidth > 700 ? 1 : 0) - (o.shift || 0)) * Math.min(1, dt * 3);
+    cam.lookAt(o.head.clone().addScaledVector(o.right, -1.7 * o.shift).add(new THREE.Vector3(0, -0.15 * o.shift, 0)));
     cam.updateMatrixWorld();
-    // Done (or skipped with a click after a moment).
-    if (this.outroT <= 0 || (this.outroT < 3 && this.input.mouseClicked)) {
-      this.state = 'done';
-      this.camera.layers.disable(1);
-      this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix();
+    // After a moment (or a click) the results appear; the winners keep dancing behind them
+    // until you press Continue.
+    if (!this.outroShown && (this.outroT <= 0 || (this.outroT < 3 && this.input.mouseClicked))) {
+      this.outroShown = true;
       document.getElementById('hud').classList.remove('outro');
       this.hud.centerText('');
       this.onEnd(this.outroRes);
@@ -1181,6 +1183,7 @@ export class Match {
     if (this.flags) for (const f of this.flags) this.scene.remove(f.mesh, f.ring);
     this.endKillcam();
     this.camera.layers.disable(1);
+    this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix();
     document.getElementById('hud').classList.remove('outro');
     this.projectiles.clear();
     this.setScope(false);

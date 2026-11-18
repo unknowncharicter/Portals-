@@ -73,7 +73,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 ## Credits
 
 - SWAT and Punk characters by Quaternius (CC0).
-- Animations from Mixamo.
+- Animations and dance emotes from Mixamo.
 - Desert Compound map: "fps tps Map" by theking1322.
 - Hats: Top hat, Hard hat and Baseball cap by Poly by Google; Beanie and Headphones by J-Toastie; Crown by Poly by Google.
 - Warehouse map: "Warehouse" by Lavender Harmony.

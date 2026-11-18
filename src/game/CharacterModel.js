@@ -246,6 +246,20 @@ export class AnimatedBody {
     });
   }
 
+  // Play a dance clip (looping), with no aiming adjustments.
+  dance(dt, clip) {
+    this.held += dt;
+    const a = this.actions[clip];
+    if (this.current !== a) {
+      a.reset().setLoop(THREE.LoopRepeat, Infinity).setEffectiveWeight(1).fadeIn(0.25).play();
+      if (this.current) this.current.fadeOut(0.25);
+      this.current = a; this.held = 0;
+    }
+    this.emoting = true;
+    this.model.rotation.y = Math.PI;
+    this.mixer.update(dt);
+  }
+
   // Point arm bones along directions given in character space.
   poseArms(dirs) {
     this.root.updateMatrixWorld(true);

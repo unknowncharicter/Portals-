@@ -448,3 +448,9 @@ body.touch .hp-wrap { width: 180px; }
 .intro-steps div { background: rgba(255,255,255,.06); border-radius: 12px; padding: 12px 8px; display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 13px; }
 .intro-steps b { font-size: 26px; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: rgba(54,181,255,.2); }
 .intro-btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+
+/* Results over the winners' victory dance: see-through, panel at the bottom */
+#results.over-outro { background: linear-gradient(90deg, rgba(5,6,12,0) 38%, rgba(5,6,12,.88) 62%); align-items: flex-end; padding-right: max(24px, 5vw); }
+#results.over-outro > * { width: min(440px, 46vw); text-align: center; }
+@media (max-width: 700px) { #results.over-outro { background: linear-gradient(180deg, rgba(5,6,12,0) 35%, rgba(5,6,12,.88) 70%); align-items: center; justify-content: flex-end; padding-right: 16px; } #results.over-outro > * { width: auto; } }
+#results.over-outro #results-title { text-shadow: 0 2px 18px rgba(0,0,0,.8); }

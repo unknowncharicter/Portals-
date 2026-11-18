@@ -89,6 +89,7 @@ export class Character {
     this.body = parts.body || null;
     this.tagSprite = parts.tag || null;
     this.gunHolder = parts.gunHolder;
+    this.teamParts = parts.teamParts || [];
     return parts.group;
   }
 
@@ -103,6 +104,7 @@ export class Character {
     this.hp = this.maxHp;
     this.alive = true;
     this.life = (this.life || 0) + 1; // counts spawns (online: tells old updates from new ones)
+    if (this.emote) { for (const t of this.teamParts) t.visible = true; this.gunHolder.visible = true; }
     this.emote = null;
     this.mesh.visible = true;
     if (this.body) this.body.reset();
@@ -340,10 +342,20 @@ export class Character {
     }
     this.mesh.position.copy(this.pos);
     if (this.emote) {
-      // Victory emote: hop (and spin for kind 1) while the body cheers.
       const e = this.emote;
       e.t += dt;
-      const ph = (e.t * 1.25) % 1; // spin hop: up and one full turn in the first half of each beat
+      // Team markers and the gun would look odd while dancing.
+      for (const t of this.teamParts) t.visible = false;
+      const dance = this.body && e.clip && this.body.actions[e.clip];
+      if (dance) {
+        this.gunHolder.visible = false;
+        this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF;
+        this.mesh.rotation.set(0, this.yaw, 0, 'YXZ');
+        this.body.dance(dt, e.clip);
+        return;
+      }
+      // Built-in cheer: hop (and spin for kind 1) while the body cheers.
+      const ph = (e.t * 1.25) % 1;
       const hop = e.kind === 1 ? (ph < 0.5 ? Math.sin(ph * 2 * Math.PI) * 0.55 : 0) : Math.abs(Math.sin(e.t * 4.5)) * 0.12;
       const spin = e.kind === 1 && ph < 0.5 ? ph * 4 * Math.PI : 0;
       this.mesh.position.y = this.pos.y - this.halfHeight + FULL_HALF + hop;

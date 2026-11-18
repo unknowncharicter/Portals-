@@ -42,6 +42,16 @@ const RIG = {
   punk:  { head: [0.7, 0.14], back: [0.85, -0.24, -0.05] },
 };
 
+// Victory emotes (dances), played by the winners at the end of a match. 'cheer' is built in.
+export const EMOTES = [
+  { id: 'cheer',    name: 'Cheer',          icon: '🙌' },
+  { id: 'uprock',   name: 'Brooklyn Uprock', icon: '🕺' },
+  { id: 'moonwalk', name: 'Moonwalk',       icon: '🌙' },
+  { id: 'flair',    name: 'Flair',          icon: '🌀' },
+  { id: 'swing',    name: 'Swing Dance',    icon: '💃' },
+  { id: 'thriller', name: 'Thriller',       icon: '🧟' },
+];
+
 // Face accessories (on the head, in front of the face).
 export const FACES = [
   { id: 'nofaceitem', name: 'None',       icon: '🙂', price: 0 },
@@ -68,8 +78,9 @@ export const DEFAULT_LOOK = { name: 'Player', model: 'swat', shirt: SHIRTS[3], p
 const HELMETED = new Set(['swat', 'astronaut', 'king']);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function randomLook(name) {
+  const emote = pick(['uprock', 'moonwalk', 'flair', 'swing', 'thriller', 'cheer']);
   const model = pick(['swat', 'swat', 'punk', ...BODIES.filter(b => b.id !== 'robot').map(b => b.id)]);
-  return { name, model, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)),
+  return { name, model, emote, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)),
     hat: HELMETED.has(model) ? 'none' : pick(['none', 'none', 'none', ...HATS.map(h => h.id)]),
     face: HELMETED.has(model) ? 'nofaceitem' : pick(['nofaceitem', 'nofaceitem', 'shades', 'ninja', 'skull', 'gasmask']),
     back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
@@ -152,6 +163,7 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
   const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, back);
   addBack(look, bbox, mat, visor);
 
+  const teamParts = [];
   if (teamColor) {
     const team = mat(teamColor);
     // Belt around the measured waist (bottom of the lower spine).
@@ -160,10 +172,10 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
     const belt = new THREE.Mesh(new THREE.BoxGeometry(wb ? wb.x1 - wb.x0 + 0.04 : 0.36, 0.07, wb ? wb.z1 - wb.z0 + 0.04 : 0.24), team);
     if (wb) belt.position.set((wb.x0 + wb.x1) / 2, wb.y0 + 0.02, (wb.z0 + wb.z1) / 2);
     else belt.position.y = 0.06;
-    waist.add(belt);
+    waist.add(belt); teamParts.push(belt);
     for (const side of ['LeftArm', 'RightArm']) {
       const pad = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.1, 0.13), team);
-      pad.position.y = 0.04; body.socket(side).add(pad);
+      pad.position.y = 0.04; body.socket(side).add(pad); teamParts.push(pad);
     }
   }
 
@@ -173,7 +185,7 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
 
   let tagSprite = null;
   if (tag) { tagSprite = nameTag(look.name, teamColor || '#ffffff'); g.add(tagSprite); }
-  return { group: g, gunHolder, tag: tagSprite, body };
+  return { group: g, gunHolder, tag: tagSprite, body, teamParts };
 }
 
 function buildBlocky(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {

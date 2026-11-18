@@ -10,7 +10,7 @@ import { Viewmodel } from './game/Viewmodel.js';
 import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES } from './game/Match.js';
 import { Room } from './net/Room.js';
 import { submitScore, fetchBoard, myTag } from './leaderboard.js';
-import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, cleanName, randomLook } from './game/Look.js';
+import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, EMOTES, cleanName, randomLook } from './game/Look.js';
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
@@ -163,6 +163,7 @@ function rebuildPreview() {
   previewScene.add(previewChar);
 }
 
+let previewDance = null;
 function renderPreview(dt) {
   if (!previewChar) return;
   const w = previewCanvas.clientWidth, h = previewCanvas.clientHeight;
@@ -175,7 +176,15 @@ function renderPreview(dt) {
   if (!previewDrag.active && performance.now() - previewDrag.last > 1500) previewChar.rotation.y += dt * 0.6;
   else previewChar.rotation.y = previewDrag.yaw;
   previewDrag.yaw = previewChar.rotation.y;
-  if (previewParts.body) {
+  if (previewParts.body && previewDance && performance.now() < previewDance.until) {
+    // Just picked an emote: show it for a few seconds.
+    previewDance.t += dt;
+    previewChar.updateMatrixWorld(true);
+    previewParts.gunHolder.visible = !previewDance.clip;
+    if (previewDance.clip && previewParts.body.actions[previewDance.clip]) previewParts.body.dance(dt, previewDance.clip);
+    else { previewParts.body.emote(dt, previewDance.t, 0); previewParts.body.handIn(previewChar, previewParts.gunHolder.position); }
+  } else if (previewParts.body) {
+    if (previewDance) { previewDance = null; previewParts.body.reset(); previewParts.gunHolder.visible = true; }
     previewChar.updateMatrixWorld(true);
     previewParts.body.update(dt, previewState);
     previewParts.body.handIn(previewChar, previewParts.gunHolder.position);
@@ -209,6 +218,7 @@ function buildCharacterPanel() {
     ['hats', 'hat', HATS.map(h => ({ ...h, icon: HAT_ICONS[h.id] || '🎩' }))],
     ['faces', 'face', FACES],
     ['backs', 'back', BACKS],
+    ['emotes', 'emote', EMOTES],
   ];
   for (const [elId, key, list] of slots) {
     const grid = $(elId);
@@ -230,6 +240,7 @@ function buildCharacterPanel() {
         L[key] = item.id;
         writeSave(save);
         buildLobby();
+        if (key === 'emote') previewDance = { clip: item.id === 'cheer' ? null : 'emote_' + item.id, until: performance.now() + 6000, t: 0 };
       };
       grid.appendChild(b);
     }
@@ -603,6 +614,7 @@ function onMatchEnd(res) {
   $('results-detail').innerHTML = html;
   if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);
   showScreen('results');
+  $('results').classList.toggle('over-outro', !!(match && match.state === 'outro'));
   // Public room host: carry on by itself (other players are waiting for the next match).
   if (online && room && room.isHost && room.isPublic) setTimeout(() => { if (state === 'results') $('btn-continue').onclick(); }, 9000);
 }
@@ -928,7 +940,7 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
-  if (match && (state === 'playing' || (state === 'paused' && match.online))) {
+  if (match && (state === 'playing' || (state === 'paused' && match.online) || (state === 'results' && match.state === 'outro'))) {
     match.update(dt);
     if (touchMode) touch.update(match);
   }
