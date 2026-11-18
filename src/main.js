@@ -13,7 +13,7 @@ import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, c
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
-import { MAPS, MAP_IDS } from './game/maps.js';
+import { MAPS, MAP_IDS, PROPS } from './game/maps.js';
 import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
 import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel, mapModel } from './game/Models.js';
@@ -910,7 +910,7 @@ models.then(() => {
 });
 // Map pictures: rendered once, shortly after start (uses the main renderer).
 // Maps made from a 3D model wait for it first.
-Promise.all(MAP_IDS.filter(id => MAPS[id].model).map(id => mapModel(MAPS[id].model.file))).then(() => setTimeout(() => {
+Promise.all([...MAP_IDS.filter(id => MAPS[id].model).map(id => mapModel(MAPS[id].model.file)), ...Object.values(PROPS).map(f => mapModel(f))]).then(() => setTimeout(() => {
   try { makeMapThumbs(renderer, world, scene, MAPS, MAP_IDS); } catch (e) { console.warn('map thumbnails failed', e); }
   if (state === 'lobby') buildLobby();
 }, 300));

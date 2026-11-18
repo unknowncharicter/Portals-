@@ -58,30 +58,38 @@ export const MAPS = {
       ffa: [V(-26, 0, -3), V(26, 0, 3), V(-26, 0, 5), V(26, 0, -5)],
     },
     build(m) {
-      const grass = '#7fbf6a', rock = '#9a8f80', wall = '#d8d2c4', wood = '#c08a50', gold = '#e8c050';
-      // Team islands
-      m.mirror([18, -3, -9], [31, 0, 9], grass);
-      m.mirror([30, 0, -9], [31, 6, 9], wall);              // back wall (portal wall)
-      m.mirror([23, 0, -6], [25, 5, -4], rock);              // pillars
-      m.mirror([23, 0, 4], [25, 5, 6], rock);
-      m.mirror([19, 0, -1.5], [20, 1.3, 1.5], wood);         // low cover
-      // Bridges to the middle
-      m.mirror([6, -0.6, -1.5], [18, 0, 1.5], wood);
-      m.mirror([10, 0, -1.6], [12, 1.1, -1.5], wood);        // little rails
-      m.mirror([10, 0, 1.5], [12, 1.1, 1.6], wood);
+      const wall = '#cfc8b8', wood = '#b07a45';
+      for (const sx of [-1, 1]) {
+        // Team island with a portal wall at the back, rocks for cover and a couple of trees.
+        m.prop('island_large', [sx * 24.5, 0, 0], 12, 0, { top: true });
+        m.box(sx > 0 ? [30, 0, -7] : [-31, 0, -7], sx > 0 ? [31, 6, 7] : [-30, 6, 7], wall);
+        m.prop('rock_large', [sx * 23.5, 0, -5], 4, 0);
+        m.prop('rock_large', [sx * 23.5, 0, 5], 4, Math.PI);
+        m.prop('rock_small', [sx * 19.5, 0, 0], 3, Math.PI / 2);
+        m.prop('tree', [sx * 28.5, 0, -6.5], 9);
+        m.prop('tree', [sx * 28.5, 0, 6.5], 8, Math.PI / 2);
+        // Bridge to the middle (with little rails)
+        m.box(sx > 0 ? [5.5, -0.6, -1.5] : [-18.5, -0.6, -1.5], sx > 0 ? [18.5, 0, 1.5] : [-5.5, 0, 1.5], wood);
+        m.box(sx > 0 ? [10, 0, -1.6] : [-12, 0, -1.6], sx > 0 ? [12, 1.1, -1.5] : [-10, 1.1, -1.5], wood);
+        m.box(sx > 0 ? [10, 0, 1.5] : [-12, 0, 1.5], sx > 0 ? [12, 1.1, 1.6] : [-10, 1.1, 1.6], wood);
+        // Side islands with flags: reach them with portals or by hopping the grass platforms.
+        for (const sz of [-1, 1]) {
+          m.prop('island', [sx * 10, 1.5, sz * 16.5], 10, 0, { top: true });
+          m.prop('flag', [sx * 10.5, 1.5, sz * 17.5], 2, sx > 0 ? 0 : Math.PI);
+          m.box([sx * 10 - 1, 1.5, sz * 19.5 - 0.5], [sx * 10 + 1, 5, sz * 19.5 + 0.5], wall);   // portal wall
+          m.prop('grass_platform', [sx * 10.5, 0.3, sz * 5.6], 5, 0, { top: true });
+          m.prop('grass_platform', [sx * 10.5, 0.9, sz * 9.6], 5, Math.PI / 2, { top: true });
+          // Floating panels to put portals on
+          m.box([sx > 0 ? 14 : -17, 1, sz > 0 ? 6.5 : -7], [sx > 0 ? 17 : -14, 5, sz > 0 ? 7 : -6.5], wall);
+        }
+      }
       // Centre island with a tower
-      m.box([-6, -4, -7], [6, 0, 7], grass);
+      m.prop('island_medium', [0, 0, 0], 10, 0, { top: true });
       m.box([-1.5, 0, -1.5], [1.5, 8, 1.5], wall);
-      m.box([-5, 0, 4.5], [-3, 1.4, 6], wood);
-      m.box([3, 0, -6], [5, 1.4, -4.5], wood);
-      // Side islands: only reachable with portals (or a brave jump)
-      m.mirror([6, -2, 12], [14, 1.5, 20], grass);
-      m.mirror([6, -2, -20], [14, 1.5, -12], grass);
-      m.mirror([9, 1.5, 17], [11, 5, 19], gold);
-      m.mirror([9, 1.5, -19], [11, 5, -17], gold);
-      // Floating panels to put portals on
-      m.mirror([12, 1, 6], [15, 5, 6.5], wall);
-      m.mirror([12, 1, -6.5], [15, 5, -6], wall);
+      m.prop('rock_small', [-4, 0, 5], 2.6);
+      m.prop('rock_small', [4, 0, -5], 2.6, Math.PI);
+      m.prop('tree', [4.2, 0, 4.6], 7);
+      m.prop('tree', [-4.2, 0, -4.6], 7, Math.PI / 2);
     },
   },
 
@@ -274,6 +282,14 @@ MAPS.compound = {
     m.box([-26.5, 0, -18], [26.5, 30, -16.75], null);
     m.box([-26.5, 0, 16.66], [26.5, 30, 18], null);
   },
+};
+
+// 3D props maps can place with m.prop(id, [x, y, z], scale, rotation, { top }).
+export const PROPS = {
+  island_large: 'props/island_large.glb', island_medium: 'props/island_medium.glb', island: 'props/island.glb',
+  grass_platform: 'props/grass_platform.glb', stone_platform: 'props/stone_platform.glb',
+  tree: 'props/tree.glb', rock_large: 'props/rock_large.glb', rock_small: 'props/rock_small.glb',
+  flag: 'props/flag.glb', container: 'props/container.glb',
 };
 
 export const MAP_IDS = Object.keys(MAPS);

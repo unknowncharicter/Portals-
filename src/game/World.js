@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MAPS } from './maps.js';
+import { MAPS, PROPS } from './maps.js';
+import PROP_BOXES from './prop-boxes.json';
 import { mapModel, mapModelLoaded } from './Models.js';
 
 // The map is built only from axis-aligned boxes. That keeps collision, raycasts and
@@ -70,9 +71,11 @@ export class World {
     this.hemi.intensity = t.hemi;
     this.sun.intensity = t.sun;
     this.killY = map.killY ?? -40;
+    this.props = [];
     map.build({
       box: (min, max, color) => this.addBox(min, max, color),
       mirror: (min, max, color) => this.mirrorX(min, max, color),
+      prop: (id, pos, scale, rot, opts) => this.addProp(id, pos, scale, rot, opts),
     });
     const toV = (p) => new THREE.Vector3(p.x, p.y, p.z);
     this.spawns = { 0: map.spawns[0].map(toV), 1: map.spawns[1].map(toV), ffa: map.spawns.ffa.map(toV) };
@@ -88,6 +91,42 @@ export class World {
       const ready = mapModelLoaded(map.model.file);
       if (ready) show(ready); else mapModel(map.model.file).then(show);
     }
+    // Props: a copy of the model for each one placed.
+    for (const pr of this.props) {
+      const place = (tpl) => {
+        if (!tpl || this.mapId !== id) return;
+        const outer = new THREE.Group();
+        outer.position.set(...pr.pos); outer.rotation.y = pr.rot;
+        const m = tpl.clone(true);
+        m.scale.setScalar(pr.scale);
+        m.position.set(-pr.off[0] * pr.scale, -pr.off[1] * pr.scale, -pr.off[2] * pr.scale);
+        outer.add(m);
+        outer.userData.mapModel = true;
+        this.group.add(outer);
+      };
+      const ready = mapModelLoaded(PROPS[pr.id]);
+      if (ready) place(ready); else mapModel(PROPS[pr.id]).then(place);
+    }
+  }
+
+  // A 3D prop with its collision boxes (from prop-boxes.json). pos is where its middle (x, z)
+  // and its bottom go, or its top with opts.top (floating islands). rot: quarter turns only.
+  addProp(id, pos, scale = 1, rot = 0, opts = {}) {
+    const boxes = PROP_BOXES[id];
+    if (!boxes || !PROPS[id]) { console.warn('unknown prop', id); return; }
+    const b = propBounds(id);
+    const off = [(b[0] + b[3]) / 2, opts.top ? b[4] : b[1], (b[2] + b[5]) / 2];
+    const c = Math.round(Math.cos(rot)), sn = Math.round(Math.sin(rot));
+    if (opts.solid !== false) for (const bx of boxes) {
+      const pts = [];
+      for (const x of [bx[0], bx[3]]) for (const z of [bx[2], bx[5]]) {
+        const lx = (x - off[0]) * scale, lz = (z - off[2]) * scale;
+        pts.push([lx * c + lz * sn, -lx * sn + lz * c]);
+      }
+      const xs = pts.map(p => p[0] + pos[0]), zs = pts.map(p => p[1] + pos[2]);
+      this.addBox([Math.min(...xs), (bx[1] - off[1]) * scale + pos[1], Math.min(...zs)], [Math.max(...xs), (bx[4] - off[1]) * scale + pos[1], Math.max(...zs)], null);
+    }
+    this.props.push({ id, pos, scale, rot, off });
   }
 
   addBox(min, max, color) {
@@ -195,4 +234,12 @@ export function rayBox(o, d, min, max) {
   const normal = new THREE.Vector3();
   normal.setComponent(axis, sign);
   return { t: tmin, normal };
+}
+
+const _pb = {};
+function propBounds(id) {
+  if (_pb[id]) return _pb[id];
+  const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (const x of PROP_BOXES[id]) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], x[k]); b[k + 3] = Math.max(b[k + 3], x[k + 3]); }
+  return (_pb[id] = b);
 }
