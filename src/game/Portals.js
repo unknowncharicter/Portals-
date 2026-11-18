@@ -56,7 +56,7 @@ const surfGeo = new THREE.PlaneGeometry(1, 1);
 
 // Offsets (along the surface) tried when looking for room for a portal around where you aimed.
 const SEARCH = [[0, 0]];
-for (const r of [0.3, 0.6, 0.9, 1.2]) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) SEARCH.push([a * r, b * r]);
+for (const r of [0.3, 0.6, 0.9, 1.2, 1.6, 2.0]) for (const [a, b] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) SEARCH.push([a * r, b * r]);
 
 export class Portal {
   constructor(owner, pose, color) {
@@ -226,10 +226,124 @@ export class PortalSystem {
       found = this.surfaceUnder(c, n, up, right);
       if (found) break;
     }
-    if (!found) return { pos: hit.point.clone(), normal: n, up, box: b, valid: false };
+    if (!found) return this.fitPose(hit, viewDir) || { pos: hit.point.clone(), normal: n, up, box: b, valid: false };
     const pose = { pos: found.pos, normal: n, up, box: b, boxes: found.boxes, valid: true };
     pose.valid = !this.overlapsExisting(pose);
     return pose;
+  }
+
+  // ---------- Portals on 3D-model surfaces (any angle: curved walls, slopes, props) ----------
+
+  // The visible 3D models of the map (map model and props), for exact surface hits.
+  modelMeshes() {
+    const g = this.world.group;
+    if (this._meshKey === g.children.length && this._meshMap === this.world.mapId) return this._meshes;
+    const list = [];
+    for (const ch of g.children) if (ch.userData.mapModel) ch.traverse(o => { if (o.isMesh) list.push(o); });
+    this._meshes = list; this._meshKey = g.children.length; this._meshMap = this.world.mapId;
+    return list;
+  }
+
+  meshHit(origin, dir, far) {
+    const meshes = this.modelMeshes();
+    if (!meshes.length) return null;
+    this._ray ||= new THREE.Raycaster();
+    this._ray.set(origin, dir); this._ray.near = 0; this._ray.far = far;
+    const h = this._ray.intersectObjects(meshes, false)[0];
+    if (!h || !h.face) return null;
+    const n = h.face.normal.clone().transformDirection(h.object.matrixWorld);
+    if (n.dot(dir) > 0) n.negate(); // double-sided faces: face the ray
+    return { point: h.point, normal: n, t: h.distance };
+  }
+
+  // Fit a portal to an uneven surface (curved or arched walls, bumpy floors): sample the
+  // collision shape over the portal area, fit a plane through it (walls can face any direction),
+  // and put the portal on the front of it. Returns a pose or null.
+  fitPose(hit, viewDir) {
+    const d = viewDir.clone().normalize();
+    const floor = Math.abs(hit.normal.y) > 0.5;
+    let n0 = floor ? new THREE.Vector3(0, Math.sign(hit.normal.y), 0) : new THREE.Vector3(-d.x, 0, -d.z);
+    if (n0.lengthSq() < 1e-4) return null;
+    n0.normalize();
+    const upOf = (n) => (floor ? d.clone().addScaledVector(n, -d.dot(n)) : new THREE.Vector3(0, 1, 0).addScaledVector(n, -n.y)).normalize();
+    const up0 = upOf(n0), right0 = new THREE.Vector3().crossVectors(up0, n0).normalize();
+    const back = n0.clone().negate(), w = this.world;
+    // Walls: first try spots where the portal stands on the floor (so you can walk in).
+    let tries = SEARCH;
+    if (!floor) {
+      const g = w.raycast(hit.point.clone().addScaledVector(n0, 0.5), new THREE.Vector3(0, -1, 0), 6);
+      if (g) {
+        const dy0 = g.point.y + PORTAL_H / 2 + 0.03 - hit.point.y;
+        tries = [...[0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.3, -1.3, 1.7, -1.7].map(dx => [dx, dy0]), ...SEARCH];
+      }
+    }
+    for (const [dx, dy] of tries) {
+      const c = hit.point.clone().addScaledVector(right0, dx).addScaledVector(up0, dy);
+      const pts = [];
+      let ok = true;
+      for (let i = 0; i < 4 && ok; i++) for (let j = 0; j < 6; j++) {
+        const u = (i / 3 - 0.5) * (PORTAL_W - 0.2), v = (j / 5 - 0.5) * (PORTAL_H - 0.2);
+        if ((u / (PORTAL_W / 2)) ** 2 + (v / (PORTAL_H / 2)) ** 2 > 1.15) continue;
+        const o = c.clone().addScaledVector(right0, u).addScaledVector(up0, v).addScaledVector(n0, 1.0);
+        const h = w.raycast(o, back, 2.0);
+        if (!h || h.normal.dot(n0) < 0.3) { ok = false; break; }
+        pts.push(h.point);
+      }
+      if (!ok || pts.length < 10) continue;
+      // Plane through the points. Walls: best-fit vertical line in x/z. Floors: flat.
+      let n = n0.clone();
+      if (!floor) {
+        let mx = 0, mz = 0;
+        for (const p of pts) { mx += p.x; mz += p.z; }
+        mx /= pts.length; mz /= pts.length;
+        let sxx = 0, szz = 0, sxz = 0;
+        for (const p of pts) { const a = p.x - mx, b = p.z - mz; sxx += a * a; szz += b * b; sxz += a * b; }
+        const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz);           // main direction of the wall
+        n = new THREE.Vector3(-Math.sin(ang), 0, Math.cos(ang));
+        if (n.dot(n0) < 0) n.negate();
+        if (n.dot(n0) < 0.6) continue;                              // wall faces too far away from us
+      }
+      let hi = -Infinity, lo = Infinity;
+      for (const p of pts) { const dd = n.dot(p); hi = Math.max(hi, dd); lo = Math.min(lo, dd); }
+      if (hi - lo > (floor ? 0.45 : 0.6)) continue;                 // too bumpy
+      const up = upOf(n), right = new THREE.Vector3().crossVectors(up, n).normalize();
+      const pos = c.clone().addScaledVector(n, hi - n.dot(c) + 0.004);
+      // On 3D-model maps, sit on the visible surface if it is just behind the collision front.
+      // (Use the front-most visible point across the portal, so no part of it ends up behind
+      // something like a pillar between arches.)
+      if (this.modelMeshes().length) {
+        let vis = -Infinity;
+        for (const [u, v] of [[0, 0], [-0.6, 0], [0.6, 0], [0, -1], [0, 1], [-0.5, -0.8], [0.5, -0.8], [-0.5, 0.8], [0.5, 0.8]]) {
+          const o = pos.clone().addScaledVector(right, u).addScaledVector(up, v).addScaledVector(n, 0.3);
+          const mh = this.meshHit(o, n.clone().negate(), 1.0);
+          vis = Math.max(vis, mh ? n.dot(mh.point) : hi);
+        }
+        if (vis < hi && vis > hi - 0.6) pos.addScaledVector(n, vis - hi);
+      }
+      // Open space in front of it.
+      const front = pos.clone().addScaledVector(n, hi - n.dot(pos) + 0.05);
+      if (w.raycast(front, n, 0.6)) continue;
+      const boxes = this.hostsFor(pos, n, up, right);
+      const pose = { pos, normal: n, up, box: boxes[0] || hit.box, boxes, valid: true };
+      pose.valid = !this.overlapsExisting(pose);
+      return pose;
+    }
+    return null;
+  }
+
+  // Collision boxes just behind (and around) a portal: you can walk into these through it.
+  hostsFor(pos, n, up, right) {
+    const back = n.clone().negate(), set = new Set();
+    const plane = n.dot(pos);
+    for (let i = 0; i < 7; i++) for (let j = 0; j < 9; j++) {
+      const u = (i / 6 - 0.5) * (PORTAL_W + 0.6), v = (j / 8 - 0.5) * (PORTAL_H + 0.6);
+      const o = pos.clone().addScaledVector(right, u).addScaledVector(up, v).addScaledVector(n, 0.9);
+      const h = this.world.raycast(o, back, 2.2);
+      if (!h) continue;
+      const dd = n.dot(h.point) - plane;
+      if (dd > -0.7 && dd < 0.8) set.add(h.box);
+    }
+    return [...set];
   }
 
   // Is there a flat surface facing n under the whole portal centred at c (and nothing sticking
@@ -358,12 +472,13 @@ export class PortalSystem {
         const denom = d.dot(p.normal);
         if (denom >= -1e-6) continue; // must approach from the front
         const t = (p.pos.clone().sub(o)).dot(p.normal) / denom;
-        if (t < 0 || t > remaining || (best && t > best.t + 0.02)) continue;
+        if (t < 0 || t > remaining) continue;
+        if (best && t > best.t + 0.02 && !(best.type === 'world' && p.hosts.includes(best.box) && t < best.t + 0.9)) continue;
         const pt = o.clone().addScaledVector(d, t);
         const l = p.local(pt);
         const ex = l.x / (PORTAL_W / 2), ey = l.y / (PORTAL_H / 2);
         if (ex * ex + ey * ey > 1) continue; // elliptical opening
-        if (!best || t < best.t + 0.02) best = { type: 'portal', t, point: pt, portal: p };
+        if (!best || t < best.t + 0.02 || (best.type === 'world' && p.hosts.includes(best.box) && t < best.t + 0.9)) best = { type: 'portal', t, point: pt, portal: p };
       }
 
       if (opts.characters) {

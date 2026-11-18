@@ -146,6 +146,10 @@ export class World {
   }
 
   addBox(min, max, color) {
+    // Paper-thin boxes (from generated collision) confuse which side a ray hit: give every box
+    // some thickness, growing it downward/backward so its top/front stays where it was.
+    min = [...min]; max = [...max];
+    for (let k = 0; k < 3; k++) if (max[k] - min[k] < 0.06) min[k] = max[k] - 0.06;
     this.boxes.push({ min: new THREE.Vector3(...min), max: new THREE.Vector3(...max), color, id: this.boxes.length });
   }
 
