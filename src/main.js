@@ -981,7 +981,13 @@ buildSettings();
 showScreen('menu');
 frame();
 // The SDK loads in the background; it never changes the current screen.
-initSDK().then(() => { SDK.loadingStart(); SDK.loadingStop(); });
+initSDK().then(() => {
+  SDK.loadingStart(); SDK.loadingStop();
+  // The intro's sound waits for CrazyGames' mute setting (no SDK: nothing to wait for, it already chose).
+  let muted = false;
+  try { muted = !!(window.CrazyGames && window.CrazyGames.SDK.game.settings.muteAudio); } catch (e) { /* no SDK */ }
+  if (window.__bootSound) window.__bootSound(!muted);
+});
 
 // Debug handle (handy for testing in the browser console).
 window.__game = { get match() { return match; }, portals, world, camera, renderer, WEAPONS, get preview() { return previewParts; } };
