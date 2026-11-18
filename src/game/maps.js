@@ -1,5 +1,6 @@
 import COMPOUND_BOXES from './compound-boxes.json';
 import COLOSSEUM_BOXES from './colosseum-boxes.json';
+import WAREHOUSE_BOXES from './warehouse-boxes.json';
 // Map layouts. Every map is built only from boxes: build(m) gets helpers
 // m.box(min, max, color) and m.mirror(min, max, color) (adds the box and its mirror across X).
 // Portal-friendly surfaces need to be at least 1.6 m wide and 2.6 m tall.
@@ -94,44 +95,46 @@ export const MAPS = {
     },
   },
 
+  // "Warehouse" by Lavender Harmony (scaled 0.4: about 24 x 41 m inside, 20 m to the roof), with
+  // shipping containers (Clint Chilcott), crates and a raised walkway. Teams start at the ends.
   warehouse: {
     name: 'Warehouse',
-    hill: { x: 0, y: 0, z: 6, r: 4 },
-    theme: { sky: '#1c1f28', fog: [30, 90], hemi: 1.3, sun: 1.0 },
-    view: { r: 18, h: 6 },
+    model: { file: 'maps/warehouse.glb', scale: 0.4, offset: [0, -0.79, -5.44] },
+    hill: { x: 6.5, y: 0, z: -1.5, r: 4.5 },
+    theme: { sky: '#9db4c8', fog: [50, 140], hemi: 1.5, sun: 1.6 },
+    view: { r: 30, h: 16 },
     spawns: {
-      0: [V(-22, 0, -3), V(-22, 0, 3)],
-      1: [V(22, 0, 3), V(22, 0, -3)],
-      ffa: [V(-22, 0, -3), V(22, 0, 3), V(-6, 0, 16), V(6, 0, -16)],
+      0: [V(-4, 0, -18), V(4, 0, -18)],
+      1: [V(8, 0, 18), V(-7, 0, 18.5)],
+      ffa: [V(-8, 0, -18), V(8, 0, 18), V(-7, 0, 6), V(9, 0, -9)],
     },
     build(m) {
-      const floor = '#6e7380', wall = '#8a8f9c', roof = '#5a5e6a', cont1 = '#c0503c', cont2 = '#3c7cc0', cont3 = '#4ea05a', shelf = '#b08850', metal = '#9aa0ac';
-      const W = 25, D = 19, H = 8;
-      m.box([-W, -1, -D], [W, 0, D], floor);
-      m.box([-W - 1, H, -D - 1], [W + 1, H + 1, D + 1], roof); // ceiling: portals work up here too
-      m.box([-W - 1, 0, -D], [-W, H, D], wall);
-      m.box([W, 0, -D], [W + 1, H, D], wall);
-      m.box([-W - 1, 0, -D - 1], [W + 1, H, -D], wall);
-      m.box([-W - 1, 0, D], [W + 1, H, D + 1], wall);
-      // Containers (2.8 m tall so their sides take portals)
-      m.box([-3, 0, -1.5], [3, 2.8, 1.5], cont1);
-      m.mirror([8, 0, -12], [14, 2.8, -9.5], cont2);
-      m.mirror([8, 0, 9.5], [14, 2.8, 12], cont3);
-      m.mirror([4, 0, 4], [6.5, 2.8, 10], cont1);
-      m.mirror([4, 0, -10], [6.5, 2.8, -4], cont3);
-      // Shelves near the spawns
-      m.mirror([16, 0, -11], [17.2, 4, -4], shelf);
-      m.mirror([16, 0, 4], [17.2, 4, 11], shelf);
-      m.mirror([19, 0, -0.8], [21, 1.3, 0.8], shelf);
-      // Support pillars (floor to ceiling)
-      for (const x of [-10, 10]) for (const z of [-6, 6]) m.box([x - 0.8, 0, z - 0.8], [x + 0.8, H, z + 0.8], metal);
-      // Mezzanine walkways with stairs
-      for (const s of [-1, 1]) {
-        const z0 = s > 0 ? 14 : -18, z1 = s > 0 ? 18 : -14;
-        m.box([-12, 3, z0], [12, 3.5, z1], metal);
-        const rz = s > 0 ? [14, 14.2] : [-14.2, -14];
-        m.box([-12, 3.5, rz[0]], [12, 4.5, rz[1]], metal);
-        for (let i = 0; i < 7; i++) m.mirror([12 + i * 0.6, 0, z0], [12 + (i + 1) * 0.6, 3.5 - i * 0.5, z1], metal);
+      const wood = '#a87a48', metal = '#7f8794';
+      for (const b of WAREHOUSE_BOXES) m.box([b[0], b[1], b[2]], [b[3], b[4], b[5]], null);
+      // Invisible walls around the building (one end is open above head height).
+      m.box([-13.5, 0, -22], [-12.1, 30, 22], null);
+      m.box([12.1, 0, -22], [13.5, 30, 22], null);
+      m.box([-13.5, 0, -22], [13.5, 30, -20.5], null);
+      m.box([-13.5, 0, 20.5], [13.5, 30, 22], null);
+      // Shipping containers (6 m long, 2.5 m tall) in a few colours.
+      const C = (x, y, z, rot, tint) => m.prop('container', [x, y, z], 1.9, rot, { tint });
+      C(0, 0, 0, Math.PI / 2, '#3a7cc0');
+      C(0, 2.43, 0, Math.PI / 2, '#d8603a');            // stacked on top
+      C(-6.5, 0, -7, 0, '#4ea05a');
+      C(6.5, 0, 7, 0, '#c0503c');
+      C(-5.5, 0, 9.8, Math.PI / 2, '#d8a030');
+      C(7, 0, -12.5, Math.PI / 2, '#3a7cc0');
+      // Crates (steps up onto the stack, and cover near the spawns)
+      m.box([3.3, 0, -0.9], [4.6, 1.2, 0.4], wood);
+      m.box([-4.6, 0, -0.4], [-3.3, 1.2, 0.9], wood);
+      m.box([-1.2, 0, -15.1], [1.2, 1.2, -13.9], wood);   // (the other end has the loading platform)
+      for (const sx of [-1, 1]) m.box([sx * 9.5 - 0.7, 0, -0.7], [sx * 9.5 + 0.7, 1.4, 0.7], wood);
+      // Raised walkway along the left wall with stairs at both ends.
+      m.box([-12, 3.6, -9], [-9.2, 4, 9], metal);
+      m.box([-9.2, 4, -9], [-9.05, 5, 9], metal);                    // railing
+      for (let i = 0; i < 7; i++) {
+        m.box([-12, 0, 9 + i * 0.7], [-9.2, 3.6 - i * 0.5, 9 + (i + 1) * 0.7], metal);
+        m.box([-12, 0, -9 - (i + 1) * 0.7], [-9.2, 3.6 - i * 0.5, -9 - i * 0.7], metal);
       }
     },
   },

@@ -75,6 +75,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - Animations from Mixamo.
 - Desert Compound map: "fps tps Map" by theking1322.
 - Hats: Top hat, Hard hat and Baseball cap by Poly by Google; Beanie and Headphones by J-Toastie; Crown by Poly by Google.
+- Warehouse map: "Warehouse" by Lavender Harmony.
 - Colosseum map: "Colosseum" by CreativeTrio.
 - Sky Islands props: Small Platformer Kit (Quaternius). Shipping Container by Clint Chilcott.
 - Face items: Gas mask by Marisha, Pixel Sunglasses by TRASH - TANUKI, Glasses by iPoly3D, Skull by Quaternius.

@@ -99,6 +99,10 @@ export class World {
         const outer = new THREE.Group();
         outer.position.set(...pr.pos); outer.rotation.y = pr.rot;
         const m = tpl.clone(true);
+        if (pr.tint) m.traverse(o => {
+          // Repaint the coloured parts (keep dark details like corner fittings).
+          if (o.isMesh && o.material.color.getHSL({}).s > 0.3) { o.material = o.material.clone(); o.material.color.set(pr.tint); }
+        });
         m.scale.setScalar(pr.scale);
         m.position.set(-pr.off[0] * pr.scale, -pr.off[1] * pr.scale, -pr.off[2] * pr.scale);
         outer.add(m);
@@ -127,7 +131,7 @@ export class World {
       const xs = pts.map(p => p[0] + pos[0]), zs = pts.map(p => p[1] + pos[2]);
       this.addBox([Math.min(...xs), (bx[1] - off[1]) * scale + pos[1], Math.min(...zs)], [Math.max(...xs), (bx[4] - off[1]) * scale + pos[1], Math.max(...zs)], null);
     }
-    this.props.push({ id, pos, scale, rot, off });
+    this.props.push({ id, pos, scale, rot, off, tint: opts.tint });
   }
 
   addBox(min, max, color) {
