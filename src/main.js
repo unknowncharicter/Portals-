@@ -348,7 +348,7 @@ function buildLobby() {
 
   // Modes: icon cards.
   if (!MODES[save.mode] || MODES[save.mode].hidden) save.mode = '1v1';
-  const MODE_ICONS = { '1v1': '⚔️', '2v2': '👥', ffa: '💥', koth: '👑', gungame: '🔫', portalonly: '🌀' };
+  const MODE_ICONS = { '1v1': '⚔️', '2v2': '👥', ffa: '💥', koth: '👑', ctf: '🚩', gungame: '🔫', portalonly: '🌀' };
   const modes = $('modes');
   modes.innerHTML = '';
   for (const [id, m] of Object.entries(MODES)) {
@@ -737,7 +737,7 @@ async function hostStart() {
 // ---------- Quick match ----------
 // Public rooms have fixed codes per mode (e.g. QF1..QF8 for free for all). Try to join each in
 // turn; the first free code becomes your own public room, and other players drop into it.
-const QUICK_MODES = { ffa: 'F', '2v2': 'T', koth: 'K', gungame: 'G' };
+const QUICK_MODES = { ffa: 'F', '2v2': 'T', koth: 'K', ctf: 'C', gungame: 'G' };
 const QUICK_ROOMS = 8;
 let autoStartT = null, searching = false;
 

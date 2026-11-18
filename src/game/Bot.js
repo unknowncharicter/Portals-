@@ -168,6 +168,13 @@ export class BotBrain {
     const side = new THREE.Vector3(-to.z, 0, to.x).multiplyScalar(this.strafeSign);
     const approach = dist > 18 ? 0.7 : dist < 8 ? -0.6 : 0;
     this.wish.copy(side).addScaledVector(to, approach).normalize();
+    // Capture the Flag: a carrier keeps running home while shooting; attackers keep pushing.
+    if (m.mode.ctf && m.flags) {
+      const g = this.ctfGoal();
+      const carrying = m.flags.some(f => f.carrier === c);
+      const d = Math.hypot(g.x - c.pos.x, g.z - c.pos.z);
+      if (carrying || d > 6) this.wish.multiplyScalar(carrying ? 0.25 : 0.6).add(_v.set(g.x - c.pos.x, 0, g.z - c.pos.z).normalize()).normalize();
+    }
     // King of the Hill: fight from inside the zone. Outside it, push in while strafing;
     // inside, drift back toward the middle instead of wandering out.
     if (m.mode.koth && m.hill) {
@@ -190,7 +197,9 @@ export class BotBrain {
     // Bots don't know where you are: go to where they last saw/heard you,
     // otherwise search the area you are probably in (a rough guess, refreshed now and then).
     let goal;
-    if (m.mode.koth && m.hill) {
+    if (m.mode.ctf && m.flags) {
+      goal = this.ctfGoal();
+    } else if (m.mode.koth && m.hill) {
       // King of the Hill: head for the zone.
       this.hillT = (this.hillT || 0) - dt;
       if (!this.hillGoal || this.hillT <= 0) this.pickHillGoal();
@@ -397,6 +406,28 @@ export class BotBrain {
   }
 
   // Steer around obstacles and edges in front of us.
+  // Capture the Flag: where to go. Each team's first bot attacks, the second defends.
+  ctfGoal() {
+    const m = this.m, c = this.c, F = m.flags;
+    const mine = F[c.team], theirs = F[1 - c.team];
+    const at = (v) => new THREE.Vector3(v.x, v.y + 0.9, v.z);
+    if (theirs.carrier === c) return at(mine.base);                      // bring it home
+    if (mine.carrier) return mine.carrier.pos.clone();                   // chase the thief
+    if (mine.dropped) return at(mine.pos);                               // return our flag
+    if (this.role === undefined) {
+      const mates = m.bots.filter(b => b.c.team === c.team);
+      this.role = mates.indexOf(this) === 0 ? 'attack' : 'defend';
+    }
+    if (this.role === 'attack') return theirs.carrier ? theirs.carrier.pos.clone() : at(theirs.pos);
+    // Defend: hang around our base.
+    if (!this.guardSpot || (this.guardT = (this.guardT || 0) - 0.016) <= 0) {
+      const a = Math.random() * Math.PI * 2;
+      this.guardSpot = at(mine.base).add(new THREE.Vector3(Math.cos(a) * 4, 0, Math.sin(a) * 4));
+      this.guardT = 4;
+    }
+    return this.guardSpot;
+  }
+
   // A random reachable spot inside the King of the Hill zone (standing on the floor, not in a box).
   pickHillGoal() {
     const h = this.m.hill, w = this.m.world;

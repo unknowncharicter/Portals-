@@ -11,7 +11,7 @@ import * as THREE from 'three';
 //  - The host decides rounds, scores and the end of the match.
 
 const SEND_RATE = 1 / 20;
-const HOST_ONLY = ['round', 'finish', 'score', 'takeover'];
+const HOST_ONLY = ['round', 'finish', 'score', 'takeover', 'ctf'];
 const r2 = (v) => Math.round(v * 100) / 100;
 const r3 = (v) => Math.round(v * 1000) / 1000;
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);

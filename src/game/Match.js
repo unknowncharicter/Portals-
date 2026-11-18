@@ -10,6 +10,7 @@ import { Tutorial } from './Tutorial.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
 import { NetSync, packSegs, unpackSegs, v3, arr } from '../net/NetSync.js';
+import { mapModelLoaded } from './Models.js';
 
 export const DIFFICULTIES = {
   easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun', 'burst'] },
@@ -52,6 +53,8 @@ export const MODES = {
     desc: '2v2 with respawns. Stand in the glowing zone to score. First team to 100 wins.' },
   'gungame': { label: 'Gun Game', ffa: true, count: 4, respawn: true, gungame: true, time: 300,
     desc: 'Free for all with respawns. Every kill gives you the next gun. Get a kill with the last one to win.' },
+  'ctf': { label: 'Capture the Flag', teams: [[0, 1], [2, 3]], respawn: true, ctf: true, target: 3, time: 300,
+    desc: '2v2 with respawns. Grab the enemy flag and bring it to yours. First to 3 captures wins.' },
   'tutorial': { label: 'Tutorial', teams: [[0], [1]], tutorial: true, hidden: true },
   'portalonly': { label: 'Portal Only', teams: [[0], [1]], portalOnly: true,
     desc: 'Damage only counts if the shot went through a portal. Bounce your shots! First to 3 rounds.' },
@@ -230,6 +233,7 @@ export class Match {
     this.player.setBodyLayer(1); // visible only through portals, not to the first-person camera
     if (this.mode.gungame) for (const c of this.chars) { c.gunLevel = 0; this.setGunGameWeapon(c); }
     if (this.mode.koth) this.setupHill();
+    if (this.mode.ctf) this.setupFlags();
     this.viewmodel.setSkin(this.player.skin, this.player.portalColor);
     for (const c of this.chars) this.wins[c.team] = 0;
   }
@@ -328,6 +332,117 @@ export class Match {
     c.slot = 0; c.gunId = null; c.updateGun();
   }
 
+  // ---------- Capture the Flag ----------
+
+  setupFlags() {
+    const tpl = mapModelLoaded('props/flag.glb');
+    this.flags = [0, 1].map(team => {
+      const sp = this.world.spawns[team];
+      const base = sp.reduce((a, v) => a.add(v), new THREE.Vector3()).multiplyScalar(1 / sp.length);
+      const color = TEAM_COLORS[team];
+      const g = new THREE.Group();
+      if (tpl) {
+        const m = tpl.clone(true);
+        m.traverse(o => { if (o.isMesh && o.material.color.getHSL({}).s > 0.3) { o.material = o.material.clone(); o.material.color.set(color); } });
+        m.scale.setScalar(1.9);
+        g.add(m);
+      } else {
+        const pole = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2.6, 0.08), new THREE.MeshLambertMaterial({ color: '#888' }));
+        pole.position.y = 1.3; g.add(pole);
+        const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.55, 0.04), new THREE.MeshLambertMaterial({ color }));
+        cloth.position.set(0.48, 2.25, 0); g.add(cloth);
+      }
+      // A glowing ring marks the base.
+      const ring = new THREE.Mesh(new THREE.RingGeometry(1.5, 1.75, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.7, depthWrite: false }));
+      ring.position.copy(base).setY(base.y + 0.04);
+      this.scene.add(g, ring);
+      return { team, base, pos: base.clone(), carrier: null, dropped: false, returnT: 0, mesh: g, ring };
+    });
+    this.placeFlags();
+  }
+
+  placeFlags() {
+    for (const f of this.flags) {
+      if (f.carrier) {
+        // Carried: on the carrier's back, a bit smaller.
+        f.pos.copy(f.carrier.pos).setY(f.carrier.pos.y - f.carrier.halfHeight);
+        f.mesh.position.copy(f.pos).add(new THREE.Vector3(Math.sin(f.carrier.yaw) * 0.35, 0.6, Math.cos(f.carrier.yaw) * 0.35));
+        f.mesh.scale.setScalar(0.7);
+        f.mesh.rotation.y = f.carrier.yaw + Math.PI / 2;
+        f.mesh.visible = f.carrier !== this.player || this.camera.layers.isEnabled(1);
+      } else {
+        f.mesh.position.copy(f.pos);
+        f.mesh.scale.setScalar(1);
+        f.mesh.visible = true;
+        f.mesh.rotation.y = Math.PI / 2; // cloth side-on to the map's long axis: readable from the middle
+      }
+    }
+  }
+
+  returnFlag(f) {
+    f.carrier = null; f.dropped = false; f.pos.copy(f.base);
+  }
+
+  updateFlags(dt) {
+    const p = this.player, name = (t) => t === p.team ? 'Your' : 'Enemy';
+    if (this.isAuthority) {
+      for (const f of this.flags) {
+        if (f.carrier && (!f.carrier.alive || f.carrier.gone)) {
+          // Carrier went down: the flag drops where they were (and goes home by itself later).
+          f.pos.copy(f.carrier.pos).setY(Math.max(this.world.killY + 2, f.carrier.pos.y - f.carrier.halfHeight));
+          if (f.carrier.pos.y < this.world.killY + 1) this.returnFlag(f); else { f.dropped = true; f.returnT = 12; }
+          f.carrier = null;
+          this.hud.toast(`${name(f.team)} flag dropped`, '#ffd27a');
+        }
+        if (f.dropped && (f.returnT -= dt) <= 0) { this.returnFlag(f); this.hud.toast(`${name(f.team)} flag returned`, '#9cf'); }
+        if (f.carrier) continue;
+        for (const c of this.chars) {
+          if (!c.alive || c.gone || c.pos.distanceTo(f.pos.clone().setY(f.pos.y + c.halfHeight)) > 1.7) continue;
+          if (c.team !== f.team && !this.flags.some(o => o.carrier === c)) {
+            f.carrier = c; f.dropped = false;
+            this.hud.toast(c.team === p.team ? `${c === p ? 'You have' : c.name + ' has'} the enemy flag!` : `${c.name} took your flag!`, c.team === p.team ? '#7f7' : '#f77');
+            (c.team === p.team ? Sfx.portalPlace : Sfx.portalDeny)();
+            break;
+          }
+          if (c.team === f.team && f.dropped) { this.returnFlag(f); this.hud.toast(`${name(f.team)} flag returned`, '#9cf'); break; }
+        }
+      }
+      // Capture: a carrier reaches their own base while their own flag is home.
+      for (const f of this.flags) {
+        const c = f.carrier;
+        if (!c) continue;
+        const own = this.flags[c.team];
+        if (!own.carrier && !own.dropped && Math.hypot(c.pos.x - own.base.x, c.pos.z - own.base.z) < 2.2) {
+          this.returnFlag(f);
+          this.scores[c.team] = (this.scores[c.team] || 0) + 1;
+          this.hud.centerText(c.team === p.team ? 'FLAG CAPTURED!' : 'ENEMY CAPTURED YOUR FLAG', 1800, c.team === p.team ? '#7f7' : '#f77');
+          (c.team === p.team ? Sfx.levelUp : Sfx.lose)();
+          if (c === p) this.earned.captures = (this.earned.captures || 0) + 1;
+          if (this.scores[c.team] >= this.mode.target) { this.placeFlags(); return this.finish(c.team); }
+        }
+      }
+      if (this.net && (this.flagSendT = (this.flagSendT || 0) - dt) <= 0) {
+        this.flagSendT = 0.15;
+        this.net.send({ e: 'ctf', scores: this.scores, flags: this.flags.map(f => ({ c: f.carrier ? f.carrier.netId : null, p: arr(f.pos), d: f.dropped })) });
+      }
+    }
+    for (const f of this.flags) f.ring.material.opacity = f.carrier || f.dropped ? 0.25 : 0.7;
+    const mine = this.flags[p.team];
+    this.flagText = mine.carrier ? 'TAKEN!' : mine.dropped ? 'dropped' : 'safe';
+    this.placeFlags();
+  }
+
+  applyFlags(msg) {
+    this.scores = msg.scores;
+    msg.flags.forEach((s, i) => {
+      const f = this.flags[i];
+      const was = f.carrier;
+      f.carrier = s.c === null ? null : this.byNet[s.c] || null;
+      f.pos.set(...s.p); f.dropped = s.d;
+      if (f.carrier && f.carrier !== was) this.hud.toast(f.carrier.team === this.player.team ? `${f.carrier === this.player ? 'You have' : f.carrier.name + ' has'} the enemy flag!` : `${f.carrier.name} took your flag!`, '#ffd27a');
+    });
+  }
+
   setupHill() {
     const h = this.world.map.hill || { x: 0, y: 0, z: 0, r: 4 };
     this.hill = h;
@@ -371,6 +486,7 @@ export class Match {
       }
       this.hillText = teams.size > 1 ? 'CONTESTED' : holder === null ? 'EMPTY' : holder === p.team ? 'YOURS' : 'ENEMY';
     }
+    if (this.mode.ctf && this.flags) { this.updateFlags(dt); if (this.state !== 'fight') return; }
     this.updateScore();
     if (this.roundT <= 0 && this.isAuthority) {
       // Time up: best score wins.
@@ -387,7 +503,10 @@ export class Match {
     const teamKills = (t) => this.chars.filter(c => c.team === t).reduce((n, c) => n + c.kills, 0);
     const side = (label, big, small, color, cls) => `<div class="sb-side ${cls}" style="--c:${color}"><span class="sb-name">${label}</span><b>${big}</b><small>${small}</small></div>`;
     let html;
-    if (this.mode.koth) {
+    if (this.mode.ctf) {
+      const my = p.team, other = 1 - my, s = this.scores || {};
+      html = `<div class="sb-row">${side('YOU', s[my] || 0, `${teamKills(my)} kills`, TEAM_COLORS[my], 'l')}<div class="sb-mid">CAPTURE THE FLAG<small>first to ${this.mode.target} · your flag: ${this.flagText || 'safe'}</small></div>${side('ENEMY', s[other] || 0, `${teamKills(other)} kills`, TEAM_COLORS[other], 'r')}</div>${kd}`;
+    } else if (this.mode.koth) {
       const my = p.team, other = 1 - my, s = this.scores || {};
       html = `<div class="sb-row">${side('YOU', Math.floor(s[my] || 0), `${teamKills(my)} kills`, TEAM_COLORS[my], 'l')}<div class="sb-mid">KING OF THE HILL<small>first to ${this.mode.target} · hill: ${this.hillText || 'EMPTY'}</small></div>${side('ENEMY', Math.floor(s[other] || 0), `${teamKills(other)} kills`, TEAM_COLORS[other], 'r')}</div>${kd}`;
     } else if (this.mode.gungame || this.mode.ffa) {
@@ -866,7 +985,8 @@ export class Match {
     const o = this.outroCam, cam = this.camera;
     const sway = Math.sin((4.5 - this.outroT) * 0.6) * 0.35;
     const want = o.head.clone().addScaledVector(o.fwd, o.dist).addScaledVector(o.right, sway * 1.5).add(new THREE.Vector3(0, 0.3, 0));
-    cam.position.lerp(want, Math.min(1, dt * 3));
+    if (!o.placed) { cam.position.copy(want); o.placed = true; } // start in place (no swoop from wherever we were)
+    else cam.position.lerp(want, Math.min(1, dt * 3));
     cam.lookAt(o.head);
     cam.updateMatrixWorld();
     // Done (or skipped with a click after a moment).
@@ -978,6 +1098,7 @@ export class Match {
         break;
       case 'finish': this.finish(msg.winner ?? undefined); break;
       case 'score': this.scores = msg.scores; break;
+      case 'ctf': if (this.flags) this.applyFlags(msg); break;
       case 'takeover': this.replaceChar(msg.entry); break;
     }
   }
@@ -1037,6 +1158,7 @@ export class Match {
     if (this.net) this.net.dispose();
     if (this.tutorial) this.tutorial.dispose();
     if (this.hillMesh) this.scene.remove(this.hillMesh);
+    if (this.flags) for (const f of this.flags) this.scene.remove(f.mesh, f.ring);
     this.endKillcam();
     this.camera.layers.disable(1);
     document.getElementById('hud').classList.remove('outro');

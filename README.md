@@ -27,6 +27,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - **Modes:**
   - **1v1, 2v2, Free for all:** last one standing wins the round; first to 3 rounds.
   - **King of the Hill:** 2v2 with respawns. Hold the zone; first team to 100 points wins.
+  - **Capture the Flag:** 2v2 with respawns. Grab the enemy flag and bring it to your own; first to 3 captures wins. Dropped flags go home after 12 s or when a teammate touches them.
   - **Gun Game:** free for all with respawns. Every kill gives you the next gun.
   - **Portal Only:** damage only counts if the shot went through a portal.
   - **Tutorial:** an 11-step "How to play" lesson.
