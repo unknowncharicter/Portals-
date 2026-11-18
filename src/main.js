@@ -964,6 +964,8 @@ function frame() {
 }
 
 const models = loadModels();
+// Hide the loading screen once characters and guns are ready (or failed: the menu still works).
+models.finally(() => { if (window.__bootDone) window.__bootDone(); });
 models.then(() => {
   makeGunThumbs(gunModel, [...PRIMARIES, ...SECONDARIES]);
   if (state === 'lobby') { rebuildPreview(); buildLobby(); }
