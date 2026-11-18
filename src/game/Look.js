@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AnimatedBody, hasCharacterModel } from './CharacterModel.js';
+import { hatModel } from './Models.js';
 
 // Character customization: colours, hats and the blocky body model.
 export const SHIRTS = ['#e8e8f0', '#2b2d3a', '#d84a4a', '#3a6fd8', '#3ab060', '#e0a030', '#9a5ad8', '#e070b0', '#30c0c0', '#7a5030'];
@@ -10,7 +11,7 @@ export const HATS = [
   { id: 'none',       name: 'None',       price: 0 },
   { id: 'cap',        name: 'Cap',        price: 0 },
   { id: 'beanie',     name: 'Beanie',     price: 0 },
-  { id: 'helmet',     name: 'Helmet',     price: 80 },
+  { id: 'helmet',     name: 'Hard hat',     price: 80 },
   { id: 'headphones', name: 'Headphones', price: 150 },
   { id: 'tophat',     name: 'Top hat',    price: 250 },
   { id: 'horns',      name: 'Horns',      price: 300 },
@@ -276,6 +277,9 @@ function addBack(look, box, mat, visor) {
 }
 
 function addHat(g, look, box, mat, visor) {
+  // 3D hat models where we have one; the rest are built from boxes.
+  const model = hatModel(look.hat, look);
+  if (model) { g.add(model); return; }
   const top = 0.93;
   switch (look.hat) {
     case 'cap': {

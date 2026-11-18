@@ -34,6 +34,18 @@ const GUNS = {
   revolver: { file: 'revolver.glb', length: 0.3,  hold: 0.62 },
 };
 
+// Hat models (in "blocky head" units: head centre y 0.72, top 0.93, about 0.44 wide).
+// width: size across (x) after turning; bottom/top: where the model's lowest/highest point goes.
+// tint: recolour with the look's shirt or pants colour.
+const HATS = {
+  cap:        { file: 'hats/cap.glb',        rotY: Math.PI,     width: 0.5,  bottom: 0.68, tint: 'shirt' },
+  beanie:     { file: 'hats/beanie.glb',     rotY: 0,           width: 0.5,  bottom: 0.64, tint: 'pants' },
+  helmet:     { file: 'hats/hardhat.glb',    rotY: 0,           width: 0.68, bottom: 0.5 },
+  headphones: { file: 'hats/headphones.glb', rotY: Math.PI / 2, width: 0.56, top: 0.95 },
+  tophat:     { file: 'hats/tophat.glb',     rotY: 0,           width: 0.62, bottom: 0.76 },
+};
+const hatTemplates = {};
+
 const templates = {};
 let loading = null;
 
@@ -56,7 +68,11 @@ export function loadModels() {
       }));
     })
     .catch(e => console.warn('Could not load character model (using blocky bodies)', e));
-  loading = Promise.all([character, ...Object.entries(GUNS).map(async ([id, cfg]) => {
+  const hats = Object.entries(HATS).map(async ([id, cfg]) => {
+    try { hatTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
+    catch (e) { console.warn('Could not load hat', id, e); }
+  });
+  loading = Promise.all([character, ...hats, ...Object.entries(GUNS).map(async ([id, cfg]) => {
     try {
       const gltf = await loader.loadAsync(`models/guns/${cfg.file}`);
       templates[id] = normalize(gltf.scene, cfg);
@@ -68,6 +84,42 @@ export function loadModels() {
   templates.crossbow = makeCrossbow();
   templates.rocket = makeRocket();
   return loading;
+}
+
+function fitHat(scene, cfg) {
+  const inner = new THREE.Group();
+  inner.add(scene);
+  inner.rotation.y = cfg.rotY;
+  const root = new THREE.Group();
+  root.add(inner);
+  root.updateMatrixWorld(true);
+  let box = new THREE.Box3().setFromObject(root);
+  inner.scale.setScalar(cfg.width / (box.max.x - box.min.x));
+  root.updateMatrixWorld(true);
+  box = new THREE.Box3().setFromObject(root);
+  const c = box.getCenter(new THREE.Vector3());
+  inner.position.set(-c.x, cfg.top !== undefined ? cfg.top - box.max.y : cfg.bottom - box.min.y, -c.z);
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    o.castShadow = false;
+    if (!o.geometry.attributes.normal) o.geometry.computeVertexNormals(); // some files have none (renders black)
+    const old = o.material;
+    o.material = new THREE.MeshLambertMaterial({ color: old.color });
+  });
+  return root;
+}
+
+// A copy of a hat model (null if there is none for that hat), tinted for the look.
+export function hatModel(id, look) {
+  const t = hatTemplates[id];
+  if (!t) return null;
+  const m = t.root.clone(true);
+  if (t.cfg.tint && look && look[t.cfg.tint]) {
+    const col = new THREE.Color(look[t.cfg.tint]);
+    if (t.cfg.tint === 'shirt') col.multiplyScalar(0.75);
+    m.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color.copy(col); } });
+  }
+  return m;
 }
 
 // Map models are loaded on demand (only when that map is picked) and kept afterwards.
