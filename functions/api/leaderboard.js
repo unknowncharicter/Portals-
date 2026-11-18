@@ -41,13 +41,13 @@ async function load(env) {
 export async function onRequestOptions() { return new Response(null, { headers: CORS }); }
 
 export async function onRequestGet({ env }) {
-  if (!env.LEADERBOARD) return json({ error: 'not-configured' }, 503);
+  if (!env.LEADERBOARD) return json({ configured: false });   // 200 so browsers don't log an error
   const top = await load(env);
   return json({ rp: top.rp.map(({ id, ...e }) => ({ ...e, tag: tag(id) })), kills: top.kills.map(({ id, ...e }) => ({ ...e, tag: tag(id) })) });
 }
 
 export async function onRequestPost({ request, env }) {
-  if (!env.LEADERBOARD) return json({ error: 'not-configured' }, 503);
+  if (!env.LEADERBOARD) return json({ configured: false });
   let body;
   try { body = await request.json(); } catch { return json({ error: 'bad-request' }, 400); }
   const entry = clean(body || {});
