@@ -32,7 +32,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
   - **Tutorial:** an 11-step "How to play" lesson.
 - **Quick match:** Online tab → pick a mode → Quick match. Joins a public room with other players, or opens one (you play bots until someone joins; joiners take over a bot). Public rooms roll into the next match by themselves.
 - **Online:** Online tab → Create room, send the 5-letter code, friends Join. Up to 4 players, bots fill empty spots. Works in every mode except the tutorial. Uses free PeerJS (WebRTC); the host's browser runs the bots and the rounds.
-- **Maps:** Arena, Sky Islands, Warehouse, Village, Sunset Spires, Canyon, Desert Compound, or Random.
+- **Maps:** Arena, Sky Islands, Warehouse, Village, Sunset Spires, Canyon, Desert Compound, Colosseum, or Random.
 - **Weapons:**
   - Primary: Assault Rifle, SMG, Shotgun, Sniper (scope), Burst Rifle, Crossbow, Rocket Launcher (rocket jumps!).
   - Secondary: Pistol, Revolver.
@@ -75,6 +75,7 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - Animations from Mixamo.
 - Desert Compound map: "fps tps Map" by theking1322.
 - Hats: Top hat, Hard hat and Baseball cap by Poly by Google; Beanie and Headphones by J-Toastie; Crown by Poly by Google.
+- Colosseum map: "Colosseum" by CreativeTrio.
 - Sky Islands props: Small Platformer Kit (Quaternius). Shipping Container by Clint Chilcott.
 - Face items: Gas mask by Marisha, Pixel Sunglasses by TRASH - TANUKI, Glasses by iPoly3D, Skull by Quaternius.
 - Extra characters from the Ultimate Modular Men pack by Quaternius (CC0).

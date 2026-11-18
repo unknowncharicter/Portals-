@@ -84,6 +84,7 @@ export class World {
     const show = (model) => {
       if (!model || this.mapId !== id || model.parent === this.group) return;
       model.scale.setScalar(map.model.scale);
+      if (map.model.offset) model.position.set(...map.model.offset); else model.position.set(0, 0, 0);
       model.userData.mapModel = true;
       this.group.add(model);
     };

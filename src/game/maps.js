@@ -1,4 +1,5 @@
 import COMPOUND_BOXES from './compound-boxes.json';
+import COLOSSEUM_BOXES from './colosseum-boxes.json';
 // Map layouts. Every map is built only from boxes: build(m) gets helpers
 // m.box(min, max, color) and m.mirror(min, max, color) (adds the box and its mirror across X).
 // Portal-friendly surfaces need to be at least 1.6 m wide and 2.6 m tall.
@@ -281,6 +282,49 @@ MAPS.compound = {
     m.box([25.1, 0, -18], [26.5, 30, 18], null);
     m.box([-26.5, 0, -18], [26.5, 30, -16.75], null);
     m.box([-26.5, 0, 16.66], [26.5, 30, 18], null);
+  },
+};
+
+// Colosseum: "Colosseum" by CreativeTrio, scaled 25x (floor 46 m across, 7 m arena wall).
+// Collision is a height map of the model (colosseum-boxes.json). Stairs at both ends lead up
+// over the arena wall into the stands; pillars, a low centre wall and rocks give cover.
+MAPS.colosseum = {
+  name: 'Colosseum',
+  model: { file: 'maps/colosseum.glb', scale: 25, offset: [0, 7.47, 0] },
+  theme: { sky: '#bcd8f0', fog: [80, 220], hemi: 1.6, sun: 2.1 },
+  view: { r: 50, h: 26 },
+  hill: { x: 0, y: 0, z: 0, r: 5 },
+  spawns: {
+    0: [V(-18, 0, -4), V(-18, 0, 4)],
+    1: [V(18, 0, 4), V(18, 0, -4)],
+    ffa: [V(-18, 0, -4), V(18, 0, 4), V(-4, 0, 18), V(4, 0, -18)],
+  },
+  build(m) {
+    const stone = '#cdbb98', dark = '#a8956f';
+    for (const b of COLOSSEUM_BOXES) m.box([b[0], b[1], b[2]], [b[3], b[4], b[5]], null);
+    // Stairs up over the arena wall (north and south)
+    for (const sz of [-1, 1]) {
+      for (let i = 0; i < 14; i++) {
+        const z0 = sz * (9 + i * 1.05), z1 = sz * (9 + (i + 1) * 1.05);
+        m.box([-1.6, 0, Math.min(z0, z1)], [1.6, 0.53 * (i + 1), Math.max(z0, z1)], i % 2 ? stone : dark);
+      }
+      m.box([-1.6, 0, sz > 0 ? 23.7 : -25.3], [1.6, 7.42, sz > 0 ? 25.3 : -23.7], stone);   // landing on the wall
+    }
+    // Pillars (good portal walls) and a low centre wall
+    for (const x of [-9, 9]) for (const z of [-7, 7]) m.box([x - 1, 0, z - 1], [x + 1, 5, z + 1], stone);
+    m.box([-6, 0, -0.8], [-1.5, 1.4, 0.8], dark);
+    m.box([1.5, 0, -0.8], [6, 1.4, 0.8], dark);
+    // Rocks for cover near the team ends
+    for (const sx of [-1, 1]) {
+      m.prop('rock_large', [sx * 14, 0, -10], 4, 0);
+      m.prop('rock_large', [sx * 14, 0, 10], 4, Math.PI);
+      m.prop('rock_small', [sx * 12, 0, 0], 3, Math.PI / 2);
+    }
+    // Invisible fence around the top of the outer wall, so nobody falls out.
+    for (let i = 0; i < 96; i++) {
+      const a = (i / 96) * Math.PI * 2, x = Math.cos(a) * 44.5, z = Math.sin(a) * 47.5;
+      m.box([x - 1.6, 8, z - 1.6], [x + 1.6, 60, z + 1.6], null);
+    }
   },
 };
 
