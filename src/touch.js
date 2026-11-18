@@ -21,6 +21,7 @@ const BUTTONS = [
   { id: 'swap',   label: '⇄',      cls: 'small' },
   { id: 'heal',   label: '+',      cls: 'small heal' },
   { id: 'scope',  label: '◎',      cls: 'small' },
+  { id: 'emote',  label: '💃',     cls: 'small' },
   { id: 'pause',  label: 'II',     cls: 'small pause' },
 ];
 
@@ -80,6 +81,7 @@ export class TouchControls {
         case 'cancel': inp.tap('KeyQ'); break;
         case 'reload': inp.tap('KeyR'); break;
         case 'nade': inp.tap('KeyG'); break;
+        case 'emote': inp.tap('KeyB'); break;
         case 'heal': inp.tap('KeyF'); break;
         case 'swap': inp.wheel += 1; break;
         case 'scope': inp.touchAim = !inp.touchAim; e.target.classList.toggle('lit', inp.touchAim); break;

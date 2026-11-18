@@ -41,7 +41,7 @@ export class NetSync {
 
   // ---------- Movement ----------
   pack(c) {
-    const flags = (c.alive ? 1 : 0) | (c.grounded ? 2 : 0) | (c.crouched ? 4 : 0) | (c.slideT > 0 ? 8 : 0) | (c.aiming ? 16 : 0) | (c.climbT > 0 ? 32 : 0);
+    const flags = (c.alive ? 1 : 0) | (c.grounded ? 2 : 0) | (c.crouched ? 4 : 0) | (c.slideT > 0 ? 8 : 0) | (c.aiming ? 16 : 0) | (c.climbT > 0 ? 32 : 0) | (c.emote && c.emote.live ? 64 : 0);
     return [c.netId, r3(c.pos.x), r3(c.pos.y), r3(c.pos.z), r2(c.vel.x), r2(c.vel.y), r2(c.vel.z), r3(c.yaw), r3(c.pitch), flags, Math.round(c.hp), c.slot, c.gunLevel || 0, c.life || 0];
   }
 
@@ -93,6 +93,7 @@ export class NetSync {
     c.slideT = flags & 8 ? 0.1 : 0;
     c.aiming = !!(flags & 16);
     c.climbT = flags & 32 ? 0.1 : 0;
+    if (flags & 64) { if (!c.emote) c.startEmote(); } else if (c.emote && c.emote.live) c.stopEmote();
     c.hp = hp;
     if (gunLevel !== (c.gunLevel || 0) && this.m.mode.gungame) { c.gunLevel = gunLevel; this.m.setGunGameWeapon(c); }
     if (slot !== c.slot && c.weapons[slot]) { c.slot = slot; c.updateGun(); }

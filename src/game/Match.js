@@ -696,6 +696,10 @@ export class Match {
     }
     this.hud.kill(killer, victim, self, info);
     if (!self) killer.kills++;
+    if (victim.emote && victim.emote.live) victim.stopEmote();
+    // Bots sometimes show off after a kill.
+    const kb = !self && this.bots.find(b => b.c === killer);
+    if (kb && Math.random() < 0.25) kb.tauntT = 2 + Math.random() * 2;
     victim.deaths = (victim.deaths || 0) + 1;
     if (killer === this.player && !self) {
       this.earned.kills++;
@@ -778,6 +782,18 @@ export class Match {
     p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens, -1.55, 1.55);
 
     const wish = new THREE.Vector3();
+    // B: dance (your chosen emote). Moving, jumping or any action stops it.
+    if (canAct && p.emote && p.emote.live) {
+      const busy = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'ShiftRight'].some(k => inp.down(k))
+        || inp.moveX || inp.moveY || inp.mouseDown || inp.rightDown || inp.touchAim || inp.wheel
+        || ['KeyB', 'KeyE', 'KeyG', 'KeyR', 'KeyF', 'Digit1', 'Digit2'].some(k => inp.hit(k)) || !p.grounded;
+      if (!busy) return wish;
+      p.stopEmote();
+      if (inp.hit('KeyB')) return wish;
+    } else if (canAct && inp.hit('KeyB') && p.grounded && !this.tutorial) {
+      p.startEmote(); this.ghostMode = false; this.ghost.hide(); this.setScope(false); this.ads = false;
+      return wish;
+    }
     if (canAct) {
       const fwd = new THREE.Vector3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw));
       const right = new THREE.Vector3(Math.cos(p.yaw), 0, -Math.sin(p.yaw));
@@ -1022,6 +1038,25 @@ export class Match {
 
   updateCamera(dt = 0) {
     const cam = this.camera, p = this.player;
+    const dancing = p.alive && p.emote && p.emote.live;
+    if (dancing !== !!this.danceCam) {
+      this.danceCam = dancing;
+      if (dancing) this.camera.layers.enable(1); else this.camera.layers.disable(1);
+      document.getElementById('hud').classList.toggle('dancing', !!dancing);
+    }
+    if (dancing) {
+      // Third person, in front of you, so you can watch yourself dance. Mouse orbits.
+      const head = new THREE.Vector3(p.pos.x, p.pos.y - p.halfHeight + 1.2, p.pos.z);
+      const yaw = p.yaw;
+      const dir = new THREE.Vector3(-Math.sin(yaw), 0.35, -Math.cos(yaw)).normalize();
+      const hit = this.world.raycast(head, dir, 3.4);
+      const dist = hit ? Math.max(0.8, hit.t - 0.3) : 3.4;
+      cam.position.copy(head).addScaledVector(dir, dist);
+      cam.lookAt(head);
+      if (cam.fov !== this.baseFov) { cam.fov = this.baseFov; cam.updateProjectionMatrix(); }
+      cam.updateMatrixWorld();
+      return;
+    }
     if (p.alive) {
       // Smooth the eye height so crouching/sliding glides instead of snapping.
       const feet = p.pos.y - p.halfHeight;
@@ -1169,7 +1204,7 @@ export class Match {
   render() {
     this.portals.renderViews(this.camera);
     this.renderer.render(this.scene, this.camera);
-    if (this.player.alive && this.state !== 'outro' && this.state !== 'done') {
+    if (this.player.alive && !this.danceCam && this.state !== 'outro' && this.state !== 'done') {
       this.renderer.autoClear = false;
       this.viewmodel.render(this.renderer);
       this.renderer.autoClear = true;
@@ -1184,7 +1219,7 @@ export class Match {
     this.endKillcam();
     this.camera.layers.disable(1);
     this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix();
-    document.getElementById('hud').classList.remove('outro');
+    document.getElementById('hud').classList.remove('outro', 'dancing');
     this.projectiles.clear();
     this.setScope(false);
     this.portals.clear();

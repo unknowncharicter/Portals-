@@ -408,9 +408,24 @@ export class Character {
     return best;
   }
 
+  // In-match emote (your chosen dance). live: started during play, any action stops it.
+  startEmote() {
+    const em = (this.look && this.look.emote) || 'cheer';
+    const clip = em !== 'cheer' && this.body && this.body.actions['emote_' + em] ? 'emote_' + em : null;
+    this.emote = { t: 0, kind: 0, clip, live: true };
+  }
+  stopEmote() {
+    if (!this.emote) return;
+    this.emote = null;
+    for (const t of this.teamParts) t.visible = true;
+    this.gunHolder.visible = true;
+    this.gunHolder.rotation.set(0, 0, 0);
+  }
+
   // Returns true if this killed the character.
   damage(amount, attacker) {
     if (!this.alive) return false;
+    if (this.emote && this.emote.live) this.stopEmote();
     this.hp -= amount;
     this.lastAttacker = attacker;
     this.hurtAt = performance.now();

@@ -162,6 +162,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #t-heal { right: 138px; bottom: 104px; color: #7f7; }
 #t-scope { right: 112px; bottom: 228px; }
 #t-pause { left: 12px; top: 12px; }
+#t-emote { left: 64px; top: 12px; }
 #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0b0d14; color: #fff; font-size: 22px; font-weight: 800; align-items: center; justify-content: center; text-align: center; padding: 24px; }
 @media (orientation: portrait) { body.touch.playing #rotate { display: flex; } }
 body.touch #bottom-left { left: auto; right: 12px; top: 12px; bottom: auto; transform: scale(.8); transform-origin: top right; }
@@ -405,6 +406,7 @@ body.touch .sb-kd { display: none; }
 #killcam.spec span { color: #7cf; }
 #hud.outro > *:not(#center-text) { display: none !important; }
 #hud.outro #center-text { top: 16%; }
+#hud.dancing #crosshair { display: none; }
 
 /* Online */
 .online-panel .on-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }

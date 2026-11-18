@@ -34,7 +34,7 @@ export class BotBrain {
 
   reset() {
     this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null; this.peek = null;
-    this.lastKnown = null; this.searchGoal = null; this.searchT = 0;
+    this.lastKnown = null; this.searchGoal = null; this.searchT = 0; this.tauntT = 0;
     this.hillGoal = null; this.escapeT = 0; this.steerT = 0; this.progPos = null;
   }
 
@@ -75,7 +75,15 @@ export class BotBrain {
     this.dash = false;
     this.slideHold = Math.max(0, (this.slideHold || 0) - dt);
     this.crouch = this.slideHold > 0;
-    if (!c.alive) return;
+    if (!c.alive) { this.tauntT = 0; return; }
+
+    // Taunt: dance for a moment after a kill, unless someone shows up or shoots us.
+    if (this.tauntT > 0) {
+      this.tauntT -= dt;
+      const hurt = performance.now() - (c.hurtAt || 0) < 1500;
+      if (hurt || this.tauntT <= 0 || (this.aimDir && this.target && this.target.alive)) { this.tauntT = 0; c.stopEmote(); }
+      else { if (!c.emote && c.grounded) c.startEmote(); if (c.emote) return; }
+    } else if (c.emote && c.emote.live) c.stopEmote();
 
     const enemies = m.enemiesOf(c).filter(e => e.alive);
     if (!enemies.length) return;
