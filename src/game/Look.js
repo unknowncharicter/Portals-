@@ -18,7 +18,7 @@ export const HATS = [
   { id: 'crown',      name: 'Crown',      price: 500 },
 ];
 
-// Character models (free, no price). 'robot' is the original Mixamo robot.
+// Character models (all free except the King). 'robot' is the original Mixamo robot.
 export const BODIES = [
   { id: 'swat',       name: 'SWAT',       icon: '🪖', price: 0 },
   { id: 'punk',       name: 'Punk',       icon: '🧑‍🎤', price: 0 },
@@ -31,7 +31,7 @@ export const BODIES = [
   { id: 'business',   name: 'Business',   icon: '💼', price: 0 },
   { id: 'adventurer', name: 'Adventurer', icon: '🧭', price: 0 },
   { id: 'astronaut',  name: 'Astronaut',  icon: '👨‍🚀', price: 0 },
-  { id: 'king',       name: 'King',       icon: '🤴', price: 0 },
+  { id: 'king',       name: 'King',       icon: '🤴', price: 1000 },
 ];
 // Where hats/masks and back items sit on each model (head: scale, height above the head bone;
 // back: scale, y, z from the upper spine).
