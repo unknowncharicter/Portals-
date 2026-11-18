@@ -51,7 +51,7 @@ export const MAPS = {
   islands: {
     name: 'Sky Islands',
     hill: { x: 0, y: 0, z: 0, r: 5 },
-    theme: { sky: '#a8d4ff', fog: [70, 200], hemi: 1.8, sun: 2.0 },
+    theme: { sky: '#a8d4ff', fog: [70, 200], hemi: 1.35, sun: 1.6 },
     view: { r: 34, h: 16 },
     killY: -25,
     spawns: {
@@ -65,8 +65,8 @@ export const MAPS = {
         // Team island with a portal wall at the back, rocks for cover and a couple of trees.
         m.prop('island_large', [sx * 24.5, 0, 0], 12, 0, { top: true });
         m.box(sx > 0 ? [30, 0, -7] : [-31, 0, -7], sx > 0 ? [31, 6, 7] : [-30, 6, 7], wall);
-        m.prop('rock_large', [sx * 23.5, 0, -5], 4, 0);
-        m.prop('rock_large', [sx * 23.5, 0, 5], 4, Math.PI);
+        m.prop('rock_large', [sx * 21.5, 0, -5.8], 3.6, 0);
+        m.prop('rock_large', [sx * 21.5, 0, 5.8], 3.6, Math.PI);
         m.prop('rock_small', [sx * 19.5, 0, 0], 3, Math.PI / 2);
         m.prop('tree', [sx * 28.5, 0, -6.5], 9);
         m.prop('tree', [sx * 28.5, 0, 6.5], 8, Math.PI / 2);
