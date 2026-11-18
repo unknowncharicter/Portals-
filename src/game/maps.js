@@ -37,14 +37,18 @@ export const MAPS = {
       m.mirror([20, 0, -0.6], [24, 1.4, 0.6], cover);
       m.mirror([13, 0, 14], [15, 2, 16], cover);
       m.mirror([13, 0, -16], [15, 2, -14], cover);
-      m.mirror([22, 0, 10], [24, 2.5, 12.5], cover);
-      m.mirror([22, 0, -12.5], [24, 2.5, -10], cover);
+      for (const sx of [-1, 1]) for (const sz of [-1, 1])
+        m.prop('container', [sx * 23, 0, sz * 11.25], 1.9, Math.PI / 2, { tint: sz * sx > 0 ? '#c0503c' : '#3a7cc0' });
       m.mirror([26, 0, 15], [33, 3, 23], dark);
       for (let i = 0; i < 6; i++) m.mirror([27, 0, 15 - (6 - i) * 0.7], [32, 0.5 * (i + 1), 15 - (5 - i) * 0.7], dark);
       m.mirror([26, 0, -23], [33, 3, -15], dark);
       for (let i = 0; i < 6; i++) m.mirror([27, 0, -15 + (5 - i) * 0.7], [32, 0.5 * (i + 1), -15 + (6 - i) * 0.7], dark);
       m.box([-30, 0, -6], [-29, 4, 6], blue);
       m.box([29, 0, -6], [30, 4, 6], red);
+      for (const z of [-8, 8]) {                    // team flags behind the spawns
+        m.prop('flag', [-31.5, 0, z], 2.2, 0, { tint: '#3a6fd8', solid: false });
+        m.prop('flag', [31.5, 0, z], 2.2, Math.PI, { tint: '#d84a4a', solid: false });
+      }
     },
   },
 
@@ -176,6 +180,14 @@ export const MAPS = {
       // Walls across the edges
       m.box([-4, 0, -14], [4, 5, -13], wall);
       m.box([-4, 0, 13], [4, 5, 14], wall);
+      // Trees at the edges and team flags on the roofs
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+        m.prop('tree', [sx * 27.5, 0, sz * 17.5], 9, sz > 0 ? 0 : Math.PI / 2);
+        m.prop('tree', [sx * 7.5, 0, sz * 17.8], 7.5, Math.PI);
+        m.prop('flag', [sx * 14, 4.8, sz * 12.5], 1.8, sx > 0 ? Math.PI : 0, { tint: sx > 0 ? '#d84a4a' : '#3a6fd8', solid: false });
+      }
+      m.prop('rock_small', [0, 0, 9], 2.2);
+      m.prop('rock_small', [0, 0, -9], 2.2, Math.PI);
       // Spawn cover
       m.mirror([22, 0, -3], [23, 1.5, 3], wood);
       m.mirror([22, 0, -12], [24, 3, -10], wood);
@@ -223,6 +235,10 @@ export const MAPS = {
       m.box([-3, 2, -16.5], [3, 7, -16], panel);
       m.box([-3, 2, 16], [3, 7, 16.5], panel);
       m.mirror([10, 1, 12], [10.5, 6, 16], panel);
+      // Floating islands drifting around (scenery, out of reach)
+      for (const [x, y, z, sc, id] of [[-42, -6, 26, 14, 'island_large'], [44, -9, -24, 13, 'island_medium'], [0, -14, -34, 16, 'island_large'],
+        [-36, 4, -30, 8, 'island'], [38, 6, 30, 9, 'island'], [6, -4, 36, 10, 'island_medium']]) m.prop(id, [x, y, z], sc, 0, { top: true, solid: false });
+      m.prop('tree', [-4.6, 0, 4.2], 7);
     },
   },
 
@@ -255,9 +271,18 @@ export const MAPS = {
       m.box([-1, 0, -4.5], [1, 6, -3], stone);
       m.box([-1, 0, 3], [1, 6, 4.5], stone);
       m.box([-1, 6, -4.5], [1, 7, 4.5], stone);              // arch top
-      m.mirror([11, 0, -2], [13, 1.4, 2], rock);
-      m.box([-4, 0, 10], [-1, 1.4, 12], rock);
-      m.box([1, 0, -12], [4, 1.4, -10], rock);
+      m.prop('rock_large', [12, 0, 0], 3.6, Math.PI / 2);
+      m.prop('rock_large', [-12, 0, 0], 3.6, -Math.PI / 2);
+      m.prop('rock_large', [-2.5, 0, 11], 3.8, 0);
+      m.prop('rock_large', [2.5, 0, -11], 3.8, Math.PI);
+      // Smaller rocks along the canyon walls and on the cliffs
+      for (const sx of [-1, 1]) {
+        m.prop('rock_small', [sx * 15.5, 0, 17.5], 3.2, 0);
+        m.prop('rock_small', [sx * 15.5, 0, -17.5], 3, Math.PI);
+        m.prop('rock_small', [sx * 4, 0, 18], 2.6, Math.PI / 2);
+        m.prop('rock_large', [sx * 30.5, 5, 17], 3.4, 0);
+        m.prop('rock_large', [sx * 30.5, 5, -17], 3.4, Math.PI);
+      }
       // Long high bridge between the cliffs
       m.box([-18, 4.6, -18.5], [18, 5, -16.5], wood);
       m.box([-18, 5, -18.6], [18, 5.9, -18.5], wood);
