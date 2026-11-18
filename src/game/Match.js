@@ -622,6 +622,7 @@ export class Match {
       // every screen, so each browser only handles its own characters for those.
       if (info.proj || info.explosion || !this.net.owns(attacker)) return false;
       this.net.send({ e: 'hit', a: attacker.netId, v: t.netId, d: dmg, head: !!info.head, portal: !!info.portal, segs: info.segs ? packSegs(info.segs) : null });
+      if (attacker === this.player) this.showDamage(t, Math.min(dmg, t.hp), info, false);
       return true;
     }
     if (t === this.player) {
@@ -641,8 +642,19 @@ export class Match {
     if (tb && t !== attacker) tb.hear(attacker.pos, true); // getting hit reveals where it came from
     if (attacker === this.player && t !== attacker && info.explosion) { this.hud.hit(false); Sfx.hit(); }
     t.lastHitHead = !!info.head;
-    if (t.damage(dmg, attacker)) this.onKill(attacker, t, info);
+    const hpBefore = t.hp;
+    const killed = t.damage(dmg, attacker);
+    if (attacker === this.player && t !== attacker) this.showDamage(t, Math.min(dmg, hpBefore), info, killed);
+    if (killed) this.onKill(attacker, t, info);
     return true;
+  }
+
+  // Floating damage number where your shot landed (you only see your own).
+  showDamage(t, amount, info, killed) {
+    if (amount <= 0) return;
+    const segs = info.segs;
+    const at = segs && segs.length ? segs[segs.length - 1].to.clone() : t.pos.clone().setY(t.pos.y + 0.6);
+    this.effects.damageNumber(t, amount, at, !!info.head, killed);
   }
 
   throwGrenade(c) {

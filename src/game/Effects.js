@@ -7,6 +7,7 @@ export class Effects {
     this.items = [];
     this.sparkGeo = new THREE.SphereGeometry(0.06, 6, 4);
     this.parts = [];
+    this.nums = [];
     this.geo = {
       ball: new THREE.SphereGeometry(0.07, 6, 4),
       cube: new THREE.BoxGeometry(0.13, 0.13, 0.13),
@@ -88,8 +89,56 @@ export class Effects {
     this.items.push({ obj: m, life: 0.25, max: 0.25, grow: true });
   }
 
+  // Small floating number showing damage you dealt. Hits on the same target close together
+  // (shotgun pellets, bursts) add up into one number.
+  damageNumber(target, amount, pos, head = false, kill = false) {
+    const now = performance.now();
+    let n = this.nums.find(x => x.target === target && now - x.t0 < 350 && x.life > 0.3);
+    if (n) { n.amount += amount; n.head = n.head || head; n.kill = n.kill || kill; n.dirty = true; n.t0 = now; n.life = n.max; n.pos.lerp(pos, 0.5); }
+    else {
+      const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 64;
+      const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false }));
+      sprite.layers.set(3);           // only your own camera (not the views through portals)
+      sprite.renderOrder = 30;
+      sprite.scale.set(0.15, 0.075, 1);
+      this.scene.add(sprite);
+      n = { target, amount, head, kill, pos: pos.clone(), sprite, canvas, tex, life: 0.8, max: 0.8, t0: now, dirty: true, drift: (Math.random() - 0.5) * 0.6 };
+      this.nums.push(n);
+    }
+  }
+
+  drawNumber(n) {
+    const g = n.canvas.getContext('2d');
+    g.clearRect(0, 0, 128, 64);
+    g.font = '800 40px Rubik, system-ui, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.75)';
+    const txt = String(Math.max(1, Math.round(n.amount)));
+    g.strokeText(txt, 64, 34);
+    g.fillStyle = n.kill ? '#ff5050' : n.head ? '#ffd23a' : '#ffffff';
+    g.fillText(txt, 64, 34);
+    n.tex.needsUpdate = true; n.dirty = false;
+  }
+
+  updateNumbers(dt) {
+    for (let i = this.nums.length - 1; i >= 0; i--) {
+      const n = this.nums[i];
+      if (n.dirty) this.drawNumber(n);
+      n.life -= dt;
+      const age = n.max - n.life;
+      n.sprite.position.copy(n.pos).add(new THREE.Vector3(n.drift * age, 0.25 + age * 1.1, 0));
+      const pop = age < 0.08 ? 1 + (0.08 - age) * 5 : 1;            // quick pop when it appears
+      const big = n.head || n.kill ? 1.2 : 1;
+      n.sprite.scale.set(0.15 * pop * big, 0.075 * pop * big, 1);
+      n.sprite.material.opacity = Math.min(1, n.life / 0.3);
+      if (n.life <= 0) { this.scene.remove(n.sprite); n.sprite.material.dispose(); n.tex.dispose(); this.nums.splice(i, 1); }
+    }
+  }
+
   update(dt) {
     this.updateParts(dt);
+    this.updateNumbers(dt);
     for (let i = this.items.length - 1; i >= 0; i--) {
       const it = this.items[i];
       it.life -= dt;
@@ -108,6 +157,7 @@ export class Effects {
   clear() {
     for (const it of this.items) this.scene.remove(it.obj);
     for (const p of this.parts) this.scene.remove(p.mesh);
-    this.items = []; this.parts = [];
+    for (const n of this.nums) this.scene.remove(n.sprite);
+    this.items = []; this.parts = []; this.nums = [];
   }
 }
