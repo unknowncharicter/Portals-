@@ -50,6 +50,11 @@ export const EMOTES = [
   { id: 'flair',    name: 'Flair',          icon: '🌀' },
   { id: 'swing',    name: 'Swing Dance',    icon: '💃' },
   { id: 'thriller', name: 'Thriller',       icon: '🧟' },
+  { id: 'breakdance',  name: 'Breakdance',   icon: '🤸' },
+  { id: 'breakfinish', name: 'Break Finish', icon: '😎' },
+  { id: 'salsa',       name: 'Salsa',        icon: '💃' },
+  { id: 'wave',        name: 'Wave',         icon: '🌊' },
+  { id: 'hiphop',      name: 'Hip Hop',      icon: '🎧' },
 ];
 
 // Face accessories (on the head, in front of the face).
@@ -78,7 +83,7 @@ export const DEFAULT_LOOK = { name: 'Player', model: 'swat', shirt: SHIRTS[3], p
 const HELMETED = new Set(['swat', 'astronaut', 'king']);
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 export function randomLook(name) {
-  const emote = pick(['uprock', 'moonwalk', 'flair', 'swing', 'thriller', 'cheer']);
+  const emote = pick(EMOTES.map(e => e.id));
   const model = pick(['swat', 'swat', 'punk', ...BODIES.filter(b => b.id !== 'robot').map(b => b.id)]);
   return { name, model, emote, shirt: pick(SHIRTS), pants: pick(PANTS), skin: pick(SKINS.slice(0, 5)),
     hat: HELMETED.has(model) ? 'none' : pick(['none', 'none', 'none', ...HATS.map(h => h.id)]),
