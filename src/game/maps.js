@@ -317,6 +317,28 @@ MAPS.compound = {
   },
 };
 
+// Arches in the Colosseum's arena wall: [angle in degrees, distance from the centre] (measured).
+const COLOSSEUM_ARCHES = [[6, 23.11], [17.35, 23.15], [28.65, 23.19], [39.95, 23.25], [51.25, 23.31], [62.55, 23.38], [73.8, 23.45], [85, 23.51], [96.2, 23.58], [107.35, 23.63], [118.5, 23.68], [129.65, 23.72], [140.8, 23.74], [151.9, 23.75], [163, 23.75], [174.15, 23.73], [185.3, 23.7], [196.45, 23.65], [207.6, 23.6], [218.75, 23.54], [230, 23.47], [241.2, 23.4], [252.5, 23.34], [263.75, 23.27], [275.05, 23.21], [286.4, 23.16], [297.75, 23.12], [309.1, 23.09], [320.45, 23.07], [331.85, 23.06], [343.2, 23.07], [354.6, 23.08]];
+
+// Wooden gate with iron bands (drawn once, shared).
+let _gate = null;
+function gateTexture(THREE) {
+  if (_gate) return _gate;
+  const c = document.createElement('canvas'); c.width = 128; c.height = 192;
+  const g = c.getContext('2d');
+  for (let i = 0; i < 6; i++) {                      // planks
+    g.fillStyle = ['#5a3d24', '#64432a', '#553a22'][i % 3];
+    g.fillRect(i * 21.3, 0, 21.3, 192);
+    g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(i * 21.3, 0, 2, 192);
+  }
+  for (const y of [28, 96, 164]) {                   // iron bands and studs
+    g.fillStyle = '#2c2f36'; g.fillRect(0, y - 6, 128, 12);
+    g.fillStyle = '#6b7079'; for (let x = 8; x < 128; x += 20) g.fillRect(x, y - 2, 4, 4);
+  }
+  _gate = new THREE.CanvasTexture(c); _gate.colorSpace = THREE.SRGBColorSpace;
+  return _gate;
+}
+
 // Colosseum: "Colosseum" by CreativeTrio, scaled 25x (floor 46 m across, 7 m arena wall).
 // Collision is a height map of the model (colosseum-boxes.json). Stairs at both ends lead up
 // over the arena wall into the stands; pillars, a low centre wall and rocks give cover.
@@ -352,6 +374,19 @@ MAPS.colosseum = {
       m.prop('rock_large', [sx * 14, 0, 10], 4, Math.PI);
       m.prop('rock_small', [sx * 12, 0, 0], 3, Math.PI / 2);
     }
+    // The 32 arches in the arena wall are solid (they'd lead out of the arena): close them with
+    // wooden gates so it's clear you can't go in there.
+    m.decor((THREE, add) => {
+      const mat = new THREE.MeshLambertMaterial({ map: gateTexture(THREE) });
+      const geo = new THREE.PlaneGeometry(2.7, 3.9);
+      for (const [deg, r] of COLOSSEUM_ARCHES) {
+        const a = deg * Math.PI / 180;
+        const g = new THREE.Mesh(geo, mat);
+        g.position.set(Math.cos(a) * (r + 0.35), 1.95, Math.sin(a) * (r + 0.35));
+        g.lookAt(0, 1.95, 0);
+        add(g);
+      }
+    });
     // Invisible fence around the top of the outer wall, so nobody falls out.
     for (let i = 0; i < 96; i++) {
       const a = (i / 96) * Math.PI * 2, x = Math.cos(a) * 44.5, z = Math.sin(a) * 47.5;

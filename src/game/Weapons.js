@@ -1,16 +1,17 @@
 import { lvl } from '../save.js';
 
 // slot: 'primary' or 'secondary'. pellets > 1 = shotgun. zoom = right-click scope FOV.
+// falloff: [full damage up to (m), lowest damage from (m), lowest damage as a fraction].
 export const WEAPONS = {
-  ar:       { adsFov: 52, id: 'ar',       slot: 'primary',   name: 'Assault Rifle', damage: 17, headMult: 1.8, interval: 0.1,   mag: 30, reload: 1.8, spread: 0.012, auto: true,  sound: 'rifle' },
-  smg:      { adsFov: 60, id: 'smg',      slot: 'primary',   name: 'SMG',           damage: 12, headMult: 1.6, interval: 0.065, mag: 35, reload: 1.5, spread: 0.022, auto: true,  sound: 'smg' },
-  shotgun:  { adsFov: 64, id: 'shotgun',  slot: 'primary',   name: 'Shotgun',       damage: 11, headMult: 1.4, interval: 0.85,  mag: 6,  reload: 2.2, spread: 0.065, auto: false, sound: 'shotgun', pellets: 9 },
-  sniper:   { id: 'sniper',   slot: 'primary',   name: 'Sniper',        damage: 85, headMult: 2.0, interval: 1.3,   mag: 5,  reload: 2.5, spread: 0.05,  auto: false, sound: 'sniper', zoom: 22, scopedSpread: 0.0005 },
+  ar:       { adsFov: 52, id: 'ar',       slot: 'primary',   name: 'Assault Rifle', damage: 16, headMult: 1.8, interval: 0.1,   mag: 30, reload: 1.8, spread: 0.012, auto: true,  sound: 'rifle' },
+  smg:      { adsFov: 60, id: 'smg',      slot: 'primary',   name: 'SMG',           damage: 13, headMult: 1.6, interval: 0.06,  mag: 35, reload: 1.5, spread: 0.022, auto: true,  sound: 'smg', falloff: [15, 30, 0.7] },
+  shotgun:  { adsFov: 64, id: 'shotgun',  slot: 'primary',   name: 'Shotgun',       damage: 12, headMult: 1.4, interval: 0.8,   mag: 6,  reload: 2.2, spread: 0.065, auto: false, sound: 'shotgun', pellets: 9, falloff: [6, 18, 0.4] },
+  sniper:   { id: 'sniper',   slot: 'primary',   name: 'Sniper',        damage: 85, headMult: 2.0, interval: 1.15,   mag: 5,  reload: 2.5, spread: 0.05,  auto: false, sound: 'sniper', zoom: 22, scopedSpread: 0.0005 },
   burst:    { adsFov: 50, id: 'burst',    slot: 'primary',   name: 'Burst Rifle',   damage: 21, headMult: 1.8, interval: 0.4,   mag: 24, reload: 2.0, spread: 0.007, auto: false, sound: 'burst', burst: 3, burstGap: 0.07 },
   crossbow: { adsFov: 46, id: 'crossbow', slot: 'primary',   name: 'Crossbow',      damage: 95, headMult: 1.6, interval: 0.3,   mag: 1,  reload: 1.1, spread: 0,     auto: false, sound: 'crossbow', projectile: 'bolt', speed: 62 },
   rocket:   { adsFov: 58, id: 'rocket',   slot: 'primary',   name: 'Rocket Launcher', damage: 0, headMult: 1, interval: 0.9,   mag: 2,  reload: 2.6, spread: 0,     auto: false, sound: 'rocket', projectile: 'rocket', speed: 30 },
   pistol:   { adsFov: 60, id: 'pistol',   slot: 'secondary', name: 'Pistol',        damage: 26, headMult: 2.0, interval: 0.22,  mag: 12, reload: 1.3, spread: 0.006, auto: false, sound: 'pistol' },
-  revolver: { adsFov: 56, id: 'revolver', slot: 'secondary', name: 'Revolver',      damage: 48, headMult: 2.0, interval: 0.5,   mag: 6,  reload: 2.0, spread: 0.004, auto: false, sound: 'revolver' },
+  revolver: { adsFov: 56, id: 'revolver', slot: 'secondary', name: 'Revolver',      damage: 52, headMult: 2.0, interval: 0.5,   mag: 6,  reload: 2.0, spread: 0.004, auto: false, sound: 'revolver' },
 };
 
 export const PRIMARIES = Object.values(WEAPONS).filter(w => w.slot === 'primary').map(w => w.id);

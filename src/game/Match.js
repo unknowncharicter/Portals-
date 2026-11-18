@@ -580,7 +580,13 @@ export class Match {
           continue;
         }
         const t = hit.character;
-        const dmg = w.damage * (hit.head ? def.headMult : 1);
+        let dmg = w.damage * (hit.head ? def.headMult : 1);
+        if (def.falloff) {
+          // Damage drops with distance (shotgun, SMG). Distance counts the whole path, through portals too.
+          const [d0, d1, minK] = def.falloff;
+          const travelled = origin.distanceTo(tr.segments[0].to) + tr.segments.slice(1).reduce((n, sg) => n + sg.from.distanceTo(sg.to), 0);
+          dmg *= 1 - (1 - minK) * THREE.MathUtils.clamp((travelled - d0) / (d1 - d0), 0, 1);
+        }
         if (this.applyDamage(c, t, dmg, { portal: tr.segments.length > 1, head: hit.head, segs: tr.segments })) {
           this.effects.spark(hit.point, '#ff4040');
           if (t !== c) { anyHit = true; anyHead = anyHead || hit.head; }

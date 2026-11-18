@@ -73,15 +73,18 @@ export class World {
     this.killY = map.killY ?? -40;
     this.props = [];
     this.ladders = [];
+    const decor = [];      // visual-only meshes (no collision), added after the boxes
     map.build({
       ladder: (min, max, n) => this.ladders.push({ min, max, n }),
       box: (min, max, color) => this.addBox(min, max, color),
       mirror: (min, max, color) => this.mirrorX(min, max, color),
       prop: (id, pos, scale, rot, opts) => this.addProp(id, pos, scale, rot, opts),
+      decor: (fn) => decor.push(fn),
     });
     const toV = (p) => new THREE.Vector3(p.x, p.y, p.z);
     this.spawns = { 0: map.spawns[0].map(toV), 1: map.spawns[1].map(toV), ffa: map.spawns.ffa.map(toV) };
     this.buildMeshes();
+    for (const fn of decor) fn(THREE, (o) => this.group.add(o));
     // Maps made from a 3D model: show it (once it has loaded).
     const show = (model) => {
       if (!model || this.mapId !== id || model.parent === this.group) return;

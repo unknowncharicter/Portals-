@@ -285,6 +285,17 @@ export class Character {
           continue;
         }
         const r = this.radius;
+        // Only clipping a corner by a few cm? Slip past it sideways instead of stopping dead
+        // (curved walls and rocks are made of many small boxes with corners everywhere).
+        const other = axis === 0 ? 2 : 0;
+        const po = p.getComponent(other);
+        const pushPlus = b.max.getComponent(other) - (po - r), pushMinus = (po + r) - b.min.getComponent(other);
+        const d = Math.min(pushPlus, pushMinus);
+        if (d < 0.22 && Math.abs(amount) > 1e-4) {
+          const shifted = po + (pushPlus < pushMinus ? d + EPS : -(d + EPS));
+          const q = [p.x, p.y, p.z]; q[other] = shifted;
+          if (this.freeAt(q[0], q[1], q[2], solid)) { p.setComponent(other, shifted); continue; }
+        }
         p.setComponent(axis, amount > 0 ? b.min.getComponent(axis) - r - EPS : b.max.getComponent(axis) + r + EPS);
         this.vel.setComponent(axis, 0);
       }
