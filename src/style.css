@@ -406,7 +406,7 @@ body.touch .sb-kd { display: none; }
 #killcam.spec span { color: #7cf; }
 #hud.outro > *:not(#center-text) { display: none !important; }
 #hud.outro #center-text { top: 16%; }
-#hud.dancing #crosshair { display: none; }
+#hud.dancing #crosshair, #hud.wheel #crosshair { display: none; }
 
 /* Online */
 .online-panel .on-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
@@ -456,3 +456,18 @@ body.touch .hp-wrap { width: 180px; }
 #results.over-outro > * { width: min(440px, 46vw); text-align: center; }
 @media (max-width: 700px) { #results.over-outro { background: linear-gradient(180deg, rgba(5,6,12,0) 35%, rgba(5,6,12,.88) 70%); align-items: center; justify-content: flex-end; padding-right: 16px; } #results.over-outro > * { width: auto; } }
 #results.over-outro #results-title { text-shadow: 0 2px 18px rgba(0,0,0,.8); }
+
+/* Emote wheel (hold B) */
+#emote-wheel { position: fixed; left: 50%; top: 50%; width: 0; height: 0; z-index: 30; pointer-events: none; }
+#emote-wheel::before { content: ''; position: absolute; left: -200px; top: -200px; width: 400px; height: 400px; border-radius: 50%; background: radial-gradient(circle, rgba(10,12,24,.55) 30%, rgba(10,12,24,.75) 70%, transparent 72%); }
+.ew-mid { position: absolute; transform: translate(-50%, -50%); text-align: center; color: #fff; white-space: nowrap; }
+.ew-mid b { display: block; font-size: 18px; letter-spacing: 3px; }
+.ew-mid small { font-size: 11px; opacity: .75; }
+.ew-item { position: absolute; transform: translate(-50%, -50%); width: 66px; height: 66px; border-radius: 50%; background: rgba(30,36,60,.9); border: 2px solid rgba(255,255,255,.18); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; transition: transform .08s, background .08s; }
+.ew-item span { font-size: 26px; line-height: 1; }
+.ew-item small { font-size: 9px; margin-top: 3px; max-width: 62px; text-align: center; line-height: 1.05; opacity: .85; }
+.ew-item.cur { border-color: #7cf; }
+.ew-item.sel { background: #36b5ff; border-color: #fff; transform: translate(-50%, -50%) scale(1.18); }
+@media (max-height: 480px) {
+  #emote-wheel { transform: scale(.72); }
+}

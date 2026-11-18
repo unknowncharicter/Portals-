@@ -409,10 +409,10 @@ export class Character {
   }
 
   // In-match emote (your chosen dance). live: started during play, any action stops it.
-  startEmote() {
-    const em = (this.look && this.look.emote) || 'cheer';
+  startEmote(id) {
+    const em = id || (this.look && this.look.emote) || 'cheer';
     const clip = em !== 'cheer' && this.body && this.body.actions['emote_' + em] ? 'emote_' + em : null;
-    this.emote = { t: 0, kind: 0, clip, live: true };
+    this.emote = { t: 0, kind: 0, clip, live: true, id: em };
   }
   stopEmote() {
     if (!this.emote) return;

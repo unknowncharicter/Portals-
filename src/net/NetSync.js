@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { EMOTES } from '../game/Look.js';
 
 // Keeps an online match in sync. Every browser simulates its own characters (its player, and
 // on the host also the bots) and sends their movement 20 times a second; everyone else's
@@ -42,7 +43,7 @@ export class NetSync {
   // ---------- Movement ----------
   pack(c) {
     const flags = (c.alive ? 1 : 0) | (c.grounded ? 2 : 0) | (c.crouched ? 4 : 0) | (c.slideT > 0 ? 8 : 0) | (c.aiming ? 16 : 0) | (c.climbT > 0 ? 32 : 0) | (c.emote && c.emote.live ? 64 : 0);
-    return [c.netId, r3(c.pos.x), r3(c.pos.y), r3(c.pos.z), r2(c.vel.x), r2(c.vel.y), r2(c.vel.z), r3(c.yaw), r3(c.pitch), flags, Math.round(c.hp), c.slot, c.gunLevel || 0, c.life || 0];
+    return [c.netId, r3(c.pos.x), r3(c.pos.y), r3(c.pos.z), r2(c.vel.x), r2(c.vel.y), r2(c.vel.z), r3(c.yaw), r3(c.pitch), flags, Math.round(c.hp), c.slot, c.gunLevel || 0, c.life || 0, c.emote && c.emote.live ? EMOTES.findIndex(e => e.id === c.emote.id) : -1];
   }
 
   tick(dt) {
@@ -64,7 +65,7 @@ export class NetSync {
   updatePuppet(c, dt) {
     const s = this.states.get(c.netId);
     if (!s) { if (c.alive) c.animate(dt); return; }
-    const [, x, y, z, vx, vy, vz, yaw, pitch, flags, hp, slot, gunLevel, life] = s;
+    const [, x, y, z, vx, vy, vz, yaw, pitch, flags, hp, slot, gunLevel, life, em] = s;
     const alive = !!(flags & 1);
     // Only a new life brings a dead puppet back (an older "alive" update can arrive after the kill).
     if (alive && !c.alive && !c.gone && life !== c.deadLife) {
@@ -93,7 +94,10 @@ export class NetSync {
     c.slideT = flags & 8 ? 0.1 : 0;
     c.aiming = !!(flags & 16);
     c.climbT = flags & 32 ? 0.1 : 0;
-    if (flags & 64) { if (!c.emote) c.startEmote(); } else if (c.emote && c.emote.live) c.stopEmote();
+    if (flags & 64) {
+      const id = EMOTES[em] ? EMOTES[em].id : null;
+      if (!c.emote || (id && c.emote.id !== id)) { c.stopEmote(); c.startEmote(id); }
+    } else if (c.emote && c.emote.live) c.stopEmote();
     c.hp = hp;
     if (gunLevel !== (c.gunLevel || 0) && this.m.mode.gungame) { c.gunLevel = gunLevel; this.m.setGunGameWeapon(c); }
     if (slot !== c.slot && c.weapons[slot]) { c.slot = slot; c.updateGun(); }

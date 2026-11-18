@@ -70,6 +70,12 @@ export class TouchControls {
     const p = { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, act };
     this.ptrs.set(e.pointerId, p);
     const inp = this.input;
+    // Emote wheel open: a tap picks the dance in that direction from the middle of the screen.
+    if (inp.wheelOpen && act !== 'emote' && act !== 'pause') {
+      inp.wheelTap = { x: e.clientX - window.innerWidth / 2, y: e.clientY - window.innerHeight / 2 };
+      this.ptrs.delete(e.pointerId);
+      return;
+    }
     if (act) {
       e.target.classList.add('on');
       switch (act) {

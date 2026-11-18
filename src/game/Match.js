@@ -3,7 +3,8 @@ import { Character, SWITCH_TIME } from './Character.js';
 import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats, WEAPONS, WeaponState } from './Weapons.js';
-import { randomLook } from './Look.js';
+import { randomLook, EMOTES } from './Look.js';
+import { EmoteWheel } from './EmoteWheel.js';
 import { Projectiles } from './Projectiles.js';
 import { GUN_SKINS } from '../progress.js';
 import { Tutorial } from './Tutorial.js';
@@ -773,16 +774,43 @@ export class Match {
 
   // ---------- Player input ----------
 
+  danceNow(id) {
+    const p = this.player;
+    if (!p.alive || !p.grounded) return;
+    p.startEmote(id);
+    this.ghostMode = false; this.ghost.hide(); this.setScope(false); this.ads = false;
+  }
+
   updatePlayer(dt, canAct) {
     const p = this.player, inp = this.input;
     if (!p.alive) return new THREE.Vector3();
+
+    // Emote wheel (hold B / tap 💃): the mouse picks a dance instead of turning.
+    const wheel = this.wheel && this.wheel.open ? this.wheel : null;
+    if (wheel) {
+      if (!canAct) wheel.hide();
+      else if (wheel.held) {
+        wheel.aim(inp.dx, inp.dy);
+        if (!inp.down('KeyB') || inp.mouseClicked) { wheel.hide(); this.danceNow(wheel.chosen()); }
+      } else if (inp.wheelTap) {
+        const t = inp.wheelTap;
+        wheel.select(wheel.pickAt(t.x, t.y, 50));
+        wheel.hide();
+        this.danceNow(wheel.chosen());
+      } else if (inp.hit('KeyB')) wheel.hide();
+      inp.wheelTap = null;
+      inp.dx = inp.dy = 0;
+      inp.mouseDown = inp.mouseClicked = false;
+      inp.pressed.delete('KeyB');
+    }
+    inp.wheelOpen = !!(this.wheel && this.wheel.open);
 
     const sens = inp.sensitivity * ((this.scoped || this.ads) ? Math.min(1, this.camera.fov / this.baseFov) : 1);
     p.yaw -= inp.dx * sens;
     p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens, -1.55, 1.55);
 
     const wish = new THREE.Vector3();
-    // B: dance (your chosen emote). Moving, jumping or any action stops it.
+    // B: dance. Moving, jumping or any action stops it.
     if (canAct && p.emote && p.emote.live) {
       const busy = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space', 'KeyC', 'ShiftLeft', 'ShiftRight'].some(k => inp.down(k))
         || inp.moveX || inp.moveY || inp.mouseDown || inp.rightDown || inp.touchAim || inp.wheel
@@ -790,9 +818,12 @@ export class Match {
       if (!busy) return wish;
       p.stopEmote();
       if (inp.hit('KeyB')) return wish;
-    } else if (canAct && inp.hit('KeyB') && p.grounded && !this.tutorial) {
-      p.startEmote(); this.ghostMode = false; this.ghost.hide(); this.setScope(false); this.ads = false;
-      return wish;
+    } else if (canAct && inp.hit('KeyB') && !wheel && !this.tutorial) {
+      // Open the wheel (a quick tap of B without moving the mouse just does your equipped dance).
+      if (!this.wheel) this.wheel = new EmoteWheel();
+      this.wheel.show(inp.down('KeyB'), (p.look && p.look.emote) || 'cheer');
+      this.ghostMode = false; this.ghost.hide(); this.setScope(false); this.ads = false;
+      inp.wheelOpen = true;
     }
     if (canAct) {
       const fwd = new THREE.Vector3(-Math.sin(p.yaw), 0, -Math.cos(p.yaw));
@@ -807,6 +838,7 @@ export class Match {
         wish.addScaledVector(fwd, -inp.moveY).addScaledVector(right, inp.moveX);
         if (wish.lengthSq() > 1) wish.normalize();
       }
+      if (this.wheel && this.wheel.open) return wish; // picking a dance: no shooting
 
       if (inp.hit('Digit1') && p.switchTo(0)) { this.setScope(false); Sfx.swap(); }
       if (inp.hit('Digit2') && p.switchTo(1)) { this.setScope(false); Sfx.swap(); }
@@ -982,6 +1014,7 @@ export class Match {
 
   // End of match: the winners line up and emote at the camera, then the results show.
   startOutro(team, res) {
+    if (this.wheel) this.wheel.hide();
     this.state = 'outro';
     this.outroT = 3;
     this.outroRes = res;
@@ -1212,6 +1245,8 @@ export class Match {
   }
 
   dispose() {
+    if (this.wheel) { this.wheel.dispose(); this.wheel = null; }
+    this.input.wheelOpen = false;
     if (this.net) this.net.dispose();
     if (this.tutorial) this.tutorial.dispose();
     if (this.hillMesh) this.scene.remove(this.hillMesh);
