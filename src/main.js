@@ -955,7 +955,7 @@ function frame() {
     // Slow fly-around of the map behind the menus.
     menuCam.t += dt * 0.08;
     const v = world.map.view;
-    camera.position.set(Math.cos(menuCam.t) * v.r, v.h, Math.sin(menuCam.t) * v.r * 0.65);
+    camera.position.set(Math.cos(menuCam.t) * v.r, v.h, Math.sin(menuCam.t) * v.r * (v.e ?? 0.65)); // e: how round the circle is
     camera.lookAt(0, 1, 0);
     camera.updateMatrixWorld();
     renderer.render(scene, camera);

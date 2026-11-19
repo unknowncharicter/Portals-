@@ -107,7 +107,7 @@ export const MAPS = {
     model: { file: 'maps/warehouse.glb', scale: 0.4, offset: [0, -0.79, -5.44] },
     hill: { x: 6.5, y: 0, z: -1.5, r: 4.5 },
     theme: { sky: '#a9c6e0', fog: [70, 230], hemi: 1.5, sun: 1.6 },
-    view: { r: 30, h: 16 },
+    view: { r: 46, h: 20, e: 1 },   // wide circle: always outside the long building
     spawns: {
       0: [V(-4, 0, -18), V(4, 0, -18)],
       1: [V(8, 0, 18), V(-7, 0, 18.5)],
