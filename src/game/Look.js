@@ -120,6 +120,41 @@ export function buildCharacterMesh(look, opts = {}) {
   return hasCharacterModel() ? buildAnimated(look, opts) : buildBlocky(look, opts);
 }
 
+// ---------- Fitting items on each character ----------
+// Built-in headgear (material names in the head mesh), hidden while wearing a hat.
+const HEADGEAR = { farmer: ['Beige', 'Red'], worker: ['Worker_Yellow'], king: ['Gold'] };
+// Hair (material names), hidden under hats that cover the top of the head.
+const HAIR = { punk: ['Red_Dark', 'Red'], beach: ['Hair'], casual: ['Hair'], hoodie: ['Hair'], business: ['Hair'], adventurer: ['Hair'], king: ['Hair_White'] };
+const FULL_HATS = ['beanie'];
+const TOP_HATS = ['cap', 'tophat', 'beanie', 'helmet'];
+const HEAD_PIVOT = [0, 0.72, 0], BACK_PIVOT = [0, 0.16, 0.18];
+// Per character, per item: p = move [x, y, z] (in blocky-head units: the head is 0.42 across;
+// -z is forward), s = size, r = turn [x, y, z] in radians. Found by checking every item on
+// every character (see the Character tab pictures).
+export const ITEM_FIT = {
+  robot: { jetpack: { p: [0, 0, -0.06] }, backpack: { p: [0, 0, -0.03] } }, // slim back
+  casual: { helmet: { p: [0, -0.03, 0.02], s: 1.06 } },                     // over the long hair
+  beach: { helmet: { s: 1.06 } },
+};
+// Fixes for an item on every character (applied when there's no per-character entry).
+const ITEM_FIT_ALL = { horns: { p: [0, -0.13, 0] } };
+
+// A group for one item, moved/scaled/turned for this character around a pivot.
+function fitSlot(parent, model, item, pivot) {
+  const outer = new THREE.Group(), inner = new THREE.Group();
+  outer.position.set(...pivot);
+  inner.position.set(-pivot[0], -pivot[1], -pivot[2]);
+  outer.add(inner);
+  parent.add(outer);
+  const f = (ITEM_FIT[model] && ITEM_FIT[model][item]) || ITEM_FIT_ALL[item];
+  if (f) {
+    if (f.p) outer.position.add(new THREE.Vector3(...f.p));
+    if (f.s) outer.scale.setScalar(f.s);
+    if (f.r) outer.rotation.set(...f.r);
+  }
+  return inner;
+}
+
 // Animated (Mixamo) body: shirt colour on the body, pants colour on the joints.
 // Hats and the visor sit on the head bone; the team band sits on the hips.
 function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true } = {}) {
@@ -143,12 +178,21 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
     hatRoot.position.y = rig.head[1] - 0.72 * rig.head[0];
   }
   head.add(hatRoot);
-  const box = (w, h, d, m, x, y, z, parent = hatRoot) => {
+  // Each item sits in its own slot, so it can be nudged for this character (ITEM_FIT).
+  const hatSlot = fitSlot(hatRoot, body.modelId, look.hat, HEAD_PIVOT);
+  const faceSlot = fitSlot(hatRoot, body.modelId, look.face, HEAD_PIVOT);
+  const box = (w, h, d, m, x, y, z, parent = hatSlot) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     b.position.set(x, y, z); parent.add(b); return b;
   };
-  addFace(look, box, mat, visor);
-  addHat(hatRoot, look, box, mat, visor);
+  const faceBox = (w, h, d, m, x, y, z, parent = faceSlot) => box(w, h, d, m, x, y, z, parent);
+  addFace(look, faceBox, mat, visor);
+  addHat(hatSlot, look, box, mat, visor);
+  // Take off the character's own headgear / hair under a hat, and its own pack under a back item.
+  const hat = look.hat && look.hat !== 'none' ? look.hat : null;
+  if (hat && HEADGEAR[body.modelId]) body.hide(/_Head/, HEADGEAR[body.modelId]);
+  if (hat && HAIR[body.modelId] && (FULL_HATS.includes(hat) || body.modelId === 'punk' && TOP_HATS.includes(hat))) body.hide(/_Head/, HAIR[body.modelId]);
+  if (look.back && look.back !== 'noback') body.hide(/Backpack/);
 
   // Back socket (upper spine): back items are made for the blocky torso (top at 0.55, back at
   // z +0.18). Fit it to the model's chest. The measured part is the middle of the chest only
@@ -165,7 +209,8 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
     back.position.set(0, rig.back[1], rig.back[2]);
   }
   spine.add(back);
-  const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, back);
+  const backSlot = fitSlot(back, body.modelId, look.back, BACK_PIVOT);
+  const bbox = (w, h, d, m, x, y, z) => box(w, h, d, m, x, y, z, backSlot);
   addBack(look, bbox, mat, visor);
 
   const teamParts = [];

@@ -126,7 +126,7 @@ export class AnimatedBody {
     const xs = [], ys = [], zs = [];
     const v = new THREE.Vector3();
     this.model.traverse(o => {
-      if (!o.isSkinnedMesh) return;
+      if (!o.isSkinnedMesh || /Backpack/.test(o.name + (o.parent ? o.parent.name : ''))) return; // (built-in gear isn't the body)
       const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight;
       const bones = o.skeleton.bones;
       for (let i = 0; i < si.count; i++) {
@@ -144,6 +144,19 @@ export class AnimatedBody {
     const r = { x0: pc(xs, 0.03), x1: pc(xs, 0.97), y0: pc(ys, 0.03), y1: pc(ys, 0.93), z0: pc(zs, 0.03), z1: pc(zs, 0.97) };
     measureCache[cacheKey] = r;
     return r;
+  }
+
+  // Hide parts of the model: meshes whose name (or parent's) matches `mesh`, or only the
+  // parts using one of the given materials. Used to take off built-in hats/packs under items.
+  hide(mesh, materials = null) {
+    this.model.traverse(o => {
+      if (!o.isMesh) return;
+      const name = o.name + ' ' + (o.parent ? o.parent.name : '');
+      if (!mesh.test(name)) return;
+      if (!materials) { o.visible = false; return; }
+      if (Array.isArray(o.material)) return;
+      if (materials.includes(o.material.name)) o.visible = false;
+    });
   }
 
   // The socket is lined up with the character (not the bone) in the rest pose, and in metres.
