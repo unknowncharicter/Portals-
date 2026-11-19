@@ -690,3 +690,13 @@ button.big:hover, .play-btn:hover { background: #ffc54f; filter: none; transform
 input[type=text], .field input { border-radius: 2px; background: #101215; border: 1px solid var(--line-2); color: var(--text); font-family: 'Barlow', sans-serif; }
 .hp-wrap { border-radius: 2px; }
 #pause h2 { letter-spacing: .12em; }
+
+/* Tutorial box: always above the crosshair, never over it. */
+#tutorial { pointer-events: none; border-radius: 2px; border-width: 1px; border-color: var(--accent); background: rgba(13,15,18,.82); }
+#tutorial small { color: var(--accent); }
+@media (max-height: 600px) {
+  #tutorial { top: 62px; width: min(520px, 56%); padding: 6px 12px; font-size: 14px; }
+  #tutorial small { font-size: 10px; margin-bottom: 2px; }
+}
+body.touch #tutorial { top: 58px; width: min(520px, 50%); padding: 6px 12px; font-size: 14px; }
+body.touch #tutorial small { font-size: 10px; margin-bottom: 2px; }
