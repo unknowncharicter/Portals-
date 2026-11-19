@@ -10,6 +10,9 @@ function angleDiff(a, b) {
   return d;
 }
 
+const SIDE_NOTICE_RANGE = 22; // m: an enemy in plain sight this close is noticed even outside the field of view
+const LOST_GRACE = 0.4;       // s: a target lost from sight this briefly keeps the reaction time already built up
+
 // Simple bot: chases, strafes, aims with a reaction delay, heals, and uses portals to flank.
 export class BotBrain {
   constructor(char, match, skill = 0.6) {
@@ -30,10 +33,13 @@ export class BotBrain {
     this.wish = new THREE.Vector3();
     this.jump = false;
     this.aimNoise = new THREE.Vector2();
+    this.pauseT = 0;         // pause before the next burst (counts down only while aimed at the target)
+    this.sideT = 0;          // how long an enemy has been in plain view outside our field of view
   }
 
   reset() {
     this.target = null; this.aimDir = null; this.seenT = 0; this.hiddenT = 0; this.flank = null; this.peek = null;
+    this.burstT = 0; this.pauseT = 0; this.sideT = 0;
     this.lastKnown = null; this.searchGoal = null; this.searchT = 0; this.tauntT = 0;
     this.hillGoal = null; this.escapeT = 0; this.steerT = 0; this.progPos = null;
   }
@@ -77,16 +83,8 @@ export class BotBrain {
     this.crouch = this.slideHold > 0;
     if (!c.alive) { this.tauntT = 0; return; }
 
-    // Taunt: dance for a moment after a kill, unless someone shows up or shoots us.
-    if (this.tauntT > 0) {
-      this.tauntT -= dt;
-      const hurt = performance.now() - (c.hurtAt || 0) < 1500;
-      if (hurt || this.tauntT <= 0 || (this.aimDir && this.target && this.target.alive)) { this.tauntT = 0; c.stopEmote(); }
-      else { if (!c.emote && c.grounded) c.startEmote(); if (c.emote) return; }
-    } else if (c.emote && c.emote.live) c.stopEmote();
-
     const enemies = m.enemiesOf(c).filter(e => e.alive);
-    if (!enemies.length) return;
+    if (!enemies.length) { this.dance(dt, false); return; }
 
     // Pick nearest enemy, prefer one we can shoot.
     this.visCheckT -= dt;
@@ -96,19 +94,30 @@ export class BotBrain {
       let found = null;
       const look = c.lookDir();
       const now = performance.now();
+      let side = null;
       for (const e of enemies) {
-        if (e.pos.distanceTo(c.pos) > 70) continue;
-        // Bots only notice you in front of them (about 120° view), unless they are already
-        // fighting you or you just shot them. Every line of sight counts (direct or through
-        // any portal), so a peek through our portal works even if you're also behind us.
+        const dist = e.pos.distanceTo(c.pos);
+        if (dist > 70) continue;
+        // Bots notice you at once in front of them (about 120° view), or straight away if they
+        // are already fighting you or you just shot them. Every line of sight counts (direct or
+        // through any portal), so a peek through our portal works even if you're also behind us.
         const tracking = this.target === e && this.seenT > 0;
         const justHit = c.lastAttacker === e && now - (c.hurtAt || 0) < 2500;
         const dir = this.findShot(e, tracking || justHit ? null : (d) => d.dot(look) >= 0.5);
-        if (!dir) continue;
-        found = { e, dir }; break;
+        if (dir) { found = { e, dir }; break; }
+        // Out of view but in plain sight nearby (beside or behind us): noticed after a moment.
+        if (!side && dist < SIDE_NOTICE_RANGE) {
+          const anyDir = this.findShot(e);
+          if (anyDir) side = { e, dir: anyDir };
+        }
       }
+      if (!found && side) {
+        this.sideT += 0.12;
+        if (this.sideT >= 0.9 - this.skill * 0.5) found = side; // easy bots take longer to notice
+      } else if (!side) this.sideT = 0;
       if (found) {
-        if (this.target !== found.e) this.seenT = 0;
+        this.sideT = 0;
+        if (this.target !== found.e) { this.seenT = 0; this.pauseT = 0; } // a new target: the first burst comes right after the reaction delay
         this.target = found.e;
         this.aimDir = found.dir;
         this.lastKnown = found.e.pos.clone();
@@ -119,7 +128,12 @@ export class BotBrain {
     }
     if (!this.target || !this.target.alive) { this.target = enemies[0]; this.aimDir = null; }
 
-    if (this.aimDir) { this.seenT += dt; this.hiddenT = 0; } else { this.seenT = 0; this.hiddenT += dt; }
+    // Taunt: dance for a moment after a kill, but stop the moment an enemy is in view (the check
+    // above keeps running while we dance) or someone shoots us.
+    if (this.dance(dt, !!this.aimDir)) return;
+
+    // Lost for a moment (a pillar, a jump): keep the reaction already built up for a short while.
+    if (this.aimDir) { this.seenT += dt; this.hiddenT = 0; } else { this.hiddenT += dt; if (this.hiddenT > LOST_GRACE) this.seenT = 0; }
     c.aiming = !!this.aimDir; // raise the gun in combat
 
     // Heal when low.
@@ -135,6 +149,20 @@ export class BotBrain {
     this.lastPos.copy(c.pos);
     if (this.stuckT > 0.4) { this.jump = true; this.strafeSign *= -1; this.stuckT = 0; }
     if (this.jump && !this.groundAhead(this.wish.lengthSq() > 0.01 ? this.wish : new THREE.Vector3(c.vel.x, 0, c.vel.z), [1.5, 3.5], false)) this.jump = false;
+  }
+
+  // Dancing after a kill. True while still dancing (this tick does nothing else).
+  dance(dt, enemyInView) {
+    const c = this.c;
+    if (this.tauntT > 0) {
+      this.tauntT -= dt;
+      const hurt = performance.now() - (c.hurtAt || 0) < 1500;
+      if (hurt || this.tauntT <= 0 || enemyInView) { this.tauntT = 0; c.stopEmote(); return false; }
+      if (!c.emote && c.grounded) c.startEmote();
+      return !!c.emote;
+    }
+    if (c.emote && c.emote.live) c.stopEmote();
+    return false;
   }
 
   turnToward(dir, dt, speed) {
@@ -161,12 +189,18 @@ export class BotBrain {
     dir.normalize();
     const err = this.turnToward(dir, dt, 2 + this.skill * 4);
 
-    // Fire in short bursts with pauses, after a human-like reaction delay.
+    // Fire in short bursts with pauses, after a human-like reaction delay. The burst and the pause
+    // only count down while we're actually aimed at the target (not while still turning to it).
     const reaction = 1.1 - this.skill * 0.75;
-    this.burstT -= dt;
     if (this.seenT > reaction && err < 0.06) {
-      if (this.burstT > 0) m.fire(c, 0.02 + (1 - this.skill) * 0.03);
-      if (this.burstT < -(0.6 + Math.random() * 0.5)) this.burstT = 0.4 + Math.random() * 0.5;
+      if (this.burstT > 0) {
+        m.fire(c, 0.02 + (1 - this.skill) * 0.03);
+        this.burstT -= dt;
+        if (this.burstT <= 0) this.pauseT = 0.6 + Math.random() * 0.5;
+      } else {
+        this.pauseT -= dt;
+        if (this.pauseT <= 0) this.burstT = 0.4 + Math.random() * 0.5;
+      }
     }
 
     // Strafe and keep a good distance.
