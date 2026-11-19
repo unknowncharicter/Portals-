@@ -17,11 +17,15 @@ export class Input {
 
     addEventListener('keydown', e => {
       if (!this.enabled) return;
-      if (!this.keys.has(e.code)) this.pressed.add(e.code);
-      this.keys.add(e.code);
+      const code = this.map(e.code);
       if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
+      if (!code) return;
+      if (!this.keys.has(code)) this.pressed.add(code);
+      this.keys.add(code);
     });
-    addEventListener('keyup', e => this.keys.delete(e.code));
+    addEventListener('keyup', e => { const code = this.map(e.code); if (code) this.keys.delete(code); });
+    this.setBinds({});
+    this.invertY = false; this.adsSens = 1;
     addEventListener('mousedown', e => {
       if (!this.enabled || !this.locked) return;
       if (e.button === 0) { this.mouseDown = true; this.mouseClicked = true; }
@@ -53,6 +57,23 @@ export class Input {
       if (p && p.catch) p.catch(plain);
     } catch (e) { plain(); }
   }
+  // Rebound keys. binds: { actionKey: physicalKey }, where the action is named by its default key
+  // (e.g. { KeyC: 'ControlLeft' } makes Left Ctrl crouch). The game keeps asking for the default keys.
+  setBinds(binds) {
+    this.fromKey = {};
+    this.movedAway = new Set();
+    for (const [action, key] of Object.entries(binds || {})) {
+      if (!key || key === action) continue;
+      this.fromKey[key] = action;
+      this.movedAway.add(action);
+    }
+  }
+  map(code) {
+    if (this.fromKey[code]) return this.fromKey[code];
+    if (this.movedAway.has(code)) return null; // that key now does nothing (its action moved)
+    return code;
+  }
+
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
   // Virtual keys (touch buttons).

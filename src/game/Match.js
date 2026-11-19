@@ -673,6 +673,7 @@ export class Match {
 
   // Floating damage number where your shot landed (you only see your own).
   showDamage(t, amount, info, killed) {
+    if (this.save.settings && this.save.settings.dmgNumbers === false) return; // turned off in Settings
     if (amount <= 0) return;
     const segs = info.segs;
     const at = segs && segs.length ? segs[segs.length - 1].to.clone() : t.pos.clone().setY(t.pos.y + 0.6);
@@ -836,9 +837,9 @@ export class Match {
     }
     inp.wheelOpen = !!(this.wheel && this.wheel.open);
 
-    const sens = inp.sensitivity * ((this.scoped || this.ads) ? Math.min(1, this.camera.fov / this.baseFov) : 1);
+    const sens = inp.sensitivity * ((this.scoped || this.ads) ? Math.min(1, this.camera.fov / this.baseFov) * (inp.adsSens || 1) : 1);
     p.yaw -= inp.dx * sens;
-    p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens, -1.55, 1.55);
+    p.pitch = THREE.MathUtils.clamp(p.pitch - inp.dy * sens * (inp.invertY ? -1 : 1), -1.55, 1.55);
 
     const wish = new THREE.Vector3();
     // B: dance. Moving, jumping or any action stops it.
@@ -1148,9 +1149,10 @@ export class Match {
       p.landImpact = 0;
       this.dipV += (-this.dip * 140 - this.dipV * 16) * dt;
       this.dip = THREE.MathUtils.clamp(this.dip + this.dipV * dt, -0.35, 0.1);
-      cam.position.y += bob + this.dip;
+      cam.position.y += (this.save.settings && this.save.settings.shake === false ? 0 : bob) + this.dip;
       this.shake = Math.max(0, this.shake - dt * 3);
-      const sh = this.shake * 0.015;
+      const calm = this.save.settings && this.save.settings.shake === false; // Settings: camera shake off
+      const sh = calm ? 0 : this.shake * 0.015;
       const tilt = p.slideT > 0 ? 0.05 : 0; // slight camera roll while sliding
       this.roll = (this.roll || 0) + (tilt - (this.roll || 0)) * Math.min(1, dt * 10);
       cam.rotation.set(p.pitch + (Math.random() - 0.5) * sh, p.yaw + (Math.random() - 0.5) * sh, this.roll + Math.sin(this.bobT * 0.5) * 0.004 * Math.min(1, hs / 7), 'YXZ');

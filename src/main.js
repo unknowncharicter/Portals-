@@ -89,41 +89,166 @@ let match = null;
 let state = 'menu'; // menu | lobby | playing | paused | results
 
 // ---------- Settings ----------
+// Settings. type: range (slider), toggle (on/off), choice (buttons), color (swatches).
+// lobbyOnly: not shown in the pause menu (keeps it short).
 const SETTINGS = [
-  { id: 'sens',   label: 'Mouse speed', min: 0.2, max: 3,   step: 0.05, fmt: v => v.toFixed(2) },
-  { id: 'fov',    label: 'Field of view', min: 60, max: 110, step: 1,   fmt: v => String(v) },
-  { id: 'volume', label: 'Sound',       min: 0,   max: 1,   step: 0.05, fmt: v => Math.round(v * 100) + '%' },
-  { id: 'music',  label: 'Music',       min: 0,   max: 1,   step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  { group: 'Controls' },
+  { id: 'sens',    label: 'Mouse speed', min: 0.2, max: 3, step: 0.05, fmt: v => v.toFixed(2) },
+  { id: 'adsSens', label: 'Aim speed', min: 0.3, max: 1.5, step: 0.05, fmt: v => Math.round(v * 100) + '%', hint: 'Mouse speed while aiming' },
+  { id: 'invertY', label: 'Invert mouse Y', type: 'toggle' },
+  { group: 'View' },
+  { id: 'fov',     label: 'Field of view', min: 60, max: 110, step: 1, fmt: v => String(v) },
+  { id: 'shake',   label: 'Head bob & shake', type: 'toggle' },
+  { id: 'dmgNumbers', label: 'Damage numbers', type: 'toggle' },
+  { id: 'showFps', label: 'Show FPS', type: 'toggle' },
+  { id: 'quality', label: 'Graphics', type: 'choice', options: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], hint: 'Lower = smoother on slow computers' },
+  { group: 'Crosshair', lobbyOnly: true },
+  { id: 'crosshair', label: 'Style', type: 'choice', lobbyOnly: true, options: [['classic', '✚'], ['dot', '•'], ['crossdot', '✛•'], ['circle', '◯'], ['tee', '┬']] },
+  { id: 'chColor', label: 'Colour', type: 'color', lobbyOnly: true, options: ['#ffffff', '#52ff6a', '#ffe14d', '#3ee8ff', '#ff5ad1', '#ff4040'] },
+  { id: 'chSize',  label: 'Size', min: 0.6, max: 2, step: 0.1, lobbyOnly: true, fmt: v => Math.round(v * 100) + '%' },
+  { group: 'Sound' },
+  { id: 'volume',  label: 'Sound', min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' },
+  { id: 'music',   label: 'Music', min: 0, max: 1, step: 0.05, fmt: v => Math.round(v * 100) + '%' },
 ];
 
+// Keys you can change (named by their default key; the game always asks for the default).
+const KEY_ACTIONS = [
+  ['KeyW', 'Move forward'], ['KeyS', 'Move back'], ['KeyA', 'Move left'], ['KeyD', 'Move right'],
+  ['Space', 'Jump'], ['KeyC', 'Crouch / slide'], ['ShiftLeft', 'Dash'], ['KeyE', 'Portal'], ['KeyQ', 'Cancel portal'],
+  ['KeyR', 'Reload'], ['KeyG', 'Grenade'], ['KeyF', 'Heal'], ['Digit1', 'Primary gun'], ['Digit2', 'Secondary gun'],
+  ['KeyB', 'Dance'], ['KeyZ', 'Sight zoom'],
+];
+const keyName = (code) => code.replace(/^Key/, '').replace(/^Digit/, '').replace('ShiftLeft', 'Left Shift').replace('ShiftRight', 'Right Shift')
+  .replace('ControlLeft', 'Left Ctrl').replace('ControlRight', 'Right Ctrl').replace('AltLeft', 'Left Alt').replace('AltRight', 'Right Alt')
+  .replace('Space', 'Space').replace('ArrowUp', '↑').replace('ArrowDown', '↓').replace('ArrowLeft', '←').replace('ArrowRight', '→');
+
+let fpsEl = null, fpsFrames = 0, fpsLast = performance.now();
 function applySettings() {
   const st = save.settings;
   input.sensitivity = 0.0022 * st.sens;
+  input.adsSens = st.adsSens ?? 1;
+  input.invertY = !!st.invertY;
+  input.setBinds(st.keys || {});
   setVolume(st.volume);
   setMusicVolume(st.music ?? 0.5);
   camera.fov = st.fov;
   if (match) { match.baseFov = st.fov; if (match.scoped) camera.fov = match.player.weapon.def.zoom; }
   camera.updateProjectionMatrix();
+  // Graphics: how many pixels we draw.
+  const dpr = window.devicePixelRatio || 1;
+  const ratio = st.quality === 'low' ? Math.min(dpr, 1) * 0.6 : st.quality === 'high' ? Math.min(dpr, 2) : Math.min(dpr, touchMode ? 1 : 1.5);
+  if (Math.abs(renderer.getPixelRatio() - ratio) > 0.01) { renderer.setPixelRatio(ratio); resize(); }
+  // Crosshair look.
+  const ch = $('crosshair');
+  ch.className = ch.className.replace(/\bch-\w+/g, '').trim();
+  ch.classList.add('ch-' + (st.crosshair || 'classic'));
+  ch.style.setProperty('--ch-color', st.chColor || '#ffffff');
+  ch.style.setProperty('--ch-size', st.chSize ?? 1);
+  // FPS counter.
+  if (st.showFps && !fpsEl) { fpsEl = document.createElement('div'); fpsEl.id = 'fps'; document.body.appendChild(fpsEl); }
+  if (fpsEl) fpsEl.classList.toggle('hidden', !st.showFps);
+}
+function countFps() {
+  if (!fpsEl || !save.settings.showFps) return;
+  fpsFrames++;
+  const now = performance.now();
+  if (now - fpsLast > 500) { fpsEl.textContent = Math.round(fpsFrames * 1000 / (now - fpsLast)) + ' FPS'; fpsFrames = 0; fpsLast = now; }
 }
 
 function buildSettings() {
+  const st = save.settings;
+  const changed = () => { applySettings(); writeSave(save); };
   for (const box of document.querySelectorAll('[data-settings]')) {
+    const inLobby = !!box.closest('#lobby');
     box.innerHTML = '';
     for (const def of SETTINGS) {
+      if (def.lobbyOnly && !inLobby) continue;
+      if (def.group) { const h = document.createElement('div'); h.className = 'set-group'; h.textContent = def.group; box.appendChild(h); continue; }
       const row = document.createElement('label');
-      const v = save.settings[def.id];
-      row.innerHTML = `<span>${def.label}</span><input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="${v}"><b>${def.fmt(v)}</b>`;
-      const inp = row.querySelector('input'), out = row.querySelector('b');
-      inp.oninput = () => {
-        save.settings[def.id] = Number(inp.value);
-        out.textContent = def.fmt(Number(inp.value));
-        applySettings();
-        writeSave(save);
-      };
+      row.className = 'set-row';
+      if (def.hint) row.title = def.hint;
+      const name = document.createElement('span'); name.textContent = def.label; row.appendChild(name);
+      const v = st[def.id];
+      if (!def.type) {
+        row.insertAdjacentHTML('beforeend', `<input type="range" min="${def.min}" max="${def.max}" step="${def.step}" value="${v}"><b>${def.fmt(v)}</b>`);
+        const inp = row.querySelector('input'), out = row.querySelector('b');
+        inp.oninput = () => { st[def.id] = Number(inp.value); out.textContent = def.fmt(Number(inp.value)); changed(); };
+      } else if (def.type === 'toggle') {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'toggle' + (v ? ' on' : '');
+        b.innerHTML = '<i></i>';
+        b.onclick = (e) => { e.preventDefault(); st[def.id] = !st[def.id]; b.classList.toggle('on', st[def.id]); Sfx.click(); changed(); };
+        row.appendChild(b);
+      } else if (def.type === 'choice') {
+        const seg = document.createElement('div'); seg.className = 'seg set-seg';
+        for (const [val, text] of def.options) {
+          const b = document.createElement('button'); b.type = 'button'; b.textContent = text;
+          if (val === v) b.classList.add('sel');
+          b.onclick = (e) => { e.preventDefault(); st[def.id] = val; Sfx.click(); changed(); buildSettings(); };
+          seg.appendChild(b);
+        }
+        row.appendChild(seg);
+      } else if (def.type === 'color') {
+        const sw = document.createElement('div'); sw.className = 'swatches set-sw';
+        for (const c of def.options) {
+          const b = document.createElement('button'); b.type = 'button'; b.style.background = c;
+          if (c === v) b.classList.add('sel');
+          b.onclick = (e) => { e.preventDefault(); st[def.id] = c; Sfx.click(); changed(); buildSettings(); };
+          sw.appendChild(b);
+        }
+        row.appendChild(sw);
+      }
       box.appendChild(row);
+    }
+    // Crosshair preview + key rebinding (lobby only).
+    if (inLobby) {
+      const prev = document.createElement('div'); prev.className = 'ch-preview';
+      const c = $('crosshair').cloneNode(true); c.removeAttribute('id'); c.classList.add('crosshair-demo');
+      prev.appendChild(c); box.appendChild(prev);
+      buildKeybinds(box);
     }
   }
 }
+
+let rebinding = null; // action waiting for a key
+function buildKeybinds(box) {
+  const st = save.settings;
+  st.keys ||= {};
+  const h = document.createElement('div'); h.className = 'set-group'; h.textContent = 'Keys'; box.appendChild(h);
+  const grid = document.createElement('div'); grid.className = 'keybinds';
+  for (const [action, label] of KEY_ACTIONS) {
+    const row = document.createElement('div'); row.className = 'keyrow';
+    const cur = st.keys[action] || action;
+    row.innerHTML = '<span></span><button type="button"></button>';
+    row.querySelector('span').textContent = label;
+    const b = row.querySelector('button');
+    b.textContent = rebinding === action ? 'Press a key…' : keyName(cur);
+    if (rebinding === action) b.classList.add('wait');
+    if (cur !== action) b.classList.add('changed');
+    b.onclick = () => { Sfx.click(); rebinding = rebinding === action ? null : action; buildSettings(); };
+    grid.appendChild(row);
+  }
+  box.appendChild(grid);
+  const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'keyreset'; reset.textContent = 'Reset keys';
+  reset.onclick = () => { st.keys = {}; rebinding = null; Sfx.click(); applySettings(); writeSave(save); buildSettings(); };
+  box.appendChild(reset);
+}
+// While waiting for a key: take the next key press (Escape cancels). A key already used by
+// another action swaps with it.
+addEventListener('keydown', (e) => {
+  if (!rebinding) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  if (e.code !== 'Escape') {
+    const st = save.settings, keys = st.keys ||= {};
+    const action = rebinding;
+    const old = keys[action] || action;
+    for (const [a] of KEY_ACTIONS) if (a !== action && (keys[a] || a) === e.code) keys[a] = old; // swap
+    keys[action] = e.code;
+    for (const [a] of KEY_ACTIONS) if (keys[a] === a) delete keys[a];
+    applySettings(); writeSave(save);
+  }
+  rebinding = null;
+  buildSettings();
+}, true);
 
 // ---------- Character preview (lobby) ----------
 const previewCanvas = $('preview');
@@ -963,6 +1088,7 @@ function frame() {
     camera.updateMatrixWorld();
     renderer.render(scene, camera);
   }
+  countFps();
   input.endFrame();
 }
 

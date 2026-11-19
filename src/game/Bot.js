@@ -143,6 +143,9 @@ export class BotBrain {
 
     this.checkStuck(dt);
     if (this.aimDir) this.combat(dt); else this.hunt(dt);
+    // Slide-jump: hop out of the end of a slide to carry its speed (like players do).
+    if (c.slideT > 0 && c.slideT < 0.12 && !this.slideJumped && Math.random() < 0.3 + this.skill * 0.3) { this.jump = true; this.slideJumped = true; }
+    if (c.slideT <= 0) this.slideJumped = false;
 
     // Unstick: if we barely moved while wanting to, jump.
     this.stuckT = c.pos.distanceTo(this.lastPos) < 0.02 && this.wish.lengthSq() > 0 ? this.stuckT + dt : 0;
@@ -205,7 +208,15 @@ export class BotBrain {
 
     // Strafe and keep a good distance.
     this.strafeT -= dt;
-    if (this.strafeT <= 0) { this.strafeSign = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0.6 + Math.random() * 1.4; }
+    if (this.strafeT <= 0) {
+      this.strafeSign = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0.6 + Math.random() * 1.4;
+      // Slide into the new direction now and then (better bots more often): a hard target.
+      if (c.grounded && !c.crouched && Math.random() < 0.25 + this.skill * 0.25) this.slideHold = 0.45;
+    }
+    // Got hit: sometimes slide out of the line of fire.
+    if (c.hurtAt && performance.now() - c.hurtAt < 120 && c.grounded && !c.crouched && Math.random() < 0.4 * this.skill) {
+      this.slideHold = 0.45; this.strafeT = 0.8;
+    }
     const to = this.target.pos.clone().sub(c.pos).setY(0);
     const dist = to.length();
     to.normalize();
@@ -359,8 +370,8 @@ export class BotBrain {
         m.throwGrenade(c);
       }
     }
-    // Slide now and then while running somewhere far.
-    if (far > 10 && c.grounded && !c.crouched && Math.random() < dt * 0.35 && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
+    // Slide now and then while running somewhere (it's faster), sometimes jumping out of it to keep the speed.
+    if (far > 7 && c.grounded && !c.crouched && Math.random() < dt * (0.6 + this.skill * 0.6) && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
     // Look where we are going (slightly toward the target height).
     const look = this.wish.lengthSq() > 0 ? this.wish.clone() : to;
     look.y = 0;
