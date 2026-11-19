@@ -234,6 +234,7 @@ export class AnimatedBody {
     this.emoting = true;
     this.model.rotation.y = Math.PI;
     this.mixer.update(dt);
+    this.feetForward(); // the idle is a rifle stance (back foot turned out): cheering, both feet face forward
     const pump = Math.sin(t * 9);
     if (kind === 0) this.poseArms({
       RightArm: [0.35, 0.95, -0.1], RightForeArm: [0.1, 1, 0.25 * pump],
@@ -246,7 +247,9 @@ export class AnimatedBody {
     });
   }
 
-  // Play a dance clip (looping), with no aiming adjustments.
+  // Play a dance clip (looping), with no aiming adjustments. The dancer stays on its spot: some
+  // dances walk about (Thriller up to 2.6 m), which could carry a winner into a wall or off a
+  // ledge, so the hips keep their place across the floor (they still bob up and down).
   dance(dt, clip) {
     this.held += dt;
     const a = this.actions[clip];
@@ -254,10 +257,49 @@ export class AnimatedBody {
       a.reset().setLoop(THREE.LoopRepeat, Infinity).setEffectiveWeight(1).fadeIn(0.25).play();
       if (this.current) this.current.fadeOut(0.25);
       this.current = a; this.held = 0;
+      this.danceSpot = this.hipsSpot();
     }
     this.emoting = true;
     this.model.rotation.y = Math.PI;
     this.mixer.update(dt);
+    this.keepOnSpot(this.danceSpot);
+  }
+
+  // Where the hips are now, and which of their (parent's) axes points up.
+  hipsSpot() {
+    const hips = this.bones.Hips;
+    if (!hips || !hips.parent) return null;
+    hips.parent.updateMatrixWorld(true);
+    const up = _v.set(0, 1, 0).applyQuaternion(hips.parent.getWorldQuaternion(_q).invert());
+    const ax = [Math.abs(up.x), Math.abs(up.y), Math.abs(up.z)];
+    const upAxis = ax.indexOf(Math.max(...ax));
+    return { pos: hips.position.clone(), upAxis };
+  }
+
+  // Puts the hips back over their spot across the floor (only their height moves).
+  keepOnSpot(spot) {
+    const hips = this.bones.Hips;
+    if (!spot || !hips) return;
+    const axes = ['x', 'y', 'z'];
+    for (let i = 0; i < 3; i++) if (i !== spot.upAxis) hips.position[axes[i]] = spot.pos[axes[i]];
+    hips.updateMatrixWorld(true);
+  }
+
+  // Turns each foot to point straight ahead (keeping how far it tips up or down).
+  feetForward() {
+    this.root.updateMatrixWorld(true);
+    const rootQ = this.root.getWorldQuaternion(new THREE.Quaternion());
+    const toRoot = rootQ.clone().invert();
+    const dirs = {};
+    for (const name of ['LeftFoot', 'RightFoot']) {
+      const bone = this.bones[name];
+      if (!bone) continue;
+      const d = Y.clone().applyQuaternion(bone.getWorldQuaternion(_q)).applyQuaternion(toRoot); // in character space
+      const flat = Math.hypot(d.x, d.z);
+      if (flat < 0.05) continue; // pointing straight down: nothing to turn
+      dirs[name] = [0, d.y, -flat]; // the same tilt, facing forward (-Z)
+    }
+    this.poseArms(dirs); // (points any bone along a direction, not just arms)
   }
 
   // Point arm bones along directions given in character space.

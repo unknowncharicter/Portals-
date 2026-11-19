@@ -5,94 +5,79 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Portal Duel</title>
   <link rel="stylesheet" href="./src/style.css" />
-  <link rel="preload" href="boot/papercomet.webp" as="image" />
   <!-- CrazyGames SDK (safe to keep; the game works without it) -->
   <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
 </head>
 <body>
-  <!-- Intro + loading screen: the Paper Comet Games animation always plays in full,
-       then fades out once the game has also finished loading. -->
+  <!-- Intro + loading screen: the Paper Comet Games intro, the same one as in Sock Run (recorded from it: picture and
+       sound, 4 s). It always plays in full, then fades out once the game has also finished loading (a comet-trail bar
+       shows if loading takes longer). Silent if the game's Sound is at 0, on CrazyGames until their SDK says sound is
+       on, or when the browser doesn't allow sound yet. If the video can't play, the logo shows for the same time. -->
   <div id="boot" style="position:fixed;inset:0;z-index:100;background:#1a2348;transition:opacity .4s">
-    <canvas id="boot-c" style="width:100%;height:100%;display:block"></canvas>
+    <video id="boot-v" playsinline muted preload="auto" disablepictureinpicture
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#1a2348">
+      <source src="boot/papercomet-intro.mp4" type="video/mp4" />
+      <source src="boot/papercomet-intro.webm" type="video/webm" />
+    </video>
+    <img id="boot-logo" src="boot/papercomet.webp" alt="Paper Comet Games"
+      style="display:none;position:absolute;left:50%;top:50%;width:min(86vw,86vh);height:auto;transform:translate(-50%,-50%)" />
+    <div id="boot-bar" style="display:none;position:absolute;left:50%;bottom:3vh;width:min(420px,62vw);height:6px;transform:translateX(-50%);border-radius:3px;background:rgba(255,255,255,.12);overflow:hidden">
+      <i id="boot-fill" style="display:block;height:100%;width:8%;border-radius:3px;background:linear-gradient(90deg,rgba(255,201,74,0),#ff5e6c,#ffc94a);transition:width .3s"></i>
+    </div>
   </div>
   <script>
   (function () {
-    var box = document.getElementById('boot'), cv = document.getElementById('boot-c'), g = cv.getContext('2d');
-    var logo = new Image(); logo.src = 'boot/papercomet.webp';
-    var t0 = performance.now(), done = false, leaving = false, prog = 0, raf = 0;
-    // Flight path in the logo's pixels (1254 x 1254): in from the lower left, a loop, then the logo's trail to the plane.
-    var PTS = [[-150, 1150], [200, 700], [520, 330], [850, 420], [1060, 540], [1010, 810], [720, 965], [434, 812], [400, 735], [430, 640], [560, 530], [700, 430], [723, 372]];
-    var COLS = ['#ff8a3d', '#ff5e6c', '#ffc94a'];
-    var FLY = 1.3, FADE = 0.45, MIN = FLY + FADE + 1.1; // whole animation, with the logo held for a moment
-    function cr(p0, p1, p2, p3, t) { var t2 = t * t, t3 = t2 * t; return 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 + (-p0 + 3 * p1 - 3 * p2 + p3) * t3); }
-    function at(u) { // u 0..1 along the path
-      var n = PTS.length - 1, f = Math.min(n - 1e-4, Math.max(0, u * n)), i = Math.floor(f), k = f - i;
-      var a = PTS[Math.max(0, i - 1)], b = PTS[i], c = PTS[i + 1], d = PTS[Math.min(n, i + 2)];
-      return [cr(a[0], b[0], c[0], d[0], k), cr(a[1], b[1], c[1], d[1], k)];
+    var box = document.getElementById('boot'), v = document.getElementById('boot-v');
+    var logo = document.getElementById('boot-logo'), bar = document.getElementById('boot-bar'), fill = document.getElementById('boot-fill');
+    var LENGTH = 4.0, ended = false, done = false, leaving = false, fellBack = false, prog = 0.08;
+    // Portrait screens: the whole picture fits (the background is the same night blue); landscape fills the screen.
+    function fit() { v.style.objectFit = innerWidth < innerHeight ? 'contain' : 'cover'; }
+    fit(); addEventListener('resize', fit);
+    // The game's own Sound setting (0 = silent).
+    var volume = 0.7;
+    try { var saved = JSON.parse(localStorage.getItem('portal-duel-save-v1') || '{}'); if (saved.settings && typeof saved.settings.volume === 'number') volume = saved.settings.volume; } catch (e) {}
+    var onCrazyGames = !!(window.CrazyGames && window.CrazyGames.SDK);
+    function finish() {
+      if (!ended) return;
+      if (!done) { bar.style.display = 'block'; return; }
+      if (leaving) return;
+      leaving = true;
+      box.style.opacity = '0';
+      setTimeout(function () { v.pause(); box.remove(); }, 450);
     }
-    var ease = function (x) { return 1 - Math.pow(1 - x, 2.2); };
-    var trail = [], stars = [[473, 247, 48], [388, 399, 26], [861, 510, 22], [790, 642, 48], [673, 722, 27]];
-    function star(x, y, r, a) {
-      g.save(); g.globalAlpha = a; g.fillStyle = '#ffc94a'; g.beginPath();
-      for (var i = 0; i < 8; i++) { var rr = i % 2 ? r * 0.38 : r, an = i * Math.PI / 4; g.lineTo(x + Math.sin(an) * rr, y - Math.cos(an) * rr); }
-      g.fill(); g.restore();
+    function end() { if (!ended) { ended = true; finish(); } }
+    function fallBack() { // no video: the logo, for as long as the intro would have taken
+      if (fellBack || ended) return;
+      fellBack = true;
+      v.style.display = 'none'; logo.style.display = 'block';
+      setTimeout(end, LENGTH * 1000);
     }
-    function plane(x, y, ang, sc) {
-      g.save(); g.translate(x, y); g.rotate(ang); g.scale(sc, sc);
-      g.fillStyle = '#fdfdfd'; g.beginPath(); g.moveTo(170, 0); g.lineTo(-40, -70); g.lineTo(-10, 0); g.closePath(); g.fill();
-      g.fillStyle = '#d6dae8'; g.beginPath(); g.moveTo(170, 0); g.lineTo(-10, 0); g.lineTo(-30, 40); g.closePath(); g.fill();
-      g.fillStyle = '#ecedf5'; g.beginPath(); g.moveTo(170, 0); g.lineTo(-5, 10); g.lineTo(40, 75); g.closePath(); g.fill();
-      g.restore();
+    v.addEventListener('ended', end);
+    v.addEventListener('error', fallBack, true);
+    v.volume = Math.max(0, Math.min(1, volume));
+    // With sound if allowed (not on CrazyGames before their SDK answers; see __bootSound), else silent.
+    function start(withSound) {
+      v.muted = !withSound;
+      var p = v.play();
+      if (p && p.catch) p.catch(function () { if (withSound) start(false); else fallBack(); });
     }
-    function draw() {
-      raf = requestAnimationFrame(draw);
-      var dpr = Math.min(2, window.devicePixelRatio || 1), W = innerWidth, H = innerHeight;
-      if (cv.width !== Math.round(W * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
-      var t = (performance.now() - t0) / 1000 - 0.15;
-      g.setTransform(dpr, 0, 0, dpr, 0, 0); g.fillStyle = '#1a2348'; g.fillRect(0, 0, W, H);
-      var s = Math.min(W, H) * 0.62 / 1254;
-      g.save(); g.translate(W / 2 - 627 * s, H * 0.45 - 627 * s); g.scale(s, s);
-      var u = ease(Math.min(1, Math.max(0, t) / FLY)), p = at(u), q = at(Math.min(1, u + 0.01));
-      if (t < FLY + FADE) {
-        trail.push({ x: p[0], y: p[1], a: Math.atan2(q[1] - p[1], q[0] - p[0]), t: t });
-        while (trail.length && t - trail[0].t > 0.35) trail.shift();
-        g.lineCap = 'round';
-        for (var c = 0; c < 3; c++) for (var i = 1; i < trail.length; i++) {
-          var A = trail[i - 1], B = trail[i], life = 1 - (t - B.t) / 0.35, off = (c - 1) * 26;
-          g.strokeStyle = COLS[c]; g.globalAlpha = Math.max(0, life) * (t > FLY ? 1 - (t - FLY) / FADE : 1); g.lineWidth = 24 * life + 2;
-          g.beginPath();
-          g.moveTo(A.x - Math.sin(A.a) * off, A.y + Math.cos(A.a) * off);
-          g.lineTo(B.x - Math.sin(B.a) * off, B.y + Math.cos(B.a) * off); g.stroke();
-        }
-        g.globalAlpha = t > FLY ? Math.max(0, 1 - (t - FLY) / FADE) : 1;
-        plane(p[0], p[1], Math.atan2(q[1] - p[1], q[0] - p[0]), 0.7 + 0.35 * u);
-        g.globalAlpha = 1;
+    start(volume > 0 && !onCrazyGames);
+    setTimeout(function () { if (v.currentTime === 0) fallBack(); }, 2500); // never got going
+    setTimeout(end, (LENGTH + 3) * 1000); // never stuck on the intro
+    var tick = setInterval(function () {
+      prog = done ? Math.min(1, prog + 0.2) : prog + (0.92 - prog) * 0.05;
+      fill.style.width = (prog * 100).toFixed(1) + '%';
+      if (leaving) clearInterval(tick);
+    }, 100);
+    window.__bootDone = function () { done = true; finish(); };
+    // CrazyGames: called once their SDK is ready, with whether sound is allowed (their mute setting comes first).
+    window.__bootSound = function (allowed) {
+      if (allowed && volume > 0 && !ended && !fellBack && v.muted && v.currentTime < LENGTH - 0.3) {
+        v.muted = false;
+        var p = v.play();
+        if (p && p.catch) p.catch(function () { v.muted = true; v.play().catch(function () {}); });
       }
-      var la = Math.min(1, Math.max(0, (t - FLY + 0.2) / FADE));
-      if (la > 0 && logo.complete) {
-        g.globalAlpha = la; g.drawImage(logo, 0, 0, 1254, 1254); g.globalAlpha = 1;
-        for (var k = 0; k < stars.length; k++) {
-          var st = stars[k], tw = 0.25 + 0.25 * Math.sin(t * 3 + k * 1.7);
-          if (t > FLY + 0.3 + k * 0.08) star(st[0], st[1], st[2] * 0.55, tw * la);
-        }
-      }
-      g.restore();
-      // Comet-trail loading bar.
-      prog = done ? Math.min(1, prog + 0.08) : prog + (0.92 - prog) * 0.012;
-      var bw = Math.min(420, W * 0.62), bx = (W - bw) / 2, by = H * 0.84;
-      g.fillStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.roundRect(bx, by, bw, 8, 4); g.fill();
-      var grad = g.createLinearGradient(bx, 0, bx + bw * prog, 0);
-      grad.addColorStop(0, 'rgba(255,201,74,0)'); grad.addColorStop(0.5, '#ff5e6c'); grad.addColorStop(1, '#ffc94a');
-      g.fillStyle = grad; g.beginPath(); g.roundRect(bx, by, Math.max(8, bw * prog), 8, 4); g.fill();
-      g.fillStyle = '#fff'; g.beginPath(); g.arc(bx + bw * prog, by + 4, 6, 0, 7); g.fill();
-      if (done && t >= MIN && !leaving) {
-        leaving = true;
-        box.style.opacity = '0';
-        setTimeout(function () { cancelAnimationFrame(raf); box.remove(); }, 450);
-      }
-    }
-    draw();
-    window.__bootDone = function () { done = true; };
+    };
   })();
   </script>
   <canvas id="game"></canvas>
