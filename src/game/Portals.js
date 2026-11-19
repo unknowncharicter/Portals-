@@ -35,10 +35,13 @@ const surfaceFrag = /* glsl */`
     #include <logdepthbuf_fragment>
     vec2 p = (vUv - 0.5) * 2.0;
     float r = length(p);
-    if (r > 1.0 || r > open) discard;
+    if (r > 1.0) discard;
     float edge = smoothstep(0.78, 1.0, r);
     vec3 col;
-    if (linked > 0.5 && flatMode < 0.5) {
+    // Still opening: the view grows from the middle, the rest is the portal's swirling colour
+    // (so the opening always fills the ring, never shows the wall behind it).
+    bool viewHere = linked > 0.5 && flatMode < 0.5 && r <= open;
+    if (viewHere) {
       col = texture2D(tex, gl_FragCoord.xy / resolution).rgb;
       col = mix(col, color, edge * 0.55);
     } else {
