@@ -111,7 +111,7 @@ export class Effects {
   drawNumber(n) {
     const g = n.canvas.getContext('2d');
     g.clearRect(0, 0, 128, 64);
-    g.font = '800 40px Rubik, system-ui, sans-serif';
+    g.font = '700 44px "Barlow Condensed", system-ui, sans-serif';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,.75)';
     const txt = String(Math.max(1, Math.round(n.amount)));

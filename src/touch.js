@@ -1,3 +1,4 @@
+import { ic } from './ui/icons.js';
 // On-screen controls for phones and tablets.
 // Left side: a joystick appears wherever you put your thumb. Right side: drag to look.
 // The FIRE button can also be dragged to aim while shooting.
@@ -17,12 +18,12 @@ const BUTTONS = [
   { id: 'portal', label: 'PORTAL', cls: 'portal' },
   { id: 'cancel', label: '✕',      cls: 'small' },
   { id: 'reload', label: 'R',      cls: 'small' },
-  { id: 'nade',   label: '💣',     cls: 'small' },
+  { id: 'nade',   icon: 'grenade', cls: 'small' },
   { id: 'swap',   label: '⇄',      cls: 'small' },
   { id: 'heal',   label: '+',      cls: 'small heal' },
   { id: 'scope',  label: '◎',      cls: 'small' },
-  { id: 'emote',  label: '💃',     cls: 'small' },
-  { id: 'zoom',   label: '🔍',     cls: 'small' },
+  { id: 'emote',  icon: 'dance',  cls: 'small' },
+  { id: 'zoom',   icon: 'zoom',   cls: 'small' },
   { id: 'pause',  label: 'II',     cls: 'small pause' },
 ];
 
@@ -44,7 +45,7 @@ export class TouchControls {
       const d = document.createElement('div');
       d.className = 'tbtn ' + (b.cls || '');
       d.id = 't-' + b.id;
-      d.textContent = b.label;
+      if (b.icon) d.innerHTML = ic(b.icon); else d.textContent = b.label;
       d.dataset.act = b.id;
       this.el.appendChild(d);
       this.btn[b.id] = d;

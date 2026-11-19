@@ -19,6 +19,8 @@
   },
   "homepage": "https://github.com/unknowncharicter/Portals-#readme",
   "dependencies": {
+    "@fontsource/barlow": "^5.3.0",
+    "@fontsource/barlow-condensed": "^5.3.0",
     "@fontsource/rubik": "^5.1.0",
     "@fontsource/russo-one": "^5.1.0",
     "peerjs": "^1.5.5",

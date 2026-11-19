@@ -94,9 +94,9 @@
     <header class="lobby-top">
       <div class="brand">PORTAL<span>DUEL</span></div>
       <div class="level-badge" title="Level"><b id="lvl-num">1</b><div class="xp"><small id="xp-text"></small><div class="xpbar"><i id="xp-fill"></i></div></div></div>
-      <div class="level-badge rank-badge" title="Rank: bots match your rank in Ranked"><b id="rank-icon">🥈</b><div class="xp"><small id="rank-text"></small><div class="xpbar"><i id="rank-fill"></i></div></div></div>
+      <div class="level-badge rank-badge" title="Rank: bots match your rank in Ranked"><b id="rank-icon">S</b><div class="xp"><small id="rank-text"></small><div class="xpbar"><i id="rank-fill"></i></div></div></div>
       <div class="grow"></div>
-      <div class="coins"><i>🪙</i><span id="coin-count">0</span></div>
+      <div class="coins"><i data-ic="coin"></i><span id="coin-count">0</span></div>
     </header>
     <div class="lobby-main">
       <aside class="hero">
@@ -110,15 +110,15 @@
       </aside>
       <section class="content">
         <nav class="tabs" id="tabs">
-          <button data-tab="play">🎮<span>Play</span></button>
-          <button data-tab="online">🌐<span>Online</span></button>
-          <button data-tab="character">🧍<span>Character</span></button>
-          <button data-tab="gunsmith">🔧<span>Gunsmith</span></button>
-          <button data-tab="shop">🛒<span>Shop</span></button>
-          <button data-tab="upgrades">⬆️<span>Upgrades</span></button>
-          <button data-tab="daily">🎁<span>Daily</span><i id="daily-dot" class="dot hidden"></i></button>
-          <button data-tab="stats">📊<span>Stats</span></button>
-          <button data-tab="settings">⚙️<span>Settings</span></button>
+          <button data-tab="play"><i data-ic="play"></i><span>Play</span></button>
+          <button data-tab="online"><i data-ic="online"></i><span>Online</span></button>
+          <button data-tab="character"><i data-ic="character"></i><span>Character</span></button>
+          <button data-tab="gunsmith"><i data-ic="gunsmith"></i><span>Gunsmith</span></button>
+          <button data-tab="shop"><i data-ic="shop"></i><span>Shop</span></button>
+          <button data-tab="upgrades"><i data-ic="upgrades"></i><span>Upgrades</span></button>
+          <button data-tab="daily"><i data-ic="daily"></i><span>Daily</span><i id="daily-dot" class="dot hidden"></i></button>
+          <button data-tab="stats"><i data-ic="stats"></i><span>Stats</span></button>
+          <button data-tab="settings"><i data-ic="settings"></i><span>Settings</span></button>
         </nav>
         <div class="tab-body">
           <section data-tab="play" class="panel">
@@ -135,7 +135,7 @@
             </div>
             <div class="row2 actions">
               <button id="btn-start" class="big">START MATCH</button>
-              <button id="btn-tutorial">📘 How to play</button>
+              <button id="btn-tutorial"><i data-ic="book"></i> How to play</button>
             </div>
             <p class="hint">Hard bots give 1.5× coins</p>
           </section>
@@ -145,7 +145,7 @@
               <p class="hint left">Play with anyone online. If nobody's around you start against bots, and players who join take over a bot.</p>
               <div class="on-actions">
                 <select id="quick-mode" class="quick-mode"><option value="ffa">Free for all</option><option value="2v2">2v2</option><option value="koth">King of the Hill</option><option value="ctf">Capture the Flag</option><option value="gungame">Gun Game</option></select>
-                <button id="btn-quick" class="big">⚡ QUICK MATCH</button>
+                <button id="btn-quick" class="big"><i data-ic="bolt"></i> QUICK MATCH</button>
               </div>
               <h3>Play online with friends</h3>
               <p class="hint left">Create a room and send the code to your friends (up to 4 players). Empty spots are filled with bots. Your loadout, portal colour and character come from the other tabs.</p>
@@ -212,7 +212,7 @@
             <h3>Your stats</h3>
             <div id="stats" class="stats"></div>
                       <h3>Leaderboard</h3>
-            <div id="lb-seg" class="seg"><button data-k="rp" class="sel">🏆 Rank points</button><button data-k="kills">⚔ Kills</button></div>
+            <div id="lb-seg" class="seg"><button data-k="rp" class="sel">Rank points</button><button data-k="kills">Kills</button></div>
             <div id="leaderboard" class="leaderboard"><p class="hint left">Loading…</p></div>
 </section>
           <section data-tab="settings" class="panel">
@@ -263,7 +263,7 @@
   </div>
 
   <!-- Shown when the game needs a click to grab the mouse -->
-  <div id="lockprompt" class="hidden"><div>🖱️ Click to play</div><small>Your mouse aims · Esc to pause</small></div>
+  <div id="lockprompt" class="hidden"><div>Click to play</div><small>Your mouse aims · Esc to pause</small></div>
 
   <!-- Touch controls -->
   <div id="touch" class="hidden"></div>
@@ -272,7 +272,6 @@
   <!-- Pause -->
   <div id="pause" class="screen hidden">
     <h2>PAUSED</h2>
-    <div class="settings" data-settings></div>
     <button id="btn-resume" class="big">RESUME</button>
     <button id="btn-quit">QUIT TO LOBBY</button>
   </div>
@@ -284,11 +283,11 @@
       <h2>New to Portal Duel?</h2>
       <div class="intro-steps">
         <div><b>E</b><span>show a portal<br>(E again to place it)</span></div>
-        <div><b>🌀</b><span>walk, look and shoot<br>through your portals</span></div>
-        <div><b>🎯</b><span>shoot enemies from<br>angles they don't expect</span></div>
+        <div><b><i data-ic="portal"></i></b><span>walk, look and shoot<br>through your portals</span></div>
+        <div><b><i data-ic="headshot"></i></b><span>shoot enemies from<br>angles they don't expect</span></div>
       </div>
-      <p>The tutorial takes about a minute and gives you 🪙 100.</p>
-      <div class="intro-btns"><button id="intro-tut" class="big">📘 PLAY TUTORIAL</button><button id="intro-skip">Skip, start the match</button></div>
+      <p>The tutorial takes about a minute and gives you <i data-ic="coin"></i> 100 coins.</p>
+      <div class="intro-btns"><button id="intro-tut" class="big"><i data-ic="book"></i> PLAY TUTORIAL</button><button id="intro-skip">Skip, start the match</button></div>
     </div>
   </div>
 

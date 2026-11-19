@@ -1,7 +1,9 @@
 import * as THREE from 'three';
-import '@fontsource/rubik/400.css';
-import '@fontsource/rubik/700.css';
-import '@fontsource/russo-one/400.css';
+import '@fontsource/barlow/latin-400.css';
+import '@fontsource/barlow/latin-600.css';
+import '@fontsource/barlow/latin-700.css';
+import '@fontsource/barlow-condensed/latin-600.css';
+import '@fontsource/barlow-condensed/latin-700.css';
 import { thumbs, makeGunThumbs, makeMapThumbs } from './ui/thumbs.js';
 import { World } from './game/World.js';
 import { PortalSystem } from './game/Portals.js';
@@ -9,6 +11,10 @@ import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
 import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES, playerLoadout, botLoadout } from './game/Match.js';
 import { buildGunsmith } from './ui/gunsmith.js';
+import { ic, coin } from './ui/icons.js';
+import { charPic } from './ui/pics.js';
+// Fill in the icons written as <i data-ic="name"> in the page.
+for (const el of document.querySelectorAll('[data-ic]')) el.outerHTML = ic(el.dataset.ic);
 import { Room } from './net/Room.js';
 import { submitScore, fetchBoard, myTag } from './leaderboard.js';
 import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, EMOTES, cleanName, randomLook } from './game/Look.js';
@@ -101,6 +107,7 @@ const SETTINGS = [
   { id: 'shake',   label: 'Head bob & shake', type: 'toggle' },
   { id: 'dmgNumbers', label: 'Damage numbers', type: 'toggle' },
   { id: 'showFps', label: 'Show FPS', type: 'toggle' },
+  { id: 'fpsLimit', label: 'FPS limit', type: 'choice', options: [[30, '30'], [60, '60'], [120, '120'], [144, '144'], [240, '240'], [0, 'Max']], hint: 'Highest frames per second' },
   { id: 'quality', label: 'Graphics', type: 'choice', options: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], hint: 'Lower = smoother on slow computers' },
   { group: 'Crosshair', lobbyOnly: true },
   { id: 'crosshair', label: 'Style', type: 'choice', lobbyOnly: true, options: [['classic', '✚'], ['dot', '•'], ['crossdot', '✛•'], ['circle', '◯'], ['tee', '┬']] },
@@ -338,10 +345,9 @@ function buildCharacterPanel() {
   }
 
   // Accessory shops: hats, face and back. Free items are always owned.
-  const HAT_ICONS = { none: '🚫', cap: '🧢', beanie: '🧶', helmet: '⛑️', headphones: '🎧', tophat: '🎩', horns: '😈', crown: '👑' };
   const slots = [
     ['bodies', 'model', BODIES],
-    ['hats', 'hat', HATS.map(h => ({ ...h, icon: HAT_ICONS[h.id] || '🎩' }))],
+    ['hats', 'hat', HATS],
     ['faces', 'face', FACES],
     ['backs', 'back', BACKS],
     ['emotes', 'emote', EMOTES],
@@ -354,7 +360,12 @@ function buildCharacterPanel() {
       const equipped = (L[key] || list[0].id) === item.id;
       const b = document.createElement('button');
       b.className = 'acc' + (equipped ? ' sel' : '') + (owned ? '' : ' locked');
-      b.innerHTML = `<span class="ai">${item.icon}</span><span class="an">${item.name}</span><span class="ap">${equipped ? 'Equipped' : owned ? 'Equip' : '🪙 ' + item.price}</span>`;
+      // A picture of your character with this item on (dances get an icon).
+      const view = key === 'model' ? 'body' : key === 'back' ? 'back' : 'head';
+      const empty = /^(none|no)/.test(item.id);
+      const pic = key === 'emote' || empty ? null : charPic({ ...L, [key]: item.id }, view);
+      const art = pic ? `<img class="ath" alt="" src="${pic}">` : `<span class="ai">${ic(key === 'emote' ? 'dance' : 'none')}</span>`;
+      b.innerHTML = `${art}<span class="an">${item.name}</span><span class="ap">${equipped ? 'Equipped' : owned ? 'Equip' : coin(item.price)}</span>`;
       if (!owned && save.coins < item.price) b.classList.add('poor');
       b.onclick = () => {
         if (!owned) {
@@ -409,7 +420,7 @@ function buildLobby() {
     const cost = upgradeCost(L);
     row.innerHTML = `<div class="name">${u.name}<br><small style="opacity:.6">${u.desc}</small></div><div class="lvl">${pips}</div>`;
     const b = document.createElement('button');
-    b.textContent = maxed ? 'MAX' : `🪙 ${cost}`;
+    b.innerHTML = maxed ? 'MAX' : coin(cost);
     b.disabled = maxed || save.coins < cost;
     b.onclick = () => {
       save.coins -= cost;
@@ -441,7 +452,7 @@ function buildLobby() {
     for (const id of list) {
       const b = card(WEAPONS[id].name, save.loadout[slot] === id, () => { save.loadout[slot] = id; writeSave(save); rebuildPreview(); buildLobby(); });
       if (thumbs.guns[id]) { const img = document.createElement('img'); img.src = thumbs.guns[id]; img.alt = ''; b.prepend(img); }
-      else b.prepend(icon('🔫'));
+      else b.prepend(icon('gun'));
       row.appendChild(b);
     }
     lo.appendChild(row);
@@ -458,7 +469,7 @@ function buildLobby() {
     });
     const t = document.createElement('div');
     t.className = 'thumb';
-    if (id === 'random') { t.style.background = 'linear-gradient(135deg,#36b5ff,#b65cff,#ff5cc8)'; t.textContent = ''; b.appendChild(icon('🎲')); }
+    if (id === 'random') { t.style.background = 'var(--panel-3)'; t.textContent = ''; b.appendChild(icon('random')); }
     else t.style.background = thumbs.maps[id] ? `url(${thumbs.maps[id]}) center / cover` : MAPS[id].theme.sky;
     b.prepend(t);
     mapsEl.appendChild(b);
@@ -467,7 +478,7 @@ function buildLobby() {
   // Difficulty: segmented control.
   const diff = $('difficulty');
   diff.innerHTML = '';
-  for (const [id, d] of Object.entries({ ranked: { label: '🏆 Ranked' }, ...DIFFICULTIES })) {
+  for (const [id, d] of Object.entries({ ranked: { label: 'Ranked' }, ...DIFFICULTIES })) {
     const b = document.createElement('button');
     b.textContent = d.label;
     if (id === 'ranked') b.title = 'Bots match your rank. Win to climb, lose to drop.';
@@ -487,13 +498,13 @@ function buildLobby() {
 
   // Modes: icon cards.
   if (!MODES[save.mode] || MODES[save.mode].hidden) save.mode = '1v1';
-  const MODE_ICONS = { '1v1': '⚔️', '2v2': '👥', ffa: '💥', koth: '👑', ctf: '🚩', gungame: '🔫', portalonly: '🌀' };
+  const MODE_ICONS = { '1v1': 'duel', '2v2': 'team', ffa: 'ffa', koth: 'koth', ctf: 'ctf', gungame: 'gungame', portalonly: 'portal' };
   const modes = $('modes');
   modes.innerHTML = '';
   for (const [id, m] of Object.entries(MODES)) {
     if (m.hidden) continue;
     const b = card(m.label, id === save.mode, () => { save.mode = id; writeSave(save); buildLobby(); });
-    b.prepend(icon(MODE_ICONS[id] || '🎮'));
+    b.prepend(icon(MODE_ICONS[id] || 'play'));
     b.title = m.desc || '';
     modes.appendChild(b);
   }
@@ -515,7 +526,7 @@ function card(label, selected, onClick) {
   b.onclick = () => { Sfx.click(); onClick(); };
   return b;
 }
-function icon(ch) { const i = document.createElement('div'); i.className = 'ico'; i.textContent = ch; return i; }
+function icon(name) { const i = document.createElement('div'); i.className = 'ico'; i.innerHTML = ic(name); return i; }
 
 // ---------- Lobby tabs ----------
 let currentTab = 'play';
@@ -540,7 +551,7 @@ function buildLevel() {
   $('xp-fill').style.width = (100 * li.into / li.need) + '%';
   $('xp-text').textContent = `Level ${li.level} · ${li.into} / ${li.need} XP`;
   const rk = rankInfo(save.rating);
-  $('rank-icon').textContent = rk.icon;
+  $('rank-icon').textContent = rk.name[0];
   $('rank-icon').style.background = rk.color;
   $('rank-text').textContent = `${rk.name} · ${rk.rp} RP`;
   $('rank-fill').style.width = (100 * rk.into) + '%';
@@ -558,10 +569,10 @@ function shopItem(item, equipped, swatch, onEquip) {
   const b = document.createElement('button');
   if (equipped) { b.textContent = 'Equipped'; b.disabled = true; }
   else if (have) { b.textContent = 'Equip'; b.onclick = () => { onEquip(); writeSave(save); Sfx.click(); buildLobby(); }; }
-  else if (item.level) { b.textContent = `🔒 Level ${item.level}`; b.disabled = true; }
-  else if (item.weekly) { b.textContent = '🏆 Weekly reward'; b.disabled = true; }
+  else if (item.level) { b.innerHTML = `${ic('lock')} Level ${item.level}`; b.disabled = true; }
+  else if (item.weekly) { b.innerHTML = `${ic('trophy')} Weekly reward`; b.disabled = true; }
   else {
-    b.textContent = `🪙 ${item.price}`;
+    b.innerHTML = coin(item.price);
     b.disabled = save.coins < item.price;
     b.onclick = () => { save.coins -= item.price; save.owned.push(item.id); onEquip(); writeSave(save); Sfx.coin(); buildLobby(); };
   }
@@ -587,13 +598,13 @@ function buildDaily() {
   const days = info.rewards.map((r, i) => {
     const day = i + 1;
     const cls = day < info.day || (!info.canClaim && day === info.day) ? 'done' : day === info.day ? 'today' : '';
-    return `<div class="${cls}">Day ${day}<b>🪙${r}</b></div>`;
+    return `<div class="${cls}">Day ${day}<b>${coin(r)}</b></div>`;
   }).join('');
   box.innerHTML = `<div class="daily-days">${days}</div>`;
   const b = document.createElement('button');
   b.className = 'big';
   b.style.marginTop = '10px';
-  b.textContent = info.canClaim ? `Claim 🪙 ${info.amount}` : 'Come back tomorrow!';
+  b.innerHTML = info.canClaim ? `Claim ${coin(info.amount)}` : 'Come back tomorrow!';
   b.disabled = !info.canClaim;
   b.onclick = () => { const got = claimDailyReward(save); if (got) { writeSave(save); Sfx.coin(); buildLobby(); } };
   box.appendChild(b);
@@ -602,7 +613,7 @@ function buildDaily() {
   for (const c of dailyChallenges(save)) {
     const d = document.createElement('div');
     d.className = 'challenge' + (c.done ? ' done' : '');
-    d.innerHTML = `<div class="t">${c.done ? '✅ ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">🪙${c.reward}</span>`;
+    d.innerHTML = `<div class="t">${c.done ? ic('check') + ' ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">${coin(c.reward)}</span>`;
     ch.appendChild(d);
   }
   // Weekly: bigger challenges, and an exclusive gun skin for finishing all three.
@@ -611,7 +622,7 @@ function buildDaily() {
   for (const c of wk.list) {
     const d = document.createElement('div');
     d.className = 'challenge' + (c.done ? ' done' : '');
-    d.innerHTML = `<div class="t">${c.done ? '✅ ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">🪙${c.reward}</span>`;
+    d.innerHTML = `<div class="t">${c.done ? ic('check') + ' ' : ''}${c.text}<div class="bar"><i style="width:${100 * c.progress / c.target}%"></i></div></div><small>${c.progress}/${c.target}</small><span class="rw">${coin(c.reward)}</span>`;
     wEl.appendChild(d);
   }
   const r = document.createElement('div');
@@ -628,7 +639,7 @@ function buildStats() {
   const rows = [
     ['Level', levelInfo(save.xp || 0).level], ['Matches', s.matches], ['Wins', s.wins], ['Win rate', pct(s.wins, s.matches)],
     ['Kills', s.kills], ['Deaths', s.deaths], ['K/D', s.deaths ? (s.kills / s.deaths).toFixed(2) : s.kills],
-    ['Portal kills 🌀', s.portalKills], ['Headshot kills', s.headshots], ['Grenade kills', s.grenadeKills],
+    ['Portal kills', s.portalKills], ['Headshot kills', s.headshots], ['Grenade kills', s.grenadeKills],
     ['Accuracy', pct(s.hits, s.shots)], ['Rounds won', s.rounds],
   ];
   $('stats').innerHTML = rows.map(([k, v]) => `<div><b>${v}</b><small>${k}</small></div>`).join('');
@@ -648,7 +659,7 @@ async function buildLeaderboard(force = false) {
   const list = data[lbKey] || [], me = myTag(save);
   if (!list.length) { el.innerHTML = '<p class="hint left">No scores yet — play a match to be first!</p>'; return; }
   el.innerHTML = list.slice(0, 20).map((e, i) => {
-    const v = lbKey === 'rp' ? `${rankInfo(e.rp).icon} ${e.rp} RP` : `${e.kills} kills`;
+    const v = lbKey === 'rp' ? `${e.rp} RP` : `${e.kills} kills`;
     return `<div class="${e.tag === me ? 'me' : ''}"><span class="n">${i + 1}</span><span class="who">${escapeHtml(e.name)}${e.tag === me ? ' (you)' : ''}</span><b>${v}</b></div>`;
   }).join('');
   const mine = list.findIndex(e => e.tag === me);
@@ -707,7 +718,7 @@ function onMatchEnd(res) {
     input.unlock();
     $('results-title').textContent = 'TUTORIAL COMPLETE!';
     $('results-title').style.color = '#7cf';
-    $('results-detail').innerHTML = first ? '<div>🪙 <b>+100</b> coins · ⭐ <b>+50</b> XP</div><div>Now try a real match!</div>' : '<div>Nice! Now try a real match.</div>';
+    $('results-detail').innerHTML = first ? `<div>${coin('+100')} coins · ${ic('star')} <b>+50</b> XP</div><div>Now try a real match!</div>` : '<div>Nice! Now try a real match.</div>';
     showScreen('results');
     Sfx.win();
     return;
@@ -725,20 +736,20 @@ function onMatchEnd(res) {
   $('results-title').textContent = res.won ? 'VICTORY!' : 'DEFEAT';
   $('results-title').style.color = res.won ? '#7f7' : '#f77';
   const e = res.earned, li = levelInfo(save.xp);
-  let html = `<div>Kills <b>${e.kills}</b> · Portal kills <b>${e.portalKills}</b> 🌀 · Headshots <b>${e.headshots}</b> · Rounds won <b>${e.rounds}</b></div>`;
-  html += `<div>🪙 <b>+${res.coins}</b> coins · ⭐ <b>+${prog.xp}</b> XP</div>`;
+  let html = `<div>Kills <b>${e.kills}</b> · Portal kills <b>${e.portalKills}</b> · Headshots <b>${e.headshots}</b> · Rounds won <b>${e.rounds}</b></div>`;
+  html += `<div>${coin('+' + res.coins)} coins · ${ic('star')} <b>+${prog.xp}</b> XP</div>`;
   html += `<div class="xpbar"><i style="width:${100 * li.into / li.need}%"></i></div><small>Level ${li.level} · ${li.into} / ${li.need} XP</small>`;
   if (ranked) {
     const r = ranked.rank;
-    html += `<div class="rp ${ranked.delta >= 0 ? 'up' : 'down'}">${r.icon} <b style="color:${r.color}">${r.name}</b> · ${ranked.after} RP <b>${ranked.delta >= 0 ? '+' : ''}${ranked.delta}</b></div>`;
+    html += `<div class="rp ${ranked.delta >= 0 ? 'up' : 'down'}"><b style="color:${r.color}">${r.name}</b> · ${ranked.after} RP <b>${ranked.delta >= 0 ? '+' : ''}${ranked.delta}</b></div>`;
     html += `<div class="xpbar rpbar"><i style="width:${100 * r.into}%;background:${r.color}"></i></div>`;
-    if (ranked.rankUp) html += `<div class="lvlup">RANK UP! ${r.icon} ${r.name}</div>`;
+    if (ranked.rankUp) html += `<div class="lvlup">RANK UP! ${r.name}</div>`;
     if (ranked.rankDown) html += `<div class="ch">Dropped to ${r.name}</div>`;
   }
-  for (const l of prog.levelUps) html += `<div class="lvlup">LEVEL UP! Level ${l.level} · +🪙${l.coins}</div>`;
-  for (const c of prog.weeklyDone || []) html += `<div class="ch">🏆 Weekly challenge done: ${c.text} · +🪙${c.reward}</div>`;
+  for (const l of prog.levelUps) html += `<div class="lvlup">LEVEL UP! Level ${l.level} · ${coin('+' + l.coins)}</div>`;
+  for (const c of prog.weeklyDone || []) html += `<div class="ch">${ic('trophy')} Weekly challenge done: ${c.text} · ${coin('+' + c.reward)}</div>`;
   if (prog.weeklySkin) html += `<div class="lvlup">EXCLUSIVE UNLOCKED: ${prog.weeklySkin.name} gun skin!</div>`;
-  for (const c of prog.challengesDone) html += `<div class="ch">✅ Challenge done: ${c.text} · +🪙${c.reward}</div>`;
+  for (const c of prog.challengesDone) html += `<div class="ch">${ic('check')} Challenge done: ${c.text} · ${coin('+' + c.reward)}</div>`;
   $('results-detail').innerHTML = html;
   if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);
   showScreen('results');
@@ -805,7 +816,7 @@ $('btn-start').onclick = async () => {
   // First match ever: offer the 1-minute tutorial first.
   if (!save.tutorialDone && !save.tutorialOffered && !((save.stats || {}).matches)) {
     save.tutorialOffered = true; writeSave(save);
-    if (touchMode) $('intro').querySelector('.intro-steps div').innerHTML = '<b>🌀</b><span>tap PORTAL to aim one<br>(tap again to place it)</span>';
+    if (touchMode) $('intro').querySelector('.intro-steps div').innerHTML = `<b>${ic('portal')}</b><span>tap PORTAL to aim one<br>(tap again to place it)</span>`;
     $('intro').classList.remove('hidden');
     return;
   }
@@ -1005,8 +1016,8 @@ function buildOnline() {
   $('room-players').innerHTML = room.players.map(p => {
     const e = roster.find(r => r.owner === p.id && !r.bot);
     const team = !e ? 'waiting (too many for this mode)' : mode.ffa ? 'free for all' : e.team === 0 ? 'Blue team' : 'Red team';
-    return `<div style="--c:${e ? e.bodyColor : '#888'}">${escapeHtml(p.name)}${p.id === room.myId ? ' (you)' : ''}${p.id === 'h' ? ' 👑' : ''}<small>${team}</small></div>`;
-  }).join('') + roster.filter(r => r.bot).map(r => `<div style="--c:${r.bodyColor}">🤖 Bot<small>${mode.ffa ? 'free for all' : r.team === 0 ? 'Blue team' : 'Red team'}</small></div>`).join('');
+    return `<div style="--c:${e ? e.bodyColor : '#888'}">${escapeHtml(p.name)}${p.id === room.myId ? ' (you)' : ''}${p.id === 'h' ? ' (host)' : ''}<small>${team}</small></div>`;
+  }).join('') + roster.filter(r => r.bot).map(r => `<div style="--c:${r.bodyColor}">Bot<small>${mode.ffa ? 'free for all' : r.team === 0 ? 'Blue team' : 'Red team'}</small></div>`).join('');
   const set = $('room-settings');
   const mapName = room.map === 'random' ? 'Random' : (MAPS[room.map] || MAPS.arena).name;
   if (room.isHost) {
@@ -1064,8 +1075,13 @@ $('btn-quick').onclick = () => { Sfx.unlock(); quickMatch($('quick-mode').value)
 const clock = new THREE.Clock();
 const menuCam = { t: 0 };
 
-function frame() {
+let lastFrame = 0;
+function frame(now = performance.now()) {
   requestAnimationFrame(frame);
+  // FPS limit (Settings): skip this screen refresh if the last frame was too recent.
+  const limit = save.settings.fpsLimit || 0;
+  if (limit && now - lastFrame < 1000 / limit - 1) return;
+  lastFrame = now;
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
   if (match && (state === 'playing' || (state === 'paused' && match.online) || (state === 'results' && match.state === 'outro'))) {

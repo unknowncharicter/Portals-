@@ -1,3 +1,4 @@
+import { ic } from './icons.js';
 const $ = (id) => document.getElementById(id);
 
 export class Hud {
@@ -22,7 +23,7 @@ export class Hud {
     this.hpText.textContent = Math.ceil(p.hp);
     const hk = document.body.classList.contains('touch') ? 'Heal' : 'F heal';
     const dk = document.body.classList.contains('touch') ? 'Dash' : 'Shift dash';
-    const gk = document.body.classList.contains('touch') ? '💣' : 'G 💣';
+    const gk = document.body.classList.contains('touch') ? 'Grenades' : 'G grenades';
     this.heal.textContent = (p.healCd > 0 ? `${hk} ${Math.ceil(p.healCd)}s` : `${hk} READY`) + ' · ' + (p.dashCd > 0 ? `${dk} ${p.dashCd.toFixed(1)}s` : `${dk} READY`) + ` · ${gk} ${p.grenades}`;
     const w = p.weapon;
     this.weapon.textContent = `${w.def.name}  [1/2]`;
@@ -98,7 +99,7 @@ export class Hud {
 
   kill(killer, victim, self = false, info = {}) {
     const d = document.createElement('div');
-    const how = info.grenade ? ' 💣' : info.portal ? ' 🌀' : info.head ? ' 🎯' : '';
+    const how = info.grenade ? ' ' + ic('grenade') : info.portal ? ' ' + ic('portal') : info.head ? ' ' + ic('headshot') : '';
     d.innerHTML = self
       ? `<b style="color:${victim.color}">${victim.name}</b> took themselves out${how}`
       : `<b style="color:${killer.color}">${killer.name}</b> ▸${how} <b style="color:${victim.color}">${victim.name}</b>`;

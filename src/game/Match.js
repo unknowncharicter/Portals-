@@ -512,7 +512,7 @@ export class Match {
   // Top-of-screen scoreboard. Updated every frame in respawn modes and on every kill otherwise.
   updateScore() {
     const p = this.player;
-    const kd = `<div class="sb-kd">⚔ ${p.kills} kills · ☠ ${p.deaths || 0} deaths</div>`;
+    const kd = `<div class="sb-kd">${p.kills} kills · ${p.deaths || 0} deaths</div>`;
     const teamKills = (t) => this.chars.filter(c => c.team === t).reduce((n, c) => n + c.kills, 0);
     const side = (label, big, small, color, cls) => `<div class="sb-side ${cls}" style="--c:${color}"><span class="sb-name">${label}</span><b>${big}</b><small>${small}</small></div>`;
     let html;
@@ -776,7 +776,7 @@ export class Match {
     this.scene.add(line);
     const from = info.segs[0].from.clone(), to = info.segs[0].to.clone();
     this.killcam = { t: 2.6, killer, line, from, dir: to.clone().sub(from).normalize() };
-    this.hud.killcam(`KILLED BY ${killer.name}`, info.portal ? 'through a portal 🌀' : info.head ? 'headshot' : killer.weapon.def.name);
+    this.hud.killcam(`KILLED BY ${killer.name}`, info.portal ? 'through a portal' : info.head ? 'headshot' : killer.weapon.def.name);
   }
 
   endKillcam() {

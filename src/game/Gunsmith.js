@@ -61,9 +61,9 @@ export const GUN_FRAMES = {
 };
 
 export const SLOTS = {
-  optic:  { name: 'Optic',       icon: '🔭' },
-  muzzle: { name: 'Muzzle',      icon: '🔇' },
-  under:  { name: 'Underbarrel', icon: '🔦' },
+  optic:  { name: 'Optic',       icon: 'optic' },
+  muzzle: { name: 'Muzzle',      icon: 'muzzle' },
+  under:  { name: 'Underbarrel', icon: 'under' },
 };
 // Which slots each gun has (the sniper already has a scope; small guns take small things).
 export const SLOTS_FOR = {

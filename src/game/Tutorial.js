@@ -24,10 +24,10 @@ export class Tutorial {
       { text: t('Press E to show a portal outline', 'Tap PORTAL to show a portal outline'), check: () => this.m.ghostMode },
       { text: t('Aim at a wall or the floor and press E again to place it', 'Aim at a wall or the floor and tap PLACE'), check: () => this.portalCount() >= 1 },
       { text: t('Place a second portal somewhere else (E, then E)', 'Place a second portal somewhere else'), check: () => this.portalCount() >= 2 },
-      { text: 'Walk into one of your portals 🌀', check: () => this.flags.teleported },
+      { text: 'Walk into one of your portals', check: () => this.flags.teleported },
       { text: 'Shoot INTO the portal in front of you. The bullet comes out the other one and hits the target!', setup: () => this.setupPortalShot(), check: () => this.flags.portalHit },
-      { text: t('Throw a grenade with G', 'Tap 💣 to throw a grenade'), check: () => this.flags.grenade },
-      { text: '🎉 You\'re ready! Win matches to earn coins, level up and unlock skins.', check: () => this.stepT > 3.5, final: true },
+      { text: t('Throw a grenade with G', 'Tap the grenade button to throw a grenade'), check: () => this.flags.grenade },
+      { text: 'You\'re ready! Win matches to earn coins, level up and unlock skins.', check: () => this.stepT > 3.5, final: true },
     ];
     this.render();
   }

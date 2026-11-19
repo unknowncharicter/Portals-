@@ -73,10 +73,10 @@ export function claimDailyReward(save) {
 // ---------- Daily challenges ----------
 const POOL = [
   { stat: 'kills',        text: n => `Get ${n} kills`,               ns: [10, 15, 20], reward: 100 },
-  { stat: 'portalKills',  text: n => `Get ${n} portal kills 🌀`,     ns: [2, 3, 5],    reward: 150 },
+  { stat: 'portalKills',  text: n => `Get ${n} portal kills`,     ns: [2, 3, 5],    reward: 150 },
   { stat: 'headshots',    text: n => `Get ${n} headshot kills`,      ns: [3, 5, 8],    reward: 120 },
   { stat: 'wins',         text: n => `Win ${n} match${n > 1 ? 'es' : ''}`, ns: [1, 2, 3], reward: 120 },
-  { stat: 'grenadeKills', text: n => `Get ${n} grenade kill${n > 1 ? 's' : ''} 💣`, ns: [1, 2, 3], reward: 130 },
+  { stat: 'grenadeKills', text: n => `Get ${n} grenade kill${n > 1 ? 's' : ''}`, ns: [1, 2, 3], reward: 130 },
   { stat: 'matches',      text: n => `Play ${n} matches`,            ns: [2, 3, 4],    reward: 80 },
   { stat: 'rounds',       text: n => `Win ${n} rounds`,              ns: [4, 6, 8],    reward: 100 },
 ];
@@ -98,10 +98,10 @@ export function weekKey(d = new Date()) {
 export function daysLeftInWeek(d = new Date()) { return 7 - ((d.getDay() + 6) % 7); }
 const WEEK_POOL = [
   { stat: 'kills',       text: n => `Get ${n} kills`,              ns: [50, 70],  reward: 300 },
-  { stat: 'portalKills', text: n => `Get ${n} portal kills 🌀`,    ns: [10, 15],  reward: 400 },
+  { stat: 'portalKills', text: n => `Get ${n} portal kills`,    ns: [10, 15],  reward: 400 },
   { stat: 'wins',        text: n => `Win ${n} matches`,            ns: [6, 8],    reward: 350 },
   { stat: 'headshots',   text: n => `Get ${n} headshot kills`,     ns: [20, 30],  reward: 350 },
-  { stat: 'captures',    text: n => `Capture ${n} flags 🚩`,       ns: [4, 6],    reward: 400 },
+  { stat: 'captures',    text: n => `Capture ${n} flags`,       ns: [4, 6],    reward: 400 },
   { stat: 'matches',     text: n => `Play ${n} matches`,           ns: [12, 15],  reward: 250 },
 ];
 export function weeklySkin(week = weekKey()) { return WEEKLY_SKINS[((week % WEEKLY_SKINS.length) + WEEKLY_SKINS.length) % WEEKLY_SKINS.length]; }

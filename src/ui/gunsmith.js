@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { gunModel, applySkin, partModel } from '../game/Models.js';
 import { GUN_FRAMES, PARTS, SLOTS, SLOTS_FOR, EFFECT_TEXT, partFits, frameOf, cleanMods } from '../game/Gunsmith.js';
 import { WEAPONS } from '../game/Weapons.js';
+import { ic, coin } from './icons.js';
 
 // The Gunsmith lobby tab: pick a gun, its frame (look) and attachments, with a 3D view.
-const PART_ICON = { optic: '🔭', muzzle: '🔇', grip: '✊', bipod: '🦵', flashlight: '🔦', bayonet: '🔪', bayonet2: '🗡️' };
+const PART_ICON = { optic: 'optic', muzzle: 'muzzle', under: 'under' };
 const GUNS = Object.keys(GUN_FRAMES);
 const ownKey = (id) => 'part:' + id;
 
@@ -57,9 +58,9 @@ export function buildGunsmith({ save, writeSave, thumbs, Sfx, skin, onChange }) 
   const button = (iconTxt, name, sub, selected, locked, onClick, pic = null) => {
     const b = document.createElement('button');
     b.className = 'acc' + (selected ? ' sel' : '') + (locked ? ' locked' : '');
-    b.innerHTML = (pic ? `<img class="ath" alt="" src="${pic}">` : `<span class="ai">${iconTxt}</span>`) + `<span class="an"></span><span class="ap"></span>`;
+    b.innerHTML = (pic ? `<img class="ath" alt="" src="${pic}">` : `<span class="ai">${ic(iconTxt)}</span>`) + `<span class="an"></span><span class="ap"></span>`;
     b.querySelector('.an').textContent = name;
-    b.querySelector('.ap').textContent = sub;
+    b.querySelector('.ap').innerHTML = sub;
     b.onclick = onClick;
     return b;
   };
@@ -68,25 +69,25 @@ export function buildGunsmith({ save, writeSave, thumbs, Sfx, skin, onChange }) 
   const frames = section('Frame (looks only)');
   for (const f of GUN_FRAMES[gun].frames) {
     const sel = f.id === mods.frame;
-    frames.appendChild(button('🔧', f.name, sel ? 'Equipped' : 'Free', sel, false, () => { Sfx.click(); set({ ...mods, frame: f.id }); },
+    frames.appendChild(button('frame', f.name, sel ? 'Equipped' : 'Free', sel, false, () => { Sfx.click(); set({ ...mods, frame: f.id }); },
       thumb('f:' + f.id, () => gunModel(gun, { frame: f.id }))));
   }
 
   // Attachment slots.
   const frame = frameOf(gun, mods);
   for (const slot of SLOTS_FOR[gun] || []) {
-    const grid = section(`${SLOTS[slot].icon} ${SLOTS[slot].name}`);
+    const grid = section(SLOTS[slot].name);
     if (slot === 'under' && frame.noUnder) {
       const p = document.createElement('p'); p.className = 'hint left'; p.textContent = 'This frame has its own grip: pick another frame to use underbarrel attachments.';
       grid.replaceWith(p);
       continue;
     }
-    grid.appendChild(button('✖️', 'None', !mods[slot] ? 'Equipped' : '', !mods[slot], false, () => { Sfx.click(); set({ ...mods, [slot]: null }); }));
+    grid.appendChild(button('none', 'None', !mods[slot] ? 'Equipped' : '', !mods[slot], false, () => { Sfx.click(); set({ ...mods, [slot]: null }); }));
     for (const [id, p] of Object.entries(PARTS)) {
       if (p.slot !== slot || !partFits(gun, id)) continue;
       const owned = save.owned.includes(ownKey(id));
       const sel = mods[slot] === id;
-      const b = button(PART_ICON[id] || PART_ICON[slot], p.name, sel ? 'Equipped' : owned ? 'Equip' : '🪙 ' + p.price, sel, !owned, () => {
+      const b = button(PART_ICON[slot], p.name, sel ? 'Equipped' : owned ? 'Equip' : coin(p.price), sel, !owned, () => {
         if (!owned) {
           if (save.coins < p.price) { Sfx.portalDeny(); return; }
           save.coins -= p.price;
