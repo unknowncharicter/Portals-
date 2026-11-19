@@ -4,6 +4,7 @@ import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats, WEAPONS, WeaponState } from './Weapons.js';
 import { randomLook, EMOTES } from './Look.js';
+import { randomMods, modEffects } from './Gunsmith.js';
 import { EmoteWheel } from './EmoteWheel.js';
 import { Projectiles } from './Projectiles.js';
 import { GUN_SKINS } from '../progress.js';
@@ -44,6 +45,17 @@ const ROUND_TIME = 120;
 const ROUND_END_TIME = 3;
 export const TEAM_COLORS = ['#3a6fd8', '#d84a4a'];
 export const FFA_COLORS = ['#3a6fd8', '#d84a4a', '#3ab060', '#d8a030'];
+// A bot's guns, with a random Gunsmith setup.
+export function botLoadout(diff) {
+  const primary = diff.guns[Math.floor(Math.random() * diff.guns.length)];
+  return { primary, secondary: 'pistol', mods: { [primary]: randomMods(primary), pistol: randomMods('pistol') } };
+}
+// Your guns with your Gunsmith setups.
+export function playerLoadout(save) {
+  const lo = save.loadout, gm = save.gunMods || {};
+  return { ...lo, mods: { [lo.primary]: gm[lo.primary] || null, [lo.secondary]: gm[lo.secondary] || null } };
+}
+
 export const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
 
 export const MODES = {
@@ -192,7 +204,7 @@ export class Match {
     const name = BOT_NAMES.map(n => n + ' (bot)').find(n => !used.has(n)) || 'Bot';
     const diff = matchDifficulty(this.save);
     const entry = { ...e, owner: 'h', bot: true, name, look: randomLook(name), gunSkin: null,
-      loadout: { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' } };
+      loadout: botLoadout(diff) };
     this.replaceChar(entry);
     this.net.send({ e: 'takeover', entry });
   }
@@ -252,8 +264,8 @@ export class Match {
         portalColor: isBot ? botColors[(i - 1) % botColors.length] : this.save.color,
         isBot, stats: isBot ? { ...buildStats(null), damageMult: diff.botDamage } : buildStats(this.save),
         loadout: isBot
-          ? { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' }
-          : this.save.loadout,
+          ? botLoadout(diff)
+          : playerLoadout(this.save),
       });
       this.addChar(c);
       if (isBot) this.bots.push(new BotBrain(c, this, Math.min(1, diff.skill + Math.random() * 0.1)));
@@ -543,7 +555,8 @@ export class Match {
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
     const scoped = c === this.player && this.scoped;
     const aiming = c === this.player && this.ads;
-    const base = scoped ? def.scopedSpread : def.spread * (aiming ? 0.35 : 1);
+    const fx = modEffects(c.gunMods[def.id]); // Gunsmith attachments
+    const base = scoped ? def.scopedSpread : def.spread * (aiming ? (fx.scope ? 0.22 : 0.35) : 1);
     const spread = base * (moving ? 1.35 : 1) * (c.grounded ? 1 : 1.7) + extraSpread;
     const origin = c.eyePos();
     const pellets = def.pellets || 1;
@@ -602,17 +615,19 @@ export class Match {
       this.earned.shots++;
       if (anyHit) this.earned.hits++;
       if (anyHit) { this.hud.hit(anyHead); anyHead ? Sfx.headshot() : Sfx.hit(); }
-      const kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045, burst: 0.012, crossbow: 0.03, rocket: 0.07 }[def.id] || 0.02;
-      this.viewmodel.fire(Math.min(1.5, kick * 30));
+      let kick = { ar: 0.008, smg: 0.006, shotgun: 0.05, sniper: 0.06, pistol: 0.02, revolver: 0.045, burst: 0.012, crossbow: 0.03, rocket: 0.07 }[def.id] || 0.02;
+      if (fx.grip) kick *= 0.7;
+      if (fx.bipod && c.crouched) kick *= 0.5;
+      this.viewmodel.fire(Math.min(1.5, kick * 30), !fx.quiet);
       this.bloom = Math.min(3, this.bloom + kick * 40);
       c.pitch = Math.min(1.5, c.pitch + kick);
       if (def.zoom) this.setScope(false); // sniper un-scopes after each shot
     }
     // Bots hear gunshots nearby.
     for (const b of this.bots) {
-      if (b.c !== c && b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < 30 && !b.aimDir) b.hear(c.pos);
+      if (b.c !== c && b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < (fx.quiet ? 10 : 30) && !b.aimDir) b.hear(c.pos);
     }
-    const vol = isPlayer ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
+    const vol = (isPlayer ? 1 : Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60)) * (fx.quiet ? 0.45 : 1);
     (Sfx[def.sound] || Sfx.rifle)(vol);
     return true;
   }
@@ -937,8 +952,11 @@ export class Match {
     this.portals.update(dt);
     this.effects.update(dt);
     this.updateCamera(dt);
-    this.viewmodel.show(p.weapon.def.id);
+    this.viewmodel.show(p.weapon.def.id, p.gunMods[p.weapon.def.id]);
     this.adsT += ((this.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
+    // Gun with a scope attachment: once fully aimed in, look through the scope (gun hidden).
+    const lens = this.ads && this.adsT > 0.9 && p.alive && modEffects(p.gunMods[p.weapon.def.id]).scope;
+    if (lens !== !!this.lens) { this.lens = lens; if (!this.scoped) { this.viewmodel.hidden = lens; this.hud.scope(lens, true); } }
     if (this.ads || this.input.mouseDown) this.aimHold = 1.2;
     this.aimHold = Math.max(0, (this.aimHold || 0) - dt);
     p.aiming = this.aimHold > 0; // your body (seen through portals) raises the gun, and keeps it up briefly
@@ -1117,7 +1135,7 @@ export class Match {
       if (!this.scoped) {
         // Field of view widens with speed (and kicks on a dash).
         this.fovKick = Math.max(0, this.fovKick - dt * 30);
-        const target = this.ads ? (p.weapon.def.adsFov || this.baseFov * 0.75)
+        const target = this.ads ? (p.weapon.def.adsFov || this.baseFov * 0.75) * (modEffects(p.gunMods[p.weapon.def.id]).scope ? 0.65 : 1)
           : this.baseFov + THREE.MathUtils.clamp((hs - 7) * 0.9, 0, 12) + this.fovKick;
         if (Math.abs(cam.fov - target) > 0.01) {
           cam.fov += (target - cam.fov) * Math.min(1, dt * (this.ads ? 14 : 8));
@@ -1197,7 +1215,8 @@ export class Match {
     for (const h of msg.hits || []) this.effects.spark(v3(h));
     const vol = Math.max(0.1, 1 - c.pos.distanceTo(this.player.pos) / 60);
     (Sfx[c.weapon.def.sound] || Sfx.rifle)(vol);
-    for (const b of this.bots) if (b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < 30 && !b.aimDir) b.hear(c.pos);
+    const quiet = modEffects(c.gunMods[c.weapon.def.id]).quiet;
+    for (const b of this.bots) if (b.c.team !== c.team && b.c.pos.distanceTo(c.pos) < (quiet ? 10 : 30) && !b.aimDir) b.hear(c.pos);
   }
 
   remotePortal(c, msg) {

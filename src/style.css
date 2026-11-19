@@ -104,6 +104,10 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 32vmin, #000 32.3vmin); }
 #scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 64vmin; height: 1px; background: #000; transform: translate(-50%, -50%); }
 #scope::after { content: ''; position: absolute; left: 50%; top: 50%; height: 64vmin; width: 1px; background: #000; transform: translate(-50%, -50%); }
+#scope.lite { background: radial-gradient(circle at 50% 50%, transparent 0 40vmin, rgba(0,0,0,.55) 40.5vmin, #000 44vmin); }
+#scope.lite::before, #scope.lite::after { opacity: .35; }
+#scope.lite i.dot { display: block; }
+#scope i.dot { display: none; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ff3030; box-shadow: 0 0 6px #ff3030; }
 #hud { position: fixed; inset: 0; pointer-events: none; }
 #crosshair { --gap: 4px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 2px #000; transition: transform .06s; }
@@ -471,3 +475,11 @@ body.touch .hp-wrap { width: 180px; }
 @media (max-height: 480px) {
   #emote-wheel { transform: scale(.72); }
 }
+
+/* Gunsmith */
+.smith-guns { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.smith-guns .card { position: relative; }
+.smith-inuse { position: absolute; top: 6px; right: 6px; font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 1px; padding: 2px 6px; border-radius: 6px; background: var(--accent); color: #fff; }
+.smith-view { height: 210px; margin: 12px 0 4px; border-radius: 14px; background: radial-gradient(ellipse at 50% 60%, rgba(120,150,255,.18), rgba(10,12,24,.35) 70%); overflow: hidden; cursor: grab; }
+.smith-view canvas { width: 100%; height: 100%; display: block; }
+.smith-effect { margin-top: 6px; }

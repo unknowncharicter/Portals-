@@ -113,6 +113,7 @@
           <button data-tab="play">🎮<span>Play</span></button>
           <button data-tab="online">🌐<span>Online</span></button>
           <button data-tab="character">🧍<span>Character</span></button>
+          <button data-tab="gunsmith">🔧<span>Gunsmith</span></button>
           <button data-tab="shop">🛒<span>Shop</span></button>
           <button data-tab="upgrades">⬆️<span>Upgrades</span></button>
           <button data-tab="daily">🎁<span>Daily</span><i id="daily-dot" class="dot hidden"></i></button>
@@ -184,6 +185,10 @@
             <div id="emotes" class="accs"></div>
             <p class="hint left">Drag your character to spin it. Accessories are just for looks: shots go straight through them.</p>
           </section>
+          <section data-tab="gunsmith" class="panel">
+            <h3>Gunsmith</h3>
+            <div id="gunsmith"></div>
+          </section>
           <section data-tab="shop" class="panel">
             <h3>Gun skins</h3>
             <div id="shop-skins" class="shop"></div>
@@ -232,7 +237,7 @@
 
   <!-- HUD -->
   <div id="hud" class="hidden">
-    <div id="scope" class="hidden"></div>
+    <div id="scope" class="hidden"><i class="dot"></i></div>
     <div id="crosshair"><i></i><i></i><i></i><i></i></div>
     <div id="timer"></div>
     <div id="killpop"></div>

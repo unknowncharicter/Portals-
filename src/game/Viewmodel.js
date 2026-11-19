@@ -44,23 +44,25 @@ export class Viewmodel {
     if (key === this.skinKey) return;
     this.skinKey = key; this.skin = skin; this.portalColor = portalColor;
     for (const g of Object.values(this.guns)) this.root.remove(g);
-    this.guns = {}; this.current = null;
+    this.guns = {}; this.current = null; this.currentKey = null;
   }
 
-  show(id) {
-    if (this.current === id) return;
-    this.current = id;
-    if (!this.guns[id]) {
-      const m = gunModel(id);
+  // mods: the Gunsmith setup for this gun (frame and attachments).
+  show(id, mods = null) {
+    const key = id + (mods ? JSON.stringify(mods) : '');
+    if (this.currentKey === key) return;
+    this.current = key; this.currentKey = key; this.currentId = id;
+    if (!this.guns[key]) {
+      const m = gunModel(id, mods);
       if (m) applySkin(m, this.skin, this.portalColor);
       // Highest point of the gun (for aiming: keep all of it below the crosshair).
       if (m) m.userData.top = new THREE.Box3().setFromObject(m).max.y;
-      if (m) { this.guns[id] = m; this.root.add(m); }
+      if (m) { this.guns[key] = m; this.root.add(m); }
     }
-    for (const [k, g] of Object.entries(this.guns)) g.visible = k === id;
+    for (const [k, g] of Object.entries(this.guns)) g.visible = k === key;
   }
 
-  fire(strength = 1) { this.kick = strength; this.flashT = 0.05; }
+  fire(strength = 1, flash = true) { this.kick = strength; this.flashT = flash ? 0.05 : 0; }
 
   update(dt, { moving, switching, reloading, lookX = 0, lookY = 0, ads = 0 }) {
     // The gun lags a little behind your aim.
@@ -72,10 +74,11 @@ export class Viewmodel {
     this.kick = Math.max(0, this.kick - dt * 8);
     const g = this.guns[this.current];
     if (!g) return;
-    const hold = HOLD[this.current] || HOLD.ar;
+    const hold = HOLD[this.currentId] || HOLD.ar;
     // Aiming: slide the gun to the middle of the screen, just under the crosshair, so the top of
     // the gun lines up with it and never covers what you're aiming at.
-    const aimY = -(g.userData.top ?? g.userData.muzzle.y) - 0.012;
+    // With a scope, look straight through its middle.
+    const aimY = g.userData.sight !== undefined ? -g.userData.sight : -(g.userData.top ?? g.userData.muzzle.y) - 0.012;
     const bob = 1 - ads * 0.8;
     let y = THREE.MathUtils.lerp(hold.y, aimY, ads) + Math.sin(this.bobT * 2) * bobA * bob;
     const x = THREE.MathUtils.lerp(hold.x, 0, ads) + Math.cos(this.bobT) * bobA * bob;

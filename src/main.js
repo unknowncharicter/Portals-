@@ -7,7 +7,8 @@ import { World } from './game/World.js';
 import { PortalSystem } from './game/Portals.js';
 import { Effects } from './game/Effects.js';
 import { Viewmodel } from './game/Viewmodel.js';
-import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES } from './game/Match.js';
+import { Match, MODES, DIFFICULTIES, matchDifficulty, TEAM_COLORS, FFA_COLORS, BOT_NAMES, playerLoadout, botLoadout } from './game/Match.js';
+import { buildGunsmith } from './ui/gunsmith.js';
 import { Room } from './net/Room.js';
 import { submitScore, fetchBoard, myTag } from './leaderboard.js';
 import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, EMOTES, cleanName, randomLook } from './game/Look.js';
@@ -17,7 +18,7 @@ import { TouchControls, isTouchDevice } from './touch.js';
 import { MAPS, MAP_IDS, PROPS } from './game/maps.js';
 import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
 import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
-import { loadModels, gunModel, mapModel } from './game/Models.js';
+import { loadModels, gunModel, mapModel, applySkin } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
 import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
 import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo, weeklyChallenges, weeklySkin, daysLeftInWeek } from './progress.js';
@@ -155,8 +156,8 @@ function rebuildPreview() {
   const keepYaw = previewChar ? previewChar.rotation.y : Math.PI; // start facing the camera
   if (previewChar) previewScene.remove(previewChar);
   const parts = buildCharacterMesh(save.look, { visor: save.color, tag: false });
-  const gun = gunModel(save.loadout.primary);
-  if (gun) parts.gunHolder.add(gun);
+  const gun = gunModel(save.loadout.primary, (save.gunMods || {})[save.loadout.primary]);
+  if (gun) { applySkin(gun, GUN_SKINS.find(s => s.id === save.gunSkin) || null, save.color); parts.gunHolder.add(gun); }
   previewChar = parts.group;
   previewChar.rotation.y = keepYaw;
   previewParts = parts;
@@ -351,6 +352,7 @@ function buildLobby() {
   }
 
   buildCharacterPanel();
+  buildGunsmith({ save, writeSave, thumbs, Sfx, skin: GUN_SKINS.find(s => s.id === save.gunSkin) || null, onChange: () => { rebuildPreview(); buildLobby(); } });
   buildTabs();
   buildLevel();
   buildShop();
@@ -717,7 +719,7 @@ $('btn-continue').onclick = async () => {
 let room = null;
 const ONLINE_MODES = Object.entries(MODES).filter(([, m]) => !m.hidden).map(([id]) => id);
 const slotsFor = (modeId) => { const M = MODES[modeId]; return M.ffa ? M.count : M.teams.flat().length; };
-const me = () => ({ name: save.look.name, look: save.look, color: save.color, loadout: save.loadout, gunSkin: save.gunSkin });
+const me = () => ({ name: save.look.name, look: save.look, color: save.color, loadout: playerLoadout(save), gunSkin: save.gunSkin });
 
 function onlineStatus(text, err = false) {
   const el = $('on-status');
@@ -769,7 +771,7 @@ function makeRoster(modeId, players) {
   free.forEach((slot, i) => {
     const name = BOT_NAMES[i % BOT_NAMES.length] + ' (bot)';
     roster.push({ ...slot, owner: 'h', bot: true, name, look: randomLook(name), color: botColors[i % botColors.length] || COLORS[i % COLORS.length],
-      loadout: { primary: diff.guns[Math.floor(Math.random() * diff.guns.length)], secondary: 'pistol' }, gunSkin: null });
+      loadout: botLoadout(diff), gunSkin: null });
   });
   roster.forEach((e, i) => { e.id = i; });
   return roster;

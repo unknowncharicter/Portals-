@@ -23,6 +23,7 @@ const EPS = 0.001;
 export class Character {
   constructor({ name, team, color, portalColor, isBot, stats, loadout, look, skin = null }) {
     this.skin = skin;
+    this.gunMods = (loadout && loadout.mods) || {}; // Gunsmith setup per gun id
     this.look = { ...look, name };
     this.name = name;
     this.team = team;
@@ -72,7 +73,7 @@ export class Character {
     if (id === this.gunId) return;
     this.gunId = id;
     this.gunHolder.clear();
-    const m = gunModel(id);
+    const m = gunModel(id, this.gunMods[id]);
     if (m) {
       applySkin(m, this.skin, this.portalColor);
       m.traverse(o => o.layers.set(this.bodyLayer));

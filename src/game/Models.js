@@ -4,6 +4,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { setCharacterTemplate, addCharacterTemplate } from './CharacterModel.js';
 import { retargetClips, MIXAMO_TO_QUAT, fixQuaterniusRig } from './Retarget.js';
+import { GUN_FRAMES, PARTS, frameOf, cleanMods } from './Gunsmith.js';
 
 // Character models (Quaternius, CC0). They share one skeleton, so the robot's animation clips
 // are copied onto it once and used by both. tint: material name -> look colour it takes.
@@ -22,18 +23,9 @@ const CHARACTERS = {
 };
 export const CHARACTER_IDS = Object.keys(CHARACTERS);
 
-// Gun models (GLB). The source models point their barrel along +X; we turn them to face -Z
-// (forward in three.js), scale them to a real-world length, and put the grip at the origin.
-const GUNS = {
-  ar:       { file: 'ar.glb',       length: 0.85, hold: 0.36 },
-  smg:      { file: 'smg.glb',      length: 0.6,  hold: 0.45 },
-  shotgun:  { file: 'shotgun.glb',  length: 0.95, hold: 0.38 },
-  sniper:   { file: 'sniper.glb',   length: 1.15, hold: 0.33 },
-  burst:    { file: 'burst.glb',    length: 0.8,  hold: 0.55 },
-  pistol:   { file: 'pistol.glb',   length: 0.24, hold: 0.62 },
-  revolver: { file: 'revolver.glb', length: 0.3,  hold: 0.62 },
-};
-
+// Gun models: frames and attachments (see Gunsmith.js). The source models point their barrel
+// along +X; we turn them to face -Z (forward in three.js), scale each gun family so its first
+// frame is a real-world length, and put the grip at the origin.
 // Hat models (in "blocky head" units: head centre y 0.72, top 0.93, about 0.44 wide).
 // width: size across (x) after turning; bottom/top: where the model's lowest/highest point goes.
 // tint: recolour with the look's shirt or pants colour.
@@ -63,6 +55,7 @@ const BACK_MODELS = {
 const hatTemplates = {}, faceTemplates = {}, backTemplates = {};
 
 const templates = {};
+const frameTemplates = {}, partScenes = {}, gunScale = {};
 let loading = null;
 
 export function loadModels() {
@@ -96,13 +89,25 @@ export function loadModels() {
     try { backTemplates[id] = { root: fitHat((await loader.loadAsync(`models/${cfg.file}`)).scene, cfg), cfg }; }
     catch (e) { console.warn('Could not load back item', id, e); }
   });
-  loading = Promise.all([character, ...hats, ...faces, ...backs, ...Object.entries(GUNS).map(async ([id, cfg]) => {
+  loading = Promise.all([character, ...hats, ...faces, ...backs, ...Object.entries(GUN_FRAMES).map(async ([id, fam]) => {
     try {
-      const gltf = await loader.loadAsync(`models/guns/${cfg.file}`);
-      templates[id] = normalize(gltf.scene, cfg);
+      // The first frame sets the family's scale; the others use the same scale (true sizes).
+      const first = (await loader.loadAsync(`models/guns/parts/${fam.frames[0].id}.glb`)).scene;
+      const raw = new THREE.Box3().setFromObject(first);
+      const scale = fam.length / (raw.max.x - raw.min.x);
+      gunScale[id] = scale;
+      frameTemplates[fam.frames[0].id] = normalizeFrame(first, scale, fam.frames[0].hold);
+      templates[id] = frameTemplates[fam.frames[0].id];
+      await Promise.all(fam.frames.slice(1).map(async (f) => {
+        try { frameTemplates[f.id] = normalizeFrame((await loader.loadAsync(`models/guns/parts/${f.id}.glb`)).scene, scale, f.hold); }
+        catch (e) { console.warn('Could not load gun frame', f.id, e); }
+      }));
     } catch (e) {
       console.warn('Could not load gun model', id, e);
     }
+  }), ...Object.entries(PARTS).map(async ([id, p]) => {
+    try { partScenes[id] = (await loader.loadAsync(`models/guns/parts/${p.file}.glb`)).scene; }
+    catch (e) { console.warn('Could not load gun part', id, e); }
   })]);
   // Blocky guns built in code (no model file needed).
   templates.crossbow = makeCrossbow();
@@ -215,41 +220,127 @@ function makeRocket() {
   return g;
 }
 
-function normalize(scene, cfg) {
+function normalizeFrame(scene, scale, hold) {
   const inner = scene;
   inner.rotation.y = Math.PI / 2; // +X -> -Z
+  inner.scale.multiplyScalar(scale);
   const root = new THREE.Group();
   root.add(inner);
   root.updateMatrixWorld(true);
-
   let box = new THREE.Box3().setFromObject(root);
-  const len = box.max.z - box.min.z;
-  inner.scale.multiplyScalar(cfg.length / len);
-  root.updateMatrixWorld(true);
-  box = new THREE.Box3().setFromObject(root);
-
   // Grip point: `hold` of the way from the back of the gun, at mid height.
   const L = box.max.z - box.min.z;
-  const grip = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z - cfg.hold * L);
+  const grip = new THREE.Vector3((box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2, box.max.z - hold * L);
   inner.position.sub(grip);
   root.updateMatrixWorld(true);
-
-  // Muzzle: average height of the vertices at the very front of the barrel.
   box = new THREE.Box3().setFromObject(root);
+
+  // Height profile along the gun (top and bottom every 1 cm), for fitting attachments,
+  // and the muzzle: average height of the vertices at the very front of the barrel.
+  const step = 0.01, z0 = box.min.z, n = Math.ceil((box.max.z - z0) / step) + 1;
+  const top = new Array(n).fill(-Infinity), bot = new Array(n).fill(Infinity);
   const front = box.min.z + L * 0.03;
-  let sumY = 0, n = 0;
+  let sumY = 0, cnt = 0;
   const v = new THREE.Vector3();
+  const mark = (z, y) => {
+    const k = Math.round((z - z0) / step);
+    if (k < 0 || k >= n) return;
+    if (y > top[k]) top[k] = y;
+    if (y < bot[k]) bot[k] = y;
+  };
   root.traverse(o => {
     if (!o.isMesh) return;
     o.castShadow = false;
-    const pos = o.geometry.attributes.position;
+    const pos = o.geometry.attributes.position, idx = o.geometry.index;
+    const ws = [];
     for (let i = 0; i < pos.count; i++) {
       v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      if (v.z <= front) { sumY += v.y; n++; }
+      ws.push(v.clone());
+      if (v.z <= front) { sumY += v.y; cnt++; }
+    }
+    // Walk along every triangle edge (a long barrel only has vertices at its two ends).
+    const tri = idx ? idx.count : pos.count;
+    for (let t = 0; t < tri; t += 3) {
+      const ids = idx ? [idx.getX(t), idx.getX(t + 1), idx.getX(t + 2)] : [t, t + 1, t + 2];
+      for (let e = 0; e < 3; e++) {
+        const a = ws[ids[e]], b = ws[ids[(e + 1) % 3]];
+        const m = Math.max(1, Math.ceil(Math.abs(b.z - a.z) / step));
+        for (let j = 0; j <= m; j++) mark(a.z + (b.z - a.z) * j / m, a.y + (b.y - a.y) * j / m);
+      }
     }
   });
-  root.userData.muzzle = new THREE.Vector3(0, n ? sumY / n : 0, box.min.z);
+  root.userData.muzzle = new THREE.Vector3(0, cnt ? sumY / cnt : 0, box.min.z);
+  root.userData.profile = { z0, step, top, bot, back: box.max.z };
   return root;
+}
+
+// Highest (or lowest) point of the gun between z a and b.
+function profileAt(pr, a, b, which) {
+  const lo = Math.max(0, Math.floor((Math.min(a, b) - pr.z0) / pr.step)), hi = Math.min(pr.top.length - 1, Math.ceil((Math.max(a, b) - pr.z0) / pr.step));
+  let r = which === 'top' ? -Infinity : Infinity;
+  for (let k = lo; k <= hi; k++) {
+    const y = which === 'top' ? pr.top[k] : pr.bot[k];
+    if (which === 'top' ? y > r : y < r) r = y;
+  }
+  return Number.isFinite(r) ? r : 0;
+}
+
+// An attachment model, turned and scaled like its gun, with its box.
+function partModel(id, scale) {
+  const src = partScenes[id];
+  if (!src) return null;
+  const inner = src.clone(true);
+  inner.rotation.y = Math.PI / 2;
+  inner.scale.setScalar(scale);
+  const g = new THREE.Group();
+  g.add(inner);
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g);
+  inner.position.set(-(box.min.x + box.max.x) / 2, 0, 0); // centred left-right
+  g.updateMatrixWorld(true);
+  return { g, box: new THREE.Box3().setFromObject(g) };
+}
+
+// Put the attachments on a copy of a frame. Returns extra info (new muzzle, scope sight height).
+function fitParts(gun, root, frame, mods) {
+  const pr = root.userData.profile, scale = gunScale[gun];
+  const muzzle = root.userData.muzzle;
+  for (const slot of ['optic', 'muzzle', 'under']) {
+    const id = mods[slot];
+    if (!id) continue;
+    const pm = partModel(id, scale);
+    if (!pm) continue;
+    const { g, box } = pm;
+    const len = box.max.z - box.min.z, h = box.max.y - box.min.y;
+    if (slot === 'optic') {
+      // On top of the gun, a little in front of the hand.
+      const cz = -Math.min(0.1, (pr.back) * 0.4);
+      const sit = profileAt(pr, cz - len * 0.38, cz + len * 0.38, 'top');
+      g.position.set(0, sit - box.min.y - 0.004, cz - (box.min.z + box.max.z) / 2);
+      root.userData.sight = sit - 0.004 + h * 0.66; // the middle of the scope's tube
+    } else if (slot === 'muzzle') {
+      // On the end of the barrel (its threaded nub slides in).
+      g.position.set(0, muzzle.y - (box.min.y + box.max.y) / 2, muzzle.z + len * 0.08 - box.max.z);
+      root.userData.muzzle = new THREE.Vector3(0, muzzle.y, muzzle.z - len * 0.92);
+    } else {
+      const p = PARTS[id];
+      const reach = muzzle.z; // negative: in front of the hand
+      if (p.file.startsWith('Bayonet')) {
+        // Under the muzzle, blade forward.
+        g.position.set(0, muzzle.y - 0.03 * (scale / 0.16) - (box.min.y + box.max.y) / 2, muzzle.z + len * 0.4 - box.max.z);
+      } else {
+        // Under the barrel, in front of the magazine: slide forward until the gun's underside
+        // is close to the barrel (not a magazine hanging down).
+        let cz = p.file === 'Bipod' ? reach * 0.75 : p.file === 'Flashlight' ? reach * 0.72 : reach * 0.5;
+        const maxDepth = 0.1 * (scale / 0.16);
+        for (let k = 0; k < 12 && muzzle.y - profileAt(pr, cz - len / 2, cz + len / 2, 'bot') > maxDepth && cz > reach * 0.85; k++) cz += (reach * 0.88 - cz) * 0.35;
+        const under = profileAt(pr, cz - len / 2, cz + len / 2, 'bot');
+        g.position.set(0, under - box.max.y + 0.004, cz - (box.min.z + box.max.z) / 2);
+      }
+    }
+    g.userData.part = slot;
+    root.add(g);
+  }
 }
 
 // Recolour a gun for a skin. skin: entry from GUN_SKINS (progress.js).
@@ -274,10 +365,15 @@ export function applySkin(root, skin, portalColor) {
 }
 
 // A fresh copy of a gun (shares geometry and materials with the template).
-export function gunModel(id) {
-  const t = templates[id];
+// mods: { frame, optic, muzzle, under } from the Gunsmith (optional).
+export function gunModel(id, mods = null) {
+  const clean = mods && cleanMods(id, mods);
+  const frame = clean && frameOf(id, clean);
+  const t = (frame && frameTemplates[frame.id]) || templates[id];
   if (!t) return null;
   const c = t.clone(true);
   c.userData.muzzle = t.userData.muzzle.clone();
+  c.userData.profile = t.userData.profile;
+  if (clean && gunScale[id]) fitParts(id, c, frame, clean);
   return c;
 }

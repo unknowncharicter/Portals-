@@ -37,8 +37,10 @@ export class Hud {
     this.crosshair.classList.toggle('ads', on);
   }
 
-  scope(on) {
+  // lite: a scope attachment (a wider view with a red dot) rather than the sniper scope.
+  scope(on, lite = false) {
     this.scopeEl.classList.toggle('hidden', !on);
+    this.scopeEl.classList.toggle('lite', on && lite);
     this.crosshair.classList.toggle('hidden', on);
   }
 

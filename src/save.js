@@ -16,7 +16,7 @@ import { DEFAULT_LOOK } from './game/Look.js';
 
 const DEFAULT = {
   coins: 0, xp: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'ranked', rating: 800, map: 'arena',
-  gunSkin: 'default', killFx: 'sparks',
+  gunSkin: 'default', killFx: 'sparks', gunMods: {},
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },
   owned: ['none', 'cap', 'beanie'],
@@ -32,6 +32,7 @@ export function loadSave() {
       const d = JSON.parse(raw);
       return { ...DEFAULT, ...d,
         loadout: { ...DEFAULT.loadout, ...(d.loadout || {}) },
+        gunMods: d.gunMods && typeof d.gunMods === 'object' ? d.gunMods : {},
         look: { ...DEFAULT.look, ...(d.look || {}) },
         settings: { ...DEFAULT.settings, ...(d.settings || {}) },
         owned: [...new Set([...DEFAULT.owned, ...(d.owned || [])])] };
