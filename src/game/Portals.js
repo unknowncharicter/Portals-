@@ -394,12 +394,27 @@ export class PortalSystem {
     const tr = this.trace(origin, dir, 300, {});
     if (!tr.hit || tr.hit.type !== 'world') return null;
     const pose = this.poseFromHit(tr.hit, tr.finalDir);
+    if (pose) this.liftToVisible(pose);
     if (pose && pose.valid) {
       // The owner's oldest portal will vanish when this one is placed, so ignore it.
       const mine = this.byOwner.get(owner) || [];
       if (mine.length >= 2) pose.valid = !this.overlapsExisting(pose, mine[0]);
     }
     return pose;
+  }
+
+  // 3D props (like the sky islands) can stick up a little past their collision box: if the
+  // visible surface is just in front of the portal, move the portal onto it so it isn't hidden.
+  liftToVisible(pose) {
+    if (!this.modelMeshes().length) return;
+    const n = pose.normal, up = pose.up, right = new THREE.Vector3().crossVectors(up, n).normalize();
+    let lift = 0;
+    for (const [u, v] of [[0, 0], [-0.5, 0], [0.5, 0], [0, -0.9], [0, 0.9], [-0.4, -0.7], [0.4, -0.7], [-0.4, 0.7], [0.4, 0.7]]) {
+      const o = pose.pos.clone().addScaledVector(right, u).addScaledVector(up, v).addScaledVector(n, 0.3);
+      const mh = this.meshHit(o, n.clone().negate(), 0.32);
+      if (mh) lift = Math.max(lift, 0.3 - mh.t);
+    }
+    if (lift > 0.002 && lift < 0.25) pose.pos.addScaledVector(n, lift + 0.004);
   }
 
   place(owner, pose) {
