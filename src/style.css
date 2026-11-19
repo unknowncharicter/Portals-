@@ -700,3 +700,12 @@ input[type=text], .field input { border-radius: 2px; background: #101215; border
 }
 body.touch #tutorial { top: 58px; width: min(520px, 50%); padding: 6px 12px; font-size: 14px; }
 body.touch #tutorial small { font-size: 10px; margin-bottom: 2px; }
+
+/* Welcome box: two equal choices */
+#intro-skip { background: var(--panel-3); color: var(--text); border: 1px solid var(--line-2); }
+#intro-skip:hover { background: #2e343c; }
+.intro-btns .big { min-width: 240px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+/* Leftovers from the old colours */
+.loadout .card.sel, .loadout button.sel { background: var(--panel-3); }
+#btn-tutorial.new { background: var(--panel-2); border: 1px solid var(--accent); color: var(--text); }
+#btn-tutorial.new::after { color: var(--accent); }

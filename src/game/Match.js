@@ -15,7 +15,7 @@ import { NetSync, packSegs, unpackSegs, v3, arr } from '../net/NetSync.js';
 import { mapModelLoaded } from './Models.js';
 
 export const DIFFICULTIES = {
-  easy:   { label: 'Easy',   skill: 0.25, coins: 0.75, botDamage: 0.55, guns: ['ar', 'smg', 'shotgun', 'burst'] },
+  easy:   { label: 'Easy',   skill: 0.08, coins: 0.75, botDamage: 0.35, guns: ['ar', 'smg'], easy: true },
   normal: { label: 'Normal', skill: 0.5,  coins: 1,    botDamage: 0.75, guns: ['ar', 'ar', 'smg', 'shotgun', 'burst'] },
   hard:   { label: 'Hard',   skill: 0.85, coins: 1.5,  botDamage: 0.95, guns: ['ar', 'ar', 'smg', 'shotgun', 'sniper', 'burst', 'crossbow'] },
 };
