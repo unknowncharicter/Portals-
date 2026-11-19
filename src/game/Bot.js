@@ -215,10 +215,10 @@ export class BotBrain {
     if (this.strafeT <= 0) {
       this.strafeSign = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0.6 + Math.random() * 1.4;
       // Slide into the new direction now and then (better bots more often): a hard target.
-      if (c.grounded && !c.crouched && Math.random() < 0.06 + this.skill * 0.08) this.slideHold = 0.45;
+      if (c.grounded && !c.crouched && Math.random() < 0.06 + this.skill * 0.08 && this.groundAhead(this.wish.lengthSq() > 0.01 ? this.wish : new THREE.Vector3(-Math.sin(c.yaw), 0, -Math.cos(c.yaw)), [2, 4])) this.slideHold = 0.45;
     }
     // Got hit: sometimes slide out of the line of fire.
-    if (c.hurtAt && performance.now() - c.hurtAt < 120 && c.grounded && !c.crouched && Math.random() < 0.12 * this.skill) {
+    if (c.hurtAt && performance.now() - c.hurtAt < 120 && c.grounded && !c.crouched && Math.random() < 0.12 * this.skill && this.groundAhead(new THREE.Vector3(c.vel.x, 0, c.vel.z).lengthSq() > 0.01 ? new THREE.Vector3(c.vel.x, 0, c.vel.z) : this.wish, [2, 4])) {
       this.slideHold = 0.45; this.strafeT = 0.8;
     }
     const to = this.target.pos.clone().sub(c.pos).setY(0);
@@ -672,7 +672,7 @@ export class BotBrain {
       if (h && !ignored.has(h.box) && h.box.max.y - feet > 0.55 && !this.inOwnOpening(h.point)) return true;
     }
     if (!c.grounded) return false;
-    const ahead = c.pos.clone().addScaledVector(d, 1.4);
+    const ahead = c.pos.clone().addScaledVector(d, 1.6); // (a bit of room: they still slip off now and then)
     if (!w.raycast(ahead, DOWN, 8) && !this.wantsPortalDrop(ahead)) { if (info) info.ledge = true; return true; }
     return false;
   }
