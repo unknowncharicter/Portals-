@@ -50,7 +50,7 @@ export class Room {
 
   // ---------- Host ----------
   // code: a fixed code (public rooms); otherwise a random one.
-  host(me, tries = 3, code = null) {
+  host(me, tries = 3, code = null, netTries = 2) {
     return new Promise((resolve, reject) => {
       this.isHost = true;
       this.code = code || makeCode();
@@ -59,7 +59,9 @@ export class Room {
       const peer = this.peer = new Peer(PREFIX + this.code, peerOptions());
       const fail = (e) => {
         peer.destroy();
-        if (e && e.type === 'unavailable-id' && tries > 0 && !code) this.host(me, tries - 1).then(resolve, reject);
+        if (e && e.type === 'unavailable-id' && tries > 0 && !code) this.host(me, tries - 1, null, netTries).then(resolve, reject);
+        // The free online server sometimes hiccups: try again before giving up.
+        else if (isNetErr(e) && netTries > 0) setTimeout(() => this.host(me, tries, code, netTries - 1).then(resolve, reject), 1200);
         else reject(err(niceError(e), e && e.type === 'unavailable-id' ? 'taken' : 'network'));
       };
       peer.once('open', () => { peer.off('error', fail); peer.on('error', (e) => this.emit('error', niceError(e))); resolve(this.code); });
@@ -112,14 +114,18 @@ export class Room {
   }
 
   // ---------- Player ----------
-  join(code, me, timeoutMs = 12000) {
+  join(code, me, timeoutMs = 12000, netTries = 2) {
     return new Promise((resolve, reject) => {
       this.isHost = false;
       this.code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
       const peer = this.peer = new Peer(peerOptions());
       let done = false;
       const timer = setTimeout(() => { if (!done) { done = true; peer.destroy(); reject(err('Could not reach that room. Check the code and try again.', 'timeout')); } }, timeoutMs);
-      peer.once('error', (e) => { if (done) return; done = true; clearTimeout(timer); peer.destroy(); reject(err(niceError(e), e && e.type === 'peer-unavailable' ? 'not-found' : 'network')); });
+      peer.once('error', (e) => {
+        if (done) return; done = true; clearTimeout(timer); peer.destroy();
+        if (isNetErr(e) && netTries > 0) { setTimeout(() => this.join(code, me, timeoutMs, netTries - 1).then(resolve, reject), 1200); return; }
+        reject(err(niceError(e), e && e.type === 'peer-unavailable' ? 'not-found' : 'network'));
+      });
       peer.once('open', () => {
         const conn = this.hostConn = peer.connect(PREFIX + this.code, { reliable: true });
         conn.on('open', () => conn.send({ t: 'hello', me: cleanMe(me) }));
@@ -162,6 +168,8 @@ export class Room {
   }
 }
 
+const isNetErr = (e) => !!e && ['network', 'server-error', 'socket-error', 'socket-closed'].includes(e.type);
+
 function err(message, code) { const e = new Error(message); e.code = code; return e; }
 
 function cleanMe(me = {}) {
@@ -177,7 +185,7 @@ function cleanMe(me = {}) {
 function niceError(e) {
   const type = e && e.type;
   if (type === 'peer-unavailable') return 'Room not found. Check the code.';
-  if (type === 'network' || type === 'server-error' || type === 'socket-error') return 'Could not reach the online server. Check your internet connection.';
+  if (type === 'network' || type === 'server-error' || type === 'socket-error') return 'Could not reach the online server. Your network may be blocking online play (common on school or work Wi-Fi), or an ad blocker may be. Try another network, a phone hotspot, or turning the ad blocker off for this site.';
   if (type === 'browser-incompatible') return 'Your browser does not support online play.';
   return (e && e.message) || 'Connection problem.';
 }
