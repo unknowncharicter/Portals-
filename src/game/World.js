@@ -60,9 +60,11 @@ export class World {
     // Clear the old map.
     for (const child of [...this.group.children]) {
       this.group.remove(child);
-      if (child.userData.mapModel) continue; // shared model: keep it for next time
-      child.geometry.dispose();
-      child.material.dispose();
+      if (child.userData.mapModel || child.userData.shared) continue; // shared model: keep it for next time
+      child.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); }
+      });
     }
     this.boxes = [];
     const t = map.theme;
@@ -111,7 +113,8 @@ export class World {
         m.scale.setScalar(pr.scale);
         m.position.set(-pr.off[0] * pr.scale, -pr.off[1] * pr.scale, -pr.off[2] * pr.scale);
         outer.add(m);
-        outer.userData.mapModel = true;
+        outer.userData.mapModel = !pr.decor; // scenery props: portals can't go on them
+        outer.userData.shared = true;
         this.group.add(outer);
       };
       const ready = mapModelLoaded(PROPS[pr.id]);
@@ -136,7 +139,7 @@ export class World {
       const xs = pts.map(p => p[0] + pos[0]), zs = pts.map(p => p[1] + pos[2]);
       this.addBox([Math.min(...xs), (bx[1] - off[1]) * scale + pos[1], Math.min(...zs)], [Math.max(...xs), (bx[4] - off[1]) * scale + pos[1], Math.max(...zs)], null);
     }
-    this.props.push({ id, pos, scale, rot, off, tint: opts.tint });
+    this.props.push({ id, pos, scale, rot, off, tint: opts.tint, decor: !!opts.decor });
   }
 
   // A ladder zone the character is in (feet between its bottom and top), if any.

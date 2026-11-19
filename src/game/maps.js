@@ -1,6 +1,7 @@
 import COMPOUND_BOXES from './compound-boxes.json';
 import COLOSSEUM_BOXES from './colosseum-boxes.json';
 import WAREHOUSE_BOXES from './warehouse-boxes.json';
+import { warehouseYard } from './warehouseYard.js';
 // Map layouts. Every map is built only from boxes: build(m) gets helpers
 // m.box(min, max, color) and m.mirror(min, max, color) (adds the box and its mirror across X).
 // Portal-friendly surfaces need to be at least 1.6 m wide and 2.6 m tall.
@@ -105,7 +106,7 @@ export const MAPS = {
     name: 'Warehouse',
     model: { file: 'maps/warehouse.glb', scale: 0.4, offset: [0, -0.79, -5.44] },
     hill: { x: 6.5, y: 0, z: -1.5, r: 4.5 },
-    theme: { sky: '#9db4c8', fog: [50, 140], hemi: 1.5, sun: 1.6 },
+    theme: { sky: '#a9c6e0', fog: [70, 230], hemi: 1.5, sun: 1.6 },
     view: { r: 30, h: 16 },
     spawns: {
       0: [V(-4, 0, -18), V(4, 0, -18)],
@@ -140,6 +141,9 @@ export const MAPS = {
         m.box([-12, 0, 9 + i * 0.7], [-9.2, 3.6 - i * 0.5, 9 + (i + 1) * 0.7], metal);
         m.box([-12, 0, -9 - (i + 1) * 0.7], [-9.2, 3.6 - i * 0.5, -9 - i * 0.7], metal);
       }
+      // The yard outside (what you see through the open end, windows and roof).
+      const scenery = (id, pos, sc, rot, o = {}) => m.prop(id, pos, sc, rot, { ...o, solid: false, decor: true });
+      m.decor((THREE, add) => warehouseYard(THREE, add, scenery));
     },
   },
 
