@@ -398,6 +398,7 @@ try { currentTab = localStorage.getItem('portal-duel-tab') || 'play'; } catch (e
 function buildTabs() {
   for (const b of document.querySelectorAll('#tabs button')) {
     b.classList.toggle('sel', b.dataset.tab === currentTab);
+    b.title = b.textContent.replace(/[^\p{L}\s]/gu, '').trim(); // name on hover (small screens show icons only)
     b.onclick = () => {
       currentTab = b.dataset.tab;
       try { localStorage.setItem('portal-duel-tab', currentTab); } catch (e) { /* ignore */ }

@@ -295,8 +295,8 @@ html, body { font-family: 'Rubik', system-ui, -apple-system, Segoe UI, Roboto, s
 .hero-mode { font-size: 13px; opacity: .75; text-align: center; }
 
 .content { display: flex; flex-direction: column; min-height: 0; gap: 10px; }
-#lobby .tabs { width: 100%; gap: 6px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 6px; backdrop-filter: blur(8px); flex-wrap: nowrap; overflow-x: auto; }
-#lobby .tabs button { flex: 1; min-width: max-content; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border-radius: 10px; padding: 9px 12px; font-size: 14px; color: #c9d4ff; transition: background .15s; }
+#lobby .tabs { width: 100%; gap: 4px; background: var(--glass); border: 1px solid var(--line); border-radius: 14px; padding: 6px; backdrop-filter: blur(8px); flex-wrap: nowrap; overflow: hidden; }
+#lobby .tabs button { flex: 1 1 auto; min-width: 0; white-space: nowrap; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; border-radius: 10px; padding: 9px 8px; font-size: 14px; color: #c9d4ff; transition: background .15s; }
 #lobby .tabs button span { font-size: 13px; letter-spacing: .5px; }
 #lobby .tabs button:hover { background: var(--glass-2); }
 #lobby .tabs button.sel { background: var(--grad); color: #fff; box-shadow: 0 4px 16px rgba(182,92,255,.35); }
@@ -489,3 +489,13 @@ body.touch .hp-wrap { width: 180px; }
 .acc img.ath { width: 100%; max-width: 96px; height: 50px; object-fit: contain; }
 .smith-zoom { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
 .smith-zoom span { font-size: 12px; opacity: .8; margin-right: 4px; }
+
+/* No scrollbars anywhere (wheel, drag and touch still scroll). */
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
+/* Tabs always fit: when space is tight, only the open tab shows its name. */
+@media (max-width: 1250px) {
+  #lobby .tabs button:not(.sel) span { display: none; }
+  #lobby .tabs button { flex: 1 1 0; }
+  #lobby .tabs button.sel { flex: 0 0 auto; padding: 9px 12px; }
+}
