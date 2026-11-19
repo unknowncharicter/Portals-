@@ -4,7 +4,7 @@ import { BotBrain } from './Bot.js';
 import { PortalGhost } from './Portals.js';
 import { buildStats, WEAPONS, WeaponState } from './Weapons.js';
 import { randomLook, EMOTES } from './Look.js';
-import { randomMods, modEffects } from './Gunsmith.js';
+import { randomMods, modEffects, opticZooms } from './Gunsmith.js';
 import { EmoteWheel } from './EmoteWheel.js';
 import { Projectiles } from './Projectiles.js';
 import { GUN_SKINS } from '../progress.js';
@@ -693,6 +693,22 @@ export class Match {
     return true;
   }
 
+  // Zoom of the sight on the gun in hand (1 without one). Remembered per gun for the match.
+  currentZoom(p) {
+    const id = p.weapon.def.id, zs = opticZooms(p.gunMods[id]);
+    if (!zs) return 1;
+    this.zoomSel ||= {};
+    if (!zs.includes(this.zoomSel[id])) this.zoomSel[id] = p.gunMods[id].zoom || zs[0];
+    return this.zoomSel[id];
+  }
+  // dir +1 zooms in. wrap: go round (Z key / touch button) instead of stopping at the ends.
+  stepZoom(p, dir, wrap) {
+    const id = p.weapon.def.id, zs = opticZooms(p.gunMods[id]);
+    let i = zs.indexOf(this.currentZoom(p)) + dir;
+    if (wrap) i = (i + zs.length) % zs.length; else i = Math.max(0, Math.min(zs.length - 1, i));
+    if (zs[i] !== this.zoomSel[id]) { this.zoomSel[id] = zs[i]; Sfx.click(); }
+  }
+
   setScope(on) {
     const p = this.player;
     on = on && p.alive && !!p.weapon.def.zoom && !p.weapon.reloading;
@@ -857,7 +873,10 @@ export class Match {
 
       if (inp.hit('Digit1') && p.switchTo(0)) { this.setScope(false); Sfx.swap(); }
       if (inp.hit('Digit2') && p.switchTo(1)) { this.setScope(false); Sfx.swap(); }
-      if (inp.wheel && p.switchTo((p.slot + 1) % 2)) { this.setScope(false); Sfx.swap(); }
+      // Mouse wheel: change the zoom while aiming through a sight, otherwise swap guns.
+      const zooms = this.ads && opticZooms(p.gunMods[p.weapon.def.id]);
+      if (zooms && (inp.wheel || inp.hit('KeyZ'))) this.stepZoom(p, inp.wheel ? -Math.sign(inp.wheel) : 1, !inp.wheel);
+      else if (inp.wheel && p.switchTo((p.slot + 1) % 2)) { this.setScope(false); Sfx.swap(); }
       if (inp.hit('KeyR')) { this.reload(p); this.setScope(false); }
       // Right mouse (held) aims with every gun. The sniper aims through its scope
       // (and comes back out while the bolt cycles after a shot).
@@ -954,9 +973,12 @@ export class Match {
     this.updateCamera(dt);
     this.viewmodel.show(p.weapon.def.id, p.gunMods[p.weapon.def.id]);
     this.adsT += ((this.ads ? 1 : 0) - this.adsT) * Math.min(1, dt * 14);
-    // Gun with a scope attachment: once fully aimed in, look through the scope (gun hidden).
-    const lens = this.ads && this.adsT > 0.9 && p.alive && modEffects(p.gunMods[p.weapon.def.id]).scope;
-    if (lens !== !!this.lens) { this.lens = lens; if (!this.scoped) { this.viewmodel.hidden = lens; this.hud.scope(lens, true); } }
+    // Gun with a sight attachment: once aimed in you look through it; show its reticle and zoom.
+    const lens = this.ads && this.adsT > 0.75 && p.alive && !!opticZooms(p.gunMods[p.weapon.def.id]);
+    if (lens !== !!this.lens || (lens && this.lensZoom !== this.currentZoom(p))) {
+      this.lens = lens; this.lensZoom = this.currentZoom(p);
+      this.hud.reticle(lens, this.lensZoom);
+    }
     if (this.ads || this.input.mouseDown) this.aimHold = 1.2;
     this.aimHold = Math.max(0, (this.aimHold || 0) - dt);
     p.aiming = this.aimHold > 0; // your body (seen through portals) raises the gun, and keeps it up briefly
@@ -1135,7 +1157,7 @@ export class Match {
       if (!this.scoped) {
         // Field of view widens with speed (and kicks on a dash).
         this.fovKick = Math.max(0, this.fovKick - dt * 30);
-        const target = this.ads ? (p.weapon.def.adsFov || this.baseFov * 0.75) * (modEffects(p.gunMods[p.weapon.def.id]).scope ? 0.65 : 1)
+        const target = this.ads ? (p.weapon.def.adsFov || this.baseFov * 0.75) / this.currentZoom(p)
           : this.baseFov + THREE.MathUtils.clamp((hs - 7) * 0.9, 0, 12) + this.fovKick;
         if (Math.abs(cam.fov - target) > 0.01) {
           cam.fov += (target - cam.fov) * Math.min(1, dt * (this.ads ? 14 : 8));
@@ -1264,6 +1286,7 @@ export class Match {
   }
 
   dispose() {
+    this.hud.reticle(false);
     if (this.wheel) { this.wheel.dispose(); this.wheel = null; }
     this.input.wheelOpen = false;
     if (this.net) this.net.dispose();

@@ -34,6 +34,8 @@ export class Viewmodel {
     this.swayX = 0; this.swayY = 0;
     this.current = null;
     this.hidden = false;
+    // Looking through a tube scope: hide all of it except the eyepiece end (a clear view).
+    this.clip = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1e6);
   }
 
   setAspect(a) { this.camera.aspect = a; this.camera.updateProjectionMatrix(); }
@@ -57,6 +59,7 @@ export class Viewmodel {
       if (m) applySkin(m, this.skin, this.portalColor);
       // Highest point of the gun (for aiming: keep all of it below the crosshair).
       if (m) m.userData.top = new THREE.Box3().setFromObject(m).max.y;
+      if (m) m.traverse(o => { if (o.isMesh && o.userData.scopeBody) { o.material = o.material.clone(); o.material.clippingPlanes = [this.clip]; } });
       if (m) { this.guns[key] = m; this.root.add(m); }
     }
     for (const [k, g] of Object.entries(this.guns)) g.visible = k === key;
@@ -85,9 +88,17 @@ export class Viewmodel {
     let rx = this.kick * 0.12;
     if (switching > 0) y -= switching * 0.5;
     if (reloading) { y -= 0.06; rx -= 0.45; }
-    this.root.position.set(x + this.swayX, y + this.swayY, hold.z - ads * 0.06 + this.kick * 0.05);
-    this.root.rotation.set(rx * (1 - ads * 0.6), 0.04 * (1 - ads), reloading ? 0.35 : 0);
+    // With a sight: bring its back close to your eye, so you look through it (like a real scope).
+    const scoped = g.userData.sight !== undefined;
+    const z = scoped ? THREE.MathUtils.lerp(hold.z, -g.userData.eyeDist - g.userData.eye, ads) : hold.z - ads * 0.06;
+    const sw = scoped ? 1 - ads * 0.75 : 1; // steadier while looking through a sight
+    this.root.position.set(x + this.swayX * sw, y + this.swayY * sw, z + this.kick * (scoped ? 0.02 : 0.05));
+    this.root.rotation.set(rx * (1 - ads * (scoped ? 0.85 : 0.6)), 0.04 * (1 - ads), reloading ? 0.35 : 0);
     this.root.updateMatrixWorld();
+    if (scoped && g.userData.scopeLen && ads > 0.6) {
+      const cut = new THREE.Vector3(0, g.userData.sight, g.userData.eye - g.userData.scopeLen * 0.22).applyMatrix4(this.root.matrixWorld);
+      this.clip.constant = -cut.z;
+    } else this.clip.constant = 1e6;
 
     this.flashT -= dt;
     this.flash.visible = this.flashT > 0 && !this.hidden;
@@ -103,6 +114,7 @@ export class Viewmodel {
 
   render(renderer) {
     if (this.hidden) return;
+    renderer.localClippingEnabled = true;
     renderer.clearDepth();
     renderer.render(this.scene, this.camera);
   }

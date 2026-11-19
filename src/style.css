@@ -104,10 +104,12 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #scope { position: absolute; inset: 0; background: radial-gradient(circle at 50% 50%, transparent 0 32vmin, #000 32.3vmin); }
 #scope::before { content: ''; position: absolute; left: 50%; top: 50%; width: 64vmin; height: 1px; background: #000; transform: translate(-50%, -50%); }
 #scope::after { content: ''; position: absolute; left: 50%; top: 50%; height: 64vmin; width: 1px; background: #000; transform: translate(-50%, -50%); }
-#scope.lite { background: radial-gradient(circle at 50% 50%, transparent 0 40vmin, rgba(0,0,0,.55) 40.5vmin, #000 44vmin); }
-#scope.lite::before, #scope.lite::after { opacity: .35; }
-#scope.lite i.dot { display: block; }
-#scope i.dot { display: none; position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #ff3030; box-shadow: 0 0 6px #ff3030; }
+#reticle { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+#reticle i { position: absolute; left: -4px; top: -4px; width: 8px; height: 8px; border-radius: 50%; background: #c8ff7a; box-shadow: 0 0 6px #7dff3a, 0 0 14px rgba(125,255,58,.6); }
+#reticle b { position: absolute; top: -2px; width: 5px; height: 30px; border-radius: 3px; background: rgba(110,220,120,.8); box-shadow: 0 0 8px rgba(110,255,120,.5); }
+#reticle b:nth-of-type(1) { left: -24px; transform: rotate(-24deg); transform-origin: 50% 0; }
+#reticle b:nth-of-type(2) { left: 19px; transform: rotate(24deg); transform-origin: 50% 0; }
+#reticle span { position: absolute; left: 30px; top: 30px; font: 700 14px/1 Rubik, sans-serif; color: #e8ffe0; text-shadow: 0 1px 3px #000; white-space: nowrap; }
 #hud { position: fixed; inset: 0; pointer-events: none; }
 #crosshair { --gap: 4px; position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 #crosshair i { position: absolute; background: #fff; box-shadow: 0 0 2px #000; transition: transform .06s; }
@@ -167,6 +169,7 @@ input[type=text] { font: inherit; padding: 8px 10px; border-radius: 8px; border:
 #t-scope { right: 112px; bottom: 228px; }
 #t-pause { left: 12px; top: 12px; }
 #t-emote { left: 64px; top: 12px; }
+#t-zoom { right: 112px; bottom: 286px; }
 #rotate { display: none; position: fixed; inset: 0; z-index: 50; background: #0b0d14; color: #fff; font-size: 22px; font-weight: 800; align-items: center; justify-content: center; text-align: center; padding: 24px; }
 @media (orientation: portrait) { body.touch.playing #rotate { display: flex; } }
 body.touch #bottom-left { left: auto; right: 12px; top: 12px; bottom: auto; transform: scale(.8); transform-origin: top right; }
@@ -483,3 +486,6 @@ body.touch .hp-wrap { width: 180px; }
 .smith-view { height: 210px; margin: 12px 0 4px; border-radius: 14px; background: radial-gradient(ellipse at 50% 60%, rgba(120,150,255,.18), rgba(10,12,24,.35) 70%); overflow: hidden; cursor: grab; }
 .smith-view canvas { width: 100%; height: 100%; display: block; }
 .smith-effect { margin-top: 6px; }
+.acc img.ath { width: 100%; max-width: 96px; height: 50px; object-fit: contain; }
+.smith-zoom { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.smith-zoom span { font-size: 12px; opacity: .8; margin-right: 4px; }

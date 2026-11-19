@@ -22,6 +22,7 @@ const BUTTONS = [
   { id: 'heal',   label: '+',      cls: 'small heal' },
   { id: 'scope',  label: '◎',      cls: 'small' },
   { id: 'emote',  label: '💃',     cls: 'small' },
+  { id: 'zoom',   label: '🔍',     cls: 'small' },
   { id: 'pause',  label: 'II',     cls: 'small pause' },
 ];
 
@@ -88,6 +89,7 @@ export class TouchControls {
         case 'reload': inp.tap('KeyR'); break;
         case 'nade': inp.tap('KeyG'); break;
         case 'emote': inp.tap('KeyB'); break;
+        case 'zoom': inp.tap('KeyZ'); break;
         case 'heal': inp.tap('KeyF'); break;
         case 'swap': inp.wheel += 1; break;
         case 'scope': inp.touchAim = !inp.touchAim; e.target.classList.toggle('lit', inp.touchAim); break;
@@ -150,6 +152,7 @@ export class TouchControls {
     const p = match.player;
     this.btn.scope.style.display = '';
     this.btn.cancel.style.display = match.ghostMode ? '' : 'none';
+    this.btn.zoom.style.display = match.lens ? '' : 'none'; // change the sight's zoom while aiming
     this.btn.portal.textContent = match.ghostMode ? 'PLACE' : 'PORTAL';
     this.btn.portal.classList.toggle('cool', p.portalCd > 0);
     this.btn.portal.style.borderColor = p.portalColor;

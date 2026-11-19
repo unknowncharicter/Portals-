@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { gunModel, applySkin } from '../game/Models.js';
+import { gunModel, applySkin, partModel } from '../game/Models.js';
 import { GUN_FRAMES, PARTS, SLOTS, SLOTS_FOR, EFFECT_TEXT, partFits, frameOf, cleanMods } from '../game/Gunsmith.js';
 import { WEAPONS } from '../game/Weapons.js';
 
@@ -53,10 +53,11 @@ export function buildGunsmith({ save, writeSave, thumbs, Sfx, skin, onChange }) 
   el.appendChild(note);
 
   const section = (title) => { const h = document.createElement('h3'); h.textContent = title; el.appendChild(h); const g = document.createElement('div'); g.className = 'accs'; el.appendChild(g); return g; };
-  const button = (iconTxt, name, sub, selected, locked, onClick) => {
+  // pic: a picture (data URL) of the actual model; otherwise the icon is shown.
+  const button = (iconTxt, name, sub, selected, locked, onClick, pic = null) => {
     const b = document.createElement('button');
     b.className = 'acc' + (selected ? ' sel' : '') + (locked ? ' locked' : '');
-    b.innerHTML = `<span class="ai">${iconTxt}</span><span class="an"></span><span class="ap"></span>`;
+    b.innerHTML = (pic ? `<img class="ath" alt="" src="${pic}">` : `<span class="ai">${iconTxt}</span>`) + `<span class="an"></span><span class="ap"></span>`;
     b.querySelector('.an').textContent = name;
     b.querySelector('.ap').textContent = sub;
     b.onclick = onClick;
@@ -67,7 +68,8 @@ export function buildGunsmith({ save, writeSave, thumbs, Sfx, skin, onChange }) 
   const frames = section('Frame (looks only)');
   for (const f of GUN_FRAMES[gun].frames) {
     const sel = f.id === mods.frame;
-    frames.appendChild(button('🔧', f.name, sel ? 'Equipped' : 'Free', sel, false, () => { Sfx.click(); set({ ...mods, frame: f.id }); }));
+    frames.appendChild(button('🔧', f.name, sel ? 'Equipped' : 'Free', sel, false, () => { Sfx.click(); set({ ...mods, frame: f.id }); },
+      thumb('f:' + f.id, () => gunModel(gun, { frame: f.id }))));
   }
 
   // Attachment slots.
@@ -92,13 +94,27 @@ export function buildGunsmith({ save, writeSave, thumbs, Sfx, skin, onChange }) 
           Sfx.coin();
         } else Sfx.click();
         set({ ...mods, [slot]: id });
-      });
+      }, thumb('p:' + id, () => { const pm = partModel(id); return pm && pm.g; }));
       if (!owned && save.coins < p.price) b.classList.add('poor');
       b.title = EFFECT_TEXT[p.effect];
       grid.appendChild(b);
     }
-    // What the equipped one does.
+    // Sights: pick the zoom it starts at (scroll while aiming to change it in a match).
     const cur = PARTS[mods[slot]];
+    if (slot === 'optic' && cur && cur.zooms && cur.zooms.length > 1) {
+      const z = document.createElement('div');
+      z.className = 'seg smith-zoom';
+      const lbl = document.createElement('span'); lbl.textContent = 'Starting zoom'; z.appendChild(lbl);
+      for (const v of cur.zooms) {
+        const b = document.createElement('button');
+        b.textContent = v + '×';
+        if (v === mods.zoom) b.classList.add('sel');
+        b.onclick = () => { Sfx.click(); set({ ...mods, zoom: v }); };
+        z.appendChild(b);
+      }
+      el.appendChild(z);
+    }
+    // What the equipped one does.
     const d = document.createElement('p');
     d.className = 'hint left smith-effect';
     d.textContent = cur ? `${cur.name}: ${EFFECT_TEXT[cur.effect]}` : 'Buy an attachment once and use it on every gun it fits.';
@@ -152,4 +168,42 @@ function showGun(holder, gun, mods, skin) {
   view.camera.lookAt(0, 0, 0);
   view.gun = pivot;
   view.scene.add(pivot);
+}
+
+// ---------- Pictures of frames and parts (rendered once, then cached) ----------
+const pics = new Map();
+let picR = null;
+function thumb(key, make) {
+  if (pics.has(key)) return pics.get(key);
+  let url = null;
+  try {
+    const obj = make();
+    if (obj) {
+      if (!picR) {
+        picR = { r: new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }), scene: new THREE.Scene() };
+        picR.r.outputColorSpace = THREE.SRGBColorSpace;
+        picR.r.setPixelRatio(1);
+        picR.r.setSize(160, 90, false);
+        picR.scene.add(new THREE.HemisphereLight('#ffffff', '#555566', 2.6));
+        const d = new THREE.DirectionalLight('#ffffff', 2); d.position.set(3, 4, 2); picR.scene.add(d);
+      }
+      const { r, scene } = picR;
+      const holder = new THREE.Group();
+      holder.add(obj);
+      holder.rotation.y = 0.35; // a little from the front, so round parts look round
+      scene.add(holder);
+      holder.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(holder);
+      const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+      const half = Math.max(Math.max(s.z, s.x) / 2 / (16 / 9), s.y / 2) * 1.12;
+      const cam = new THREE.OrthographicCamera(-half * 16 / 9, half * 16 / 9, half, -half, 0.01, 20);
+      cam.position.set(c.x + 3, c.y + 0.3, c.z);
+      cam.lookAt(c);
+      r.render(scene, cam);
+      url = r.domElement.toDataURL('image/png');
+      scene.remove(holder);
+    }
+  } catch (e) { url = null; }
+  pics.set(key, url);
+  return url;
 }

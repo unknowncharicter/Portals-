@@ -8,7 +8,7 @@ export class Hud {
     this.weapon = $('weapon-name'); this.ammo = $('ammo');
     this.score = $('score'); this.center = $('center-text');
     this.killfeed = $('killfeed'); this.hitmarker = $('hitmarker'); this.dmg = $('damage');
-    this.scopeEl = $('scope'); this.crosshair = $('crosshair');
+    this.scopeEl = $('scope'); this.crosshair = $('crosshair'); this.reticleEl = $('reticle'); this.zoomLabel = $('zoom-label');
     this.timer = $('timer'); this.killpopEl = $('killpop');
     this._kpT = null; this._spread = -1;
     this._hitT = null; this._dmgT = null; this._centerT = null;
@@ -37,10 +37,15 @@ export class Hud {
     this.crosshair.classList.toggle('ads', on);
   }
 
-  // lite: a scope attachment (a wider view with a red dot) rather than the sniper scope.
-  scope(on, lite = false) {
+  // Looking through a sight attachment: a glowing reticle in its middle and the zoom.
+  reticle(on, zoom = 1) {
+    this.reticleEl.classList.toggle('hidden', !on);
+    this.crosshair.classList.toggle('hidden', on);
+    if (on) this.zoomLabel.textContent = (Math.round(zoom * 100) / 100) + '×';
+  }
+
+  scope(on) {
     this.scopeEl.classList.toggle('hidden', !on);
-    this.scopeEl.classList.toggle('lite', on && lite);
     this.crosshair.classList.toggle('hidden', on);
   }
 

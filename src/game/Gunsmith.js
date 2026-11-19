@@ -74,9 +74,11 @@ const SMALL_GUNS = ['pistol', 'revolver'];
 
 // Attachments. effect: what it does in a match (shown in the Gunsmith).
 export const PARTS = {
-  scope1:    { file: 'Scope_1',        slot: 'optic',  name: 'Hunter Scope',   price: 250, effect: 'scope' },
-  scope2:    { file: 'Scope_2',        slot: 'optic',  name: 'Long Scope',     price: 300, effect: 'scope' },
-  scope3:    { file: 'Scope_3',        slot: 'optic',  name: 'Wide Scope',     price: 350, effect: 'scope' },
+  // zooms: magnification steps (scroll while aiming to change). eye: how far the sight sits from your eye when aiming.
+  reddot:    { build: 'reddot',        slot: 'optic',  name: 'Red Dot',        price: 200, effect: 'scope', zooms: [1, 1.25], eye: 0.15 },
+  scope1:    { file: 'Scope_1',        slot: 'optic',  name: 'Hunter Scope',   price: 250, effect: 'scope', zooms: [1.5, 2, 3], eye: 0.12 },
+  scope2:    { file: 'Scope_2',        slot: 'optic',  name: 'Long Scope',     price: 300, effect: 'scope', zooms: [2, 4, 6], eye: 0.12 },
+  scope3:    { file: 'Scope_3',        slot: 'optic',  name: 'Wide Scope',     price: 350, effect: 'scope', zooms: [1.5, 3, 4], eye: 0.12 },
   sil_short: { file: 'Silencer_Short', slot: 'muzzle', name: 'Short Silencer', price: 150, effect: 'quiet', small: true },
   sil1:      { file: 'Silencer_1',     slot: 'muzzle', name: 'Silencer',       price: 200, effect: 'quiet', small: true },
   sil2:      { file: 'Silencer_2',     slot: 'muzzle', name: 'Ribbed Silencer', price: 250, effect: 'quiet' },
@@ -89,7 +91,7 @@ export const PARTS = {
   bayonet2:  { file: 'Bayonet_2',      slot: 'under',  name: 'Combat Knife',   price: 200, effect: 'style' },
 };
 export const EFFECT_TEXT = {
-  scope: 'More zoom and steadier aim when aiming',
+  scope: 'Look through it when aiming: steadier aim, scroll to change the zoom',
   quiet: 'Quiet: no muzzle flash, bots only hear you up close',
   grip:  'Less kick when shooting',
   bipod: 'Much less kick while crouching',
@@ -121,6 +123,9 @@ export function cleanMods(gun, mods) {
     if (slot === 'under' && frame.noUnder) continue;
     out[slot] = id;
   }
+  // Starting zoom for the optic.
+  const optic = PARTS[out.optic];
+  if (optic && optic.zooms) out.zoom = optic.zooms.includes(mods.zoom) ? mods.zoom : optic.zooms[0];
   return out;
 }
 
@@ -146,4 +151,10 @@ export function randomMods(gun) {
     if (ids.length) mods[slot] = ids[Math.floor(Math.random() * ids.length)];
   }
   return cleanMods(gun, mods);
+}
+
+// The zoom steps of a gun's optic (null without one).
+export function opticZooms(mods) {
+  const p = mods && PARTS[mods.optic];
+  return p && p.zooms ? p.zooms : null;
 }

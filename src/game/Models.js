@@ -106,7 +106,12 @@ export function loadModels() {
       console.warn('Could not load gun model', id, e);
     }
   }), ...Object.entries(PARTS).map(async ([id, p]) => {
-    try { partScenes[id] = (await loader.loadAsync(`models/guns/parts/${p.file}.glb`)).scene; }
+    if (p.build === 'reddot') { partScenes[id] = makeRedDot(); return; }
+    try {
+      const sc = (await loader.loadAsync(`models/guns/parts/${p.file}.glb`)).scene;
+      if (p.slot === 'optic') hollowScope(sc); // see-through, so you can aim through it
+      partScenes[id] = sc;
+    }
     catch (e) { console.warn('Could not load gun part', id, e); }
   })]);
   // Blocky guns built in code (no model file needed).
@@ -286,7 +291,7 @@ function profileAt(pr, a, b, which) {
 }
 
 // An attachment model, turned and scaled like its gun, with its box.
-function partModel(id, scale) {
+export function partModel(id, scale = gunScale.ar || 0.165) {
   const src = partScenes[id];
   if (!src) return null;
   const inner = src.clone(true);
@@ -298,7 +303,91 @@ function partModel(id, scale) {
   const box = new THREE.Box3().setFromObject(g);
   inner.position.set(-(box.min.x + box.max.x) / 2, 0, 0); // centred left-right
   g.updateMatrixWorld(true);
-  return { g, box: new THREE.Box3().setFromObject(g) };
+  // Height of the middle of the sight (optics), in this group's space.
+  const axisY = src.userData.axisY !== undefined ? src.userData.axisY * scale : null;
+  return { g, box: new THREE.Box3().setFromObject(g), axisY };
+}
+
+// Scope models have solid lens caps: cut them out so you can look through the tube.
+// Only the outside faces are drawn, so from behind you see the eyepiece's rim and a clear
+// view through it. Also notes the height of the tube's middle.
+function hollowScope(scene) {
+  scene.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(scene);
+  const v = new THREE.Vector3();
+  // The tube's middle: centre of the vertices at the very back (the eyepiece).
+  let sy = 0, sz = 0, n = 0;
+  scene.traverse(o => {
+    if (!o.isMesh) return;
+    const pos = o.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      if (v.x < box.min.x + (box.max.x - box.min.x) * 0.01) { sy += v.y; sz += v.z; n++; }
+    }
+  });
+  const ay = n ? sy / n : (box.min.y + box.max.y) / 2, az = n ? sz / n : 0;
+  scene.userData.axisY = ay;
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), nrm = new THREE.Vector3();
+  scene.traverse(o => {
+    if (!o.isMesh || !o.geometry.index) return;
+    const geo = o.geometry, pos = geo.attributes.position, idx = geo.index;
+    const world = (i, out) => out.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+    // Faces pointing along the tube, grouped by where they are along it.
+    const planes = new Map();
+    for (let t = 0; t < idx.count; t += 3) {
+      world(idx.getX(t), a); world(idx.getX(t + 1), b); world(idx.getX(t + 2), c);
+      nrm.subVectors(b, a).cross(c.clone().sub(a)).normalize();
+      if (Math.abs(nrm.x) < 0.95) continue;
+      const key = Math.round(a.x * 50);
+      if (!planes.has(key)) planes.set(key, []);
+      planes.get(key).push([t, a.clone(), b.clone(), c.clone()]);
+    }
+    const drop = new Set();
+    for (const tris of planes.values()) {
+      // A lens is a disc: one of its triangles covers the tube's middle.
+      let R = 0;
+      for (const [, p, q, r] of tris) if (covers(p, q, r, ay, az)) R = Math.max(R, ...[p, q, r].map(w => Math.hypot(w.y - ay, w.z - az)));
+      if (!R) continue;
+      for (const [t, p, q, r] of tris) if ([p, q, r].every(w => Math.hypot(w.y - ay, w.z - az) <= R * 1.02)) drop.add(t);
+    }
+    if (!drop.size) return;
+    const keep = [];
+    for (let t = 0; t < idx.count; t += 3) if (!drop.has(t)) keep.push(idx.getX(t), idx.getX(t + 1), idx.getX(t + 2));
+    o.geometry = geo.clone();
+    o.geometry.setIndex(keep);
+  });
+}
+// Does triangle pqr (looked at along x) cover the point (y, z)?
+function covers(p, q, r, y, z) {
+  const s = (a, b) => (b.y - a.y) * (z - a.z) - (b.z - a.z) * (y - a.y);
+  const d1 = s(p, q), d2 = s(q, r), d3 = s(r, p);
+  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+}
+
+// A small boxy red dot sight (an open window you look through), built in code.
+// Made in the gun pack's units (about 0.165 m each), barrel direction +X like the pack models.
+function makeRedDot() {
+  const U = 1 / 0.165, g = new THREE.Group();
+  const dark = new THREE.MeshLambertMaterial({ color: '#3a3d44' });
+  const mid = new THREE.MeshLambertMaterial({ color: '#4a4e57' });
+  const add = (w, h, d, mat, x, y, z, rz = 0, rx = 0) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w * U, h * U, d * U), mat);
+    m.position.set(x * U, y * U, z * U); m.rotation.set(rx, 0, rz); g.add(m); return m;
+  };
+  add(0.07, 0.012, 0.03, dark, 0, 0.006, 0);              // rail clamp
+  add(0.062, 0.014, 0.046, mid, 0.002, 0.019, 0);          // body
+  add(0.02, 0.01, 0.04, dark, -0.022, 0.03, 0);            // back of the body (the emitter)
+  // The hood: two slanted posts and a top bar round an open window.
+  const H = 0.044, top = 0.026 + H;
+  add(0.03, H, 0.006, mid, 0.012, 0.026 + H / 2, 0.021, 0, -0.12);
+  add(0.03, H, 0.006, mid, 0.012, 0.026 + H / 2, -0.021, 0, 0.12);
+  add(0.03, 0.007, 0.05, mid, 0.012, top, 0);
+  // Faint glass.
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.036 * U, H * U).rotateY(Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color: '#9fe8ff', transparent: true, opacity: 0.12, depthWrite: false, side: THREE.DoubleSide }));
+  glass.position.set(0.02 * U, (0.026 + H / 2) * U, 0); g.add(glass);
+  g.userData.axisY = (0.026 + H / 2) * U;
+  return g;
 }
 
 // Put the attachments on a copy of a frame. Returns extra info (new muzzle, scope sight height).
@@ -317,7 +406,23 @@ function fitParts(gun, root, frame, mods) {
       const cz = -Math.min(0.1, (pr.back) * 0.4);
       const sit = profileAt(pr, cz - len * 0.38, cz + len * 0.38, 'top');
       g.position.set(0, sit - box.min.y - 0.004, cz - (box.min.z + box.max.z) / 2);
-      root.userData.sight = sit - 0.004 + h * 0.66; // the middle of the scope's tube
+      // Look over the gun's own front sight / barrel (and a silencer): if they'd be in the way,
+      // lift the sight on a riser mount, like real guns do.
+      const axis = pm.axisY ?? (box.min.y + box.max.y) / 2;
+      const front = g.position.z + box.min.z;
+      let block = profileAt(pr, front, muzzle.z, 'top');
+      if (mods.muzzle) block = Math.max(block, muzzle.y + 0.03 * (scale / 0.16));
+      const lift = Math.max(0, block + 0.014 - (g.position.y + axis));
+      if (lift > 0.002) {
+        g.position.y += lift;
+        const riser = new THREE.Mesh(new THREE.BoxGeometry(0.024, lift + 0.006, len * 0.45), new THREE.MeshLambertMaterial({ color: '#2e3036' }));
+        riser.position.set(0, sit + (lift + 0.006) / 2 - 0.004, g.position.z + (box.min.z + box.max.z) / 2);
+        root.add(riser);
+      }
+      root.userData.sight = g.position.y + axis; // middle of the sight
+      root.userData.eye = g.position.z + box.max.z;   // back of the sight
+      root.userData.eyeDist = PARTS[id].eye || 0.12;   // how far from your eye it sits when aiming
+      if (!PARTS[id].build) { g.traverse(o => { if (o.isMesh) o.userData.scopeBody = true; }); root.userData.scopeLen = len; }
     } else if (slot === 'muzzle') {
       // On the end of the barrel (its threaded nub slides in).
       g.position.set(0, muzzle.y - (box.min.y + box.max.y) / 2, muzzle.z + len * 0.08 - box.max.z);
