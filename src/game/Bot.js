@@ -101,7 +101,7 @@ export class BotBrain {
         // Bots notice you at once in front of them (about 120° view), or straight away if they
         // are already fighting you or you just shot them. Every line of sight counts (direct or
         // through any portal), so a peek through our portal works even if you're also behind us.
-        const tracking = this.target === e && this.seenT > 0;
+        const tracking = (this.target === e && (this.seenT > 0 || now - (this.lostAt || 0) < 700)) || dist < 6;
         const justHit = c.lastAttacker === e && now - (c.hurtAt || 0) < 2500;
         const dir = this.findShot(e, tracking || justHit ? null : (d) => d.dot(look) >= 0.5);
         if (dir) { found = { e, dir }; break; }
@@ -122,6 +122,7 @@ export class BotBrain {
         this.aimDir = found.dir;
         this.lastKnown = found.e.pos.clone();
       } else {
+        if (this.aimDir) this.lostAt = now;
         this.aimDir = null;
         this.target = enemies[0];
       }
@@ -160,7 +161,9 @@ export class BotBrain {
     if (this.tauntT > 0) {
       this.tauntT -= dt;
       const hurt = performance.now() - (c.hurtAt || 0) < 1500;
-      if (hurt || this.tauntT <= 0 || enemyInView) { this.tauntT = 0; c.stopEmote(); return false; }
+      // Stop dancing if an enemy is near (any direction) and in plain sight.
+      const near = this.m.enemiesOf(c).some(e => e.alive && e.pos.distanceTo(c.pos) < 15 && this.findShot(e));
+      if (hurt || this.tauntT <= 0 || enemyInView || near) { this.tauntT = 0; c.stopEmote(); return false; }
       if (!c.emote && c.grounded) c.startEmote();
       return !!c.emote;
     }
@@ -195,7 +198,8 @@ export class BotBrain {
     // Fire in short bursts with pauses, after a human-like reaction delay. The burst and the pause
     // only count down while we're actually aimed at the target (not while still turning to it).
     const reaction = 1.1 - this.skill * 0.75;
-    if (this.seenT > reaction && err < 0.06) {
+    const close = this.target.pos.distanceTo(c.pos) < 7; // close up the target crosses the view fast
+    if (this.seenT > reaction && err < (close ? 0.14 : 0.06)) {
       if (this.burstT > 0) {
         m.fire(c, 0.02 + (1 - this.skill) * 0.03);
         this.burstT -= dt;
@@ -211,10 +215,10 @@ export class BotBrain {
     if (this.strafeT <= 0) {
       this.strafeSign = Math.random() < 0.5 ? -1 : 1; this.strafeT = 0.6 + Math.random() * 1.4;
       // Slide into the new direction now and then (better bots more often): a hard target.
-      if (c.grounded && !c.crouched && Math.random() < 0.25 + this.skill * 0.25) this.slideHold = 0.45;
+      if (c.grounded && !c.crouched && Math.random() < 0.06 + this.skill * 0.08) this.slideHold = 0.45;
     }
     // Got hit: sometimes slide out of the line of fire.
-    if (c.hurtAt && performance.now() - c.hurtAt < 120 && c.grounded && !c.crouched && Math.random() < 0.4 * this.skill) {
+    if (c.hurtAt && performance.now() - c.hurtAt < 120 && c.grounded && !c.crouched && Math.random() < 0.12 * this.skill) {
       this.slideHold = 0.45; this.strafeT = 0.8;
     }
     const to = this.target.pos.clone().sub(c.pos).setY(0);
@@ -371,7 +375,7 @@ export class BotBrain {
       }
     }
     // Slide now and then while running somewhere (it's faster), sometimes jumping out of it to keep the speed.
-    if (far > 7 && c.grounded && !c.crouched && Math.random() < dt * (0.6 + this.skill * 0.6) && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
+    if (far > 14 && c.grounded && !c.crouched && Math.random() < dt * (0.12 + this.skill * 0.12) && this.groundAhead(this.wish, [3, 6, 9])) this.slideHold = 0.6;
     // Look where we are going (slightly toward the target height).
     const look = this.wish.lengthSq() > 0 ? this.wish.clone() : to;
     look.y = 0;
