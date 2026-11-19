@@ -792,7 +792,7 @@ export class Match {
   }
 
   heal(c) {
-    if (c.tryHeal() && c === this.player) Sfx.heal();
+    if (c.tryHeal() && c === this.player) { Sfx.heal(); if (this.tutorial) this.tutorial.flags.healed = true; }
   }
 
   placePortal(c, pose) {

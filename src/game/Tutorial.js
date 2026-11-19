@@ -6,7 +6,7 @@ import { Sfx } from '../audio.js';
 export class Tutorial {
   constructor(match) {
     this.m = match;
-    this.flags = { teleported: false, grenade: false, portalHit: false, hits: 0 };
+    this.flags = { teleported: false, grenade: false, portalHit: false, hits: 0, healed: false };
     this.stepIndex = 0;
     this.stepT = 0;
     this.start = null;
@@ -27,6 +27,7 @@ export class Tutorial {
       { text: 'Walk into one of your portals', check: () => this.flags.teleported },
       { text: 'Shoot INTO the portal in front of you. The bullet comes out the other one and hits the target!', setup: () => this.setupPortalShot(), check: () => this.flags.portalHit },
       { text: t('Throw a grenade with G', 'Tap the grenade button to throw a grenade'), check: () => this.flags.grenade },
+      { text: t('Ouch, you\'re hurt! Press F to heal', 'Ouch, you\'re hurt! Tap the green + button to heal'), heal: true, setup: () => this.setupHeal(), check: () => this.flags.healed },
       { text: 'You\'re ready! Win matches to earn coins, level up and unlock skins.', check: () => this.stepT > 3.5, final: true },
     ];
     this.render();
@@ -44,6 +45,17 @@ export class Tutorial {
     const b = m.portals.poseFromHit(m.world.raycast(new V(4, 1.3, 9), new V(1, 0, 0), 50), new V(1, 0, 0)); // same height as A, so a straight shot hits the chest
     m.placePortal(p, b);
     this.placeDummy(new V(6.2, 0, 9), -Math.PI / 2);
+  }
+
+  // Take some health away (with the usual hit flash) so there's something to heal.
+  setupHeal() {
+    const p = this.m.player;
+    p.hp = Math.min(p.hp, Math.round(p.maxHp * 0.4));
+    p.healCd = 0;
+    p.hurtAt = performance.now();
+    this.m.shake = Math.min(1, (this.m.shake || 0) + 0.6);
+    if (this.m.hud.hurt) this.m.hud.hurt();
+    Sfx.hurt?.();
   }
 
   placeDummy(at, yaw) {
@@ -66,8 +78,9 @@ export class Tutorial {
     if (p.jumped) this.jumped = true;
     if (p.dashed) this.dashed = true;
     if (p.slid) this.slid = true;
-    // Keep everyone topped up: nobody can lose in the tutorial.
-    p.hp = p.maxHp;
+    // Keep everyone topped up: nobody can lose in the tutorial (except during the heal step,
+    // where you're left hurt until you heal yourself).
+    if (!this.steps[this.stepIndex].heal) p.hp = p.maxHp;
     p.grenades = Math.max(p.grenades, 1);
     for (const c of this.m.chars) if (c.isBot) { c.hp = c.maxHp; c.vel.set(0, 0, 0); }
 
