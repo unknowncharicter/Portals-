@@ -126,6 +126,11 @@ const HEADGEAR = { farmer: ['Beige', 'Red'], worker: ['Worker_Yellow'], king: ['
 // Hair (material names), hidden under hats that cover the top of the head.
 const HAIR = { punk: ['Red_Dark', 'Red'], beach: ['Hair'], casual: ['Hair'], hoodie: ['Hair'], business: ['Hair'], adventurer: ['Hair'], king: ['Hair_White'] };
 const FULL_HATS = ['beanie'];
+// Built-in face gear hidden under face items.
+const FACEGEAR = { swat: ['Visor'], farmer: ['Beige', 'Red'] }; // (the farmer's wide brim gets in the way of every face item)
+const WHOLE_HEAD = ['skull', 'gasmask'];
+// Where the back of each face item sits (blocky-head units, -z forward): the face must stay behind it.
+const FACE_FRONT = { visor: -0.215, shades: -0.235, glasses: -0.235, ninja: -0.215, gasmask: -0.2, skull: -0.2, cyber: -0.22 };
 const TOP_HATS = ['cap', 'tophat', 'beanie', 'helmet'];
 const HEAD_PIVOT = [0, 0.72, 0], BACK_PIVOT = [0, 0.16, 0.18];
 // Per character, per item: p = move [x, y, z] (in blocky-head units: the head is 0.42 across;
@@ -181,6 +186,23 @@ function buildAnimated(look, { visor = '#33aaff', teamColor = null, tag = true }
   // Each item sits in its own slot, so it can be nudged for this character (ITEM_FIT).
   const hatSlot = fitSlot(hatRoot, body.modelId, look.hat, HEAD_PIVOT);
   const faceSlot = fitSlot(hatRoot, body.modelId, look.face, HEAD_PIVOT);
+  // Built-in visors come off under face items; then make sure face items sit in front of the
+  // face (a long nose or a helmet visor can stick out past the head's average size).
+  const faceItem = look.face && look.face !== 'nofaceitem' ? look.face : null;
+  if (faceItem && FACEGEAR[body.modelId]) body.hide(/_Head/, FACEGEAR[body.modelId]);
+  // Masks that cover the whole head: built-in hats and hair come off underneath.
+  if (faceItem && WHOLE_HEAD.includes(faceItem)) {
+    if (HEADGEAR[body.modelId]) body.hide(/_Head/, HEADGEAR[body.modelId]);
+    if (HAIR[body.modelId] && faceItem === 'skull') body.hide(/_Head/, HAIR[body.modelId]);
+  }
+  if (faceItem && hb) {
+    const k = hatRoot.scale.x, front = body.faceFront(head, hb);
+    if (front !== null) {
+      const real = (front - hatRoot.position.z) / k;          // face front in blocky-head units
+      const push = Math.min(0, real - (FACE_FRONT[faceItem] ?? -0.21));
+      faceSlot.parent.position.z += push;
+    }
+  }
   const box = (w, h, d, m, x, y, z, parent = hatSlot) => {
     const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
     b.position.set(x, y, z); parent.add(b); return b;

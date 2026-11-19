@@ -146,6 +146,32 @@ export class AnimatedBody {
     return r;
   }
 
+  // How far forward the face reaches (smallest z in `space`, -z is forward) between two heights
+  // given as shares of the head's height (nose, brow, built-in visors...). Cached per model.
+  faceFront(space, box, lo = 0.2, hi = 0.8) {
+    const cacheKey = this.modelId + ':front';
+    if (measureCache[cacheKey] !== undefined) return measureCache[cacheKey];
+    this.root.updateMatrixWorld(true);
+    const want = new Set(['Head'].map(n => this.bones[n]).filter(Boolean));
+    const v = new THREE.Vector3(), zs = [];
+    const y0 = box.y0 + (box.y1 - box.y0) * lo, y1 = box.y0 + (box.y1 - box.y0) * hi;
+    this.model.traverse(o => {
+      if (!o.isSkinnedMesh || !o.visible) return;
+      const si = o.geometry.attributes.skinIndex, sw = o.geometry.attributes.skinWeight, bones = o.skeleton.bones;
+      for (let i = 0; i < si.count; i++) {
+        let best = 0, bi = -1;
+        for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > best) { best = w; bi = si.getComponent(i, k); } }
+        if (bi < 0 || !want.has(bones[bi])) continue;
+        o.getVertexPosition(i, v); o.localToWorld(v); space.worldToLocal(v);
+        if (v.y >= y0 && v.y <= y1 && Math.abs(v.x - (box.x0 + box.x1) / 2) < (box.x1 - box.x0) * 0.3) zs.push(v.z);
+      }
+    });
+    zs.sort((a, b) => a - b);
+    const r = zs.length > 10 ? zs[Math.floor(zs.length * 0.01)] : null;
+    measureCache[cacheKey] = r;
+    return r;
+  }
+
   // Hide parts of the model: meshes whose name (or parent's) matches `mesh`, or only the
   // parts using one of the given materials. Used to take off built-in hats/packs under items.
   hide(mesh, materials = null) {
