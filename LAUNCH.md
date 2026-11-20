@@ -47,7 +47,7 @@ The game is built for CrazyGames' **Full Launch** requirements:
 | Account | Uses the CrazyGames username (unless the player typed their own name) and shows the profile picture. No own login. Logging in / out reloads with that account |
 | Multiplayer | Private rooms are reported with `updateRoom` (Invite / Join buttons work; not joinable when full), `leftRoom` when leaving, invite links open straight into the room, "instant multiplayer" opens a room, Copy gives a CrazyGames invite link |
 | Usernames | Shown above players and in the room list. Names with rude words are blocked (in the game, in rooms and on the leaderboard). No chat |
-| One click to play | No title screen: the lobby opens straight away; new players get "Play tutorial / Start match" |
+| One click to play | No title screen: the lobby opens straight away; new players get "Play tutorial / Start match". The Paper Comet intro plays only on the first visit (a click skips it) |
 | Devices | Phone/tablet controls switch on from CrazyGames' device type. No own full-screen button on CrazyGames. Xbox / PlayStation controllers work |
 | Size | About 11 MB, ~130 files (limits: 50 MB initial, 1500 files) |
 
@@ -65,7 +65,8 @@ The game is built for CrazyGames' **Full Launch** requirements:
    - **Orientation:** landscape · **Mobile:** yes · **Controller:** yes
    - **Multiplayer:** yes. Lobby size **6**. Tick **"Progress Save"** (needed for the Data module).
    - **Language:** English
-3. **Covers** (in `marketing/`): `cover_1920x1080.png`, `cover_800x1200.png`, `cover_800x800.png`.
+3. **Covers** (in `marketing/`): `cover_1920x1080.png`, `cover_800x1200.png`, `cover_800x800.png`. They follow CrazyGames' cover rules: the title only (no "Play now" or other text), one clear focal point (your character by a glowing portal), no borders or logos.
+   **Preview videos** (also required, in `marketing/`): `preview_landscape_1920x1080.mp4` and `preview_portrait_1080x1620.mp4`: 15 s, no sound, they start on the cover picture, real gameplay (a hero by a portal, a shot through a portal that takes out a bot, a 3v3 fight in the Warehouse, running through a portal).
 4. Test it in the portal's **Preview** tool before sending: start a match, finish it (an ad should play after Continue), try the rewarded "+coins" button, open a room and use CrazyGames' Invite button from a second account.
 5. Credits: paste the list from `README.md` (some models are CC-BY and need the creator named).
 
@@ -73,3 +74,15 @@ The game is built for CrazyGames' **Full Launch** requirements:
 
 Models and sounds are listed under **Credits** in `README.md` — some are CC-BY and need the
 creator named. Paste that list into the game description or a credits section if CrazyGames asks.
+
+
+## Basic Launch: the 4 numbers CrazyGames watches (7-21 days)
+
+| Metric | Good | What helps Portal Duel |
+|---|---|---|
+| Conversion (plays 1+ min) | 80%+ | 6 MB build, intro only once, one click to a match, tutorial offered |
+| Average play time | 10+ min | Rounds, 8 modes, ranked RP, unlocks, Gunsmith |
+| Day 1 retention | 10-15% | Daily reward + daily / weekly challenges, cloud saves |
+| Click-through rate (from 23 Nov 2026) | top 20% | New covers (one character + portal, bold title) and the hover video |
+
+Tip: covers can be A/B tested later in the developer portal (see "A/B Testing Your Covers" in their docs).
