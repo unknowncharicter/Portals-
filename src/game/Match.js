@@ -61,6 +61,7 @@ export const BOT_NAMES = ['Vex', 'Nova', 'Bolt', 'Kira', 'Rook', 'Zed'];
 export const MODES = {
   '1v1': { label: '1v1', teams: [[0], [1]], desc: 'Duel one bot. Last one standing wins the round. First to 3 rounds.' },
   '2v2': { label: '2v2', teams: [[0, 1], [2, 3]], desc: 'You and a bot teammate vs two bots. First to 3 rounds.' },
+  '3v3': { label: '3v3', teams: [[0, 1, 2], [3, 4, 5]], desc: 'You and two bot teammates vs three bots. First to 3 rounds.' },
   'ffa': { label: 'Free for all', ffa: true, count: 4, desc: 'Everyone for themselves. Last one standing wins the round.' },
   'koth': { label: 'King of the Hill', teams: [[0, 1], [2, 3]], respawn: true, koth: true, target: 100, time: 240,
     desc: '2v2 with respawns. Stand in the glowing zone to score. First team to 100 wins.' },

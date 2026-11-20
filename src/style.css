@@ -709,3 +709,14 @@ body.touch #tutorial small { font-size: 10px; margin-bottom: 2px; }
 .loadout .card.sel, .loadout button.sel { background: var(--panel-3); }
 #btn-tutorial.new { background: var(--panel-2); border: 1px solid var(--accent); color: var(--text); }
 #btn-tutorial.new::after { color: var(--accent); }
+
+/* Private room: pick your team */
+.room-players:has(.team-cols) { display: block; }
+.team-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.room-players .team-col { display: flex; flex-direction: column; gap: 6px; background: transparent; padding: 0; border: 0; border-top: 3px solid var(--tc); }
+.team-col.t0 { --tc: #3a6fd8; } .team-col.t1 { --tc: #d84a4a; }
+.room-players .team-head { display: flex; align-items: center; justify-content: space-between; background: transparent; border: 0; padding: 6px 2px; font-family: var(--display); text-transform: uppercase; letter-spacing: .08em; color: var(--tc); }
+.team-head button { padding: 5px 14px; font-size: 13px; }
+.team-head button:disabled { opacity: .35; }
+.room-players [data-move] { cursor: pointer; }
+.room-players [data-move]:hover { background: var(--panel-3); }

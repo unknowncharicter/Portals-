@@ -77,7 +77,7 @@ export class Room {
       this.isHost = true;
       this.code = code || makeCode();
       this.myId = 'h';
-      this.players = [{ ...me, id: 'h' }];
+      this.players = [{ ...me, id: 'h', team: 0 }];
       const peer = this.peer = new Peer(PREFIX + this.code, peerOptions(servers));
       const fail = (e) => {
         peer.destroy();
@@ -98,11 +98,13 @@ export class Room {
     conn.on('data', (msg) => {
       if (!msg || typeof msg !== 'object') return;
       if (msg.t === 'hello') {
-        // Players can join any time (mid-match they take over a bot), up to 4.
-        if (this.players.length >= 4) { conn.send({ t: 'kick', reason: 'The room is full (4 players).', code: 'full' }); setTimeout(() => conn.close(), 300); return; }
+        // Players can join any time (mid-match they take over a bot), up to 6.
+        if (this.players.length >= 6) { conn.send({ t: 'kick', reason: 'The room is full (6 players).', code: 'full' }); setTimeout(() => conn.close(), 300); return; }
         id = 'p' + this.nextId++;
         this.conns.set(id, conn);
-        this.players.push({ ...cleanMe(msg.me), id });
+        // A new player starts on the smaller team (they can switch in a private room).
+        const n0 = this.players.filter(p => p.team === 0).length, n1 = this.players.filter(p => p.team === 1).length;
+        this.players.push({ ...cleanMe(msg.me), id, team: n0 <= n1 ? 0 : 1 });
         conn.send({ t: 'welcome', id });
         this.sendLobby();
         this.emit('players', this.players);
@@ -111,6 +113,7 @@ export class Room {
       }
       if (!id) return;
       if (msg.t === 'bye') { gone(); return; }
+      if (msg.t === 'team') { this.setTeam(id, msg.team); return; }
       this.emit('message', msg, id);
     });
     const gone = () => {
@@ -128,6 +131,20 @@ export class Room {
   sendLobby() {
     if (!this.isHost) return;
     this.broadcast({ t: 'lobby', players: this.players, mode: this.mode, map: this.map });
+  }
+
+  // Private rooms: which team a player wants (0 blue, 1 red, null = any). Host only; players ask
+  // the host with pickTeam().
+  setTeam(id, team) {
+    const p = this.players.find(q => q.id === id);
+    if (!p) return;
+    p.team = team === 0 || team === 1 ? team : null;
+    this.sendLobby();
+    this.emit('players', this.players);
+  }
+  pickTeam(team) {
+    if (this.isHost) this.setTeam(this.myId, team);
+    else if (this.hostConn && this.hostConn.open) this.hostConn.send({ t: 'team', team });
   }
 
   setSettings(mode, map) {

@@ -86,6 +86,17 @@ export class World {
     const toV = (p) => new THREE.Vector3(p.x, p.y, p.z);
     this.spawns = { 0: map.spawns[0].map(toV), 1: map.spawns[1].map(toV), ffa: map.spawns.ffa.map(toV) };
     this.buildMeshes();
+    // 3v3 needs a third spawn per team: between the two, or beside them, on open floor.
+    for (const t of [0, 1]) {
+      const sp = this.spawns[t];
+      if (sp.length >= 3 || sp.length < 2) continue;
+      const mid = sp[0].clone().add(sp[1]).multiplyScalar(0.5);
+      const side = sp[1].clone().sub(sp[0]); side.y = 0; side.normalize();
+      const across = new THREE.Vector3(-side.z, 0, side.x);
+      const tries = [mid, mid.clone().addScaledVector(across, 1.6), mid.clone().addScaledVector(across, -1.6),
+        sp[0].clone().addScaledVector(side, -2), sp[1].clone().addScaledVector(side, 2)];
+      sp.push(tries.find(p => this.openSpot(p)) || sp[0].clone().addScaledVector(across, 1.2));
+    }
     for (const fn of decor) fn(THREE, (o) => this.group.add(o));
     // Maps made from a 3D model: show it (once it has loaded).
     const show = (model) => {
@@ -120,6 +131,17 @@ export class World {
       const ready = mapModelLoaded(PROPS[pr.id]);
       if (ready) place(ready); else mapModel(PROPS[pr.id]).then(place);
     }
+  }
+
+  // Is there floor under this point and room to stand (nothing inside a body there)?
+  openSpot(p) {
+    const down = this.raycast(new THREE.Vector3(p.x, p.y + 2.5, p.z), new THREE.Vector3(0, -1, 0), 4);
+    if (!down || Math.abs(down.point.y - p.y) > 0.6) return false;
+    for (const b of this.boxes) {
+      if (p.x > b.min.x - 0.45 && p.x < b.max.x + 0.45 && p.z > b.min.z - 0.45 && p.z < b.max.z + 0.45 &&
+          down.point.y + 0.1 < b.max.y && down.point.y + 1.8 > b.min.y) return false;
+    }
+    return true;
   }
 
   // A 3D prop with its collision boxes (from prop-boxes.json). pos is where its middle (x, z)

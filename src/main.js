@@ -896,10 +896,19 @@ function makeRoster(modeId, players) {
     ? Array.from({ length: M.count }, (_, i) => ({ team: i, bodyColor: FFA_COLORS[i] }))
     : M.teams.flatMap((members, team) => members.map(() => ({ team, bodyColor: TEAM_COLORS[team] })));
   const free = [...slots], roster = [];
-  players.forEach((p, i) => {
-    let k = M.ffa ? 0 : free.findIndex(s => s.team === i % M.teams.length);
+  // Players who picked a team go there first (if it has room); the rest fill the smaller team.
+  const order = [...players.filter(p => p.team === 0 || p.team === 1), ...players.filter(p => p.team !== 0 && p.team !== 1)];
+  const count = [0, 0];
+  order.forEach((p) => {
+    let k = 0;
+    if (!M.ffa) {
+      const want = p.team === 0 || p.team === 1 ? p.team : (count[0] <= count[1] ? 0 : 1);
+      k = free.findIndex(s => s.team === want);
+      if (k < 0) k = free.findIndex(s => s.team === 1 - want);
+    }
     if (k < 0) k = 0;
     const slot = free.splice(k, 1)[0];
+    if (!M.ffa) count[slot.team]++;
     roster.push({ ...slot, owner: p.id, bot: false, name: p.name, look: p.look, color: p.color, loadout: p.loadout, gunSkin: p.gunSkin });
   });
   const diff = matchDifficulty(save);
@@ -1013,11 +1022,30 @@ function buildOnline() {
   $('room-code').textContent = room.code;
   const mode = MODES[room.mode] || MODES['2v2'];
   const roster = makeRoster(room.mode, room.players.slice(0, slotsFor(room.mode)));
-  $('room-players').innerHTML = room.players.map(p => {
-    const e = roster.find(r => r.owner === p.id && !r.bot);
-    const team = !e ? 'waiting (too many for this mode)' : mode.ffa ? 'free for all' : e.team === 0 ? 'Blue team' : 'Red team';
-    return `<div style="--c:${e ? e.bodyColor : '#888'}">${escapeHtml(p.name)}${p.id === room.myId ? ' (you)' : ''}${p.id === 'h' ? ' (host)' : ''}<small>${team}</small></div>`;
-  }).join('') + roster.filter(r => r.bot).map(r => `<div style="--c:${r.bodyColor}">Bot<small>${mode.ffa ? 'free for all' : r.team === 0 ? 'Blue team' : 'Red team'}</small></div>`).join('');
+  const canPick = !mode.ffa && !room.isPublic && !room.code.startsWith('Q');
+  const card = (r, p) => {
+    const team = !r ? 'waiting (too many for this mode)' : mode.ffa ? 'free for all' : r.team === 0 ? 'Blue team' : 'Red team';
+    const name = p ? `${escapeHtml(p.name)}${p.id === room.myId ? ' (you)' : ''}${p.id === 'h' ? ' (host)' : ''}` : 'Bot';
+    // The host can move anyone by clicking them.
+    const move = canPick && p && room.isHost && r ? ` data-move="${p.id}" title="Click to move to the other team"` : '';
+    return `<div style="--c:${r ? r.bodyColor : '#888'}"${move}>${name}<small>${team}</small></div>`;
+  };
+  if (canPick) {
+    // Two columns, one per team, with a button to join each.
+    const col = (t) => `<div class="team-col t${t}"><div class="team-head">${t === 0 ? 'Blue team' : 'Red team'}`
+      + `<button data-team="${t}"${(roster.find(r => r.owner === room.myId && !r.bot) || {}).team === t ? ' disabled' : ''}>Join</button></div>`
+      + roster.filter(r => r.team === t).map(r => card(r, r.bot ? null : room.players.find(p => p.id === r.owner))).join('') + '</div>';
+    const waiting = room.players.filter(p => !roster.some(r => r.owner === p.id && !r.bot));
+    $('room-players').innerHTML = `<div class="team-cols">${col(0)}${col(1)}</div>` + waiting.map(p => card(null, p)).join('');
+    for (const b of $('room-players').querySelectorAll('[data-team]')) b.onclick = () => { Sfx.click(); room.pickTeam(+b.dataset.team); };
+    for (const d of $('room-players').querySelectorAll('[data-move]')) d.onclick = () => {
+      const r = roster.find(x => x.owner === d.dataset.move && !x.bot);
+      Sfx.click(); room.setTeam(d.dataset.move, r ? 1 - r.team : 0);
+    };
+  } else {
+    $('room-players').innerHTML = room.players.map(p => card(roster.find(r => r.owner === p.id && !r.bot), p)).join('')
+      + roster.filter(r => r.bot).map(r => card(r, null)).join('');
+  }
   const set = $('room-settings');
   const mapName = room.map === 'random' ? 'Random' : (MAPS[room.map] || MAPS.arena).name;
   if (room.isHost) {
