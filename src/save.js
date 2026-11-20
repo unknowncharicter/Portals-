@@ -31,6 +31,9 @@ export function loadSave() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw);
+      // The Cyber face mask used the same id as the Cyber gun skin ('cyber'): give it its own.
+      if (d.look && d.look.face === 'cyber') d.look.face = 'cyberface';
+      if (Array.isArray(d.owned) && d.owned.includes('cyber') && !d.owned.includes('cyberface')) d.owned.push('cyberface');
       return { ...DEFAULT, ...d,
         loadout: { ...DEFAULT.loadout, ...(d.loadout || {}) },
         gunMods: d.gunMods && typeof d.gunMods === 'object' ? d.gunMods : {},

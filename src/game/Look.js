@@ -66,7 +66,7 @@ export const FACES = [
   { id: 'ninja',      name: 'Ninja mask', icon: '🥷', price: 180 },
   { id: 'gasmask',    name: 'Gas mask',   icon: '😷', price: 260 },
   { id: 'skull',      name: 'Skull mask', icon: '💀', price: 350 },
-  { id: 'cyber',      name: 'Cyber face', icon: '🤖', price: 450 },
+  { id: 'cyberface',  name: 'Cyber face', icon: '🤖', price: 450 },
 ];
 // Back accessories.
 export const BACKS = [
@@ -130,7 +130,7 @@ const FULL_HATS = ['beanie'];
 const FACEGEAR = { swat: ['Visor'], farmer: ['Beige', 'Red'] }; // (the farmer's wide brim gets in the way of every face item)
 const WHOLE_HEAD = ['skull', 'gasmask'];
 // Where the back of each face item sits (blocky-head units, -z forward): the face must stay behind it.
-const FACE_FRONT = { visor: -0.215, shades: -0.235, glasses: -0.235, ninja: -0.215, gasmask: -0.2, skull: -0.2, cyber: -0.22 };
+const FACE_FRONT = { visor: -0.215, shades: -0.235, glasses: -0.235, ninja: -0.215, gasmask: -0.2, skull: -0.2, cyberface: -0.22 };
 const TOP_HATS = ['cap', 'tophat', 'beanie', 'helmet'];
 const HEAD_PIVOT = [0, 0.72, 0], BACK_PIVOT = [0, 0.16, 0.18];
 // Per character, per item: p = move [x, y, z] (in blocky-head units: the head is 0.42 across;
@@ -366,7 +366,7 @@ function addFace(look, box, mat, visor) {
       box(0.05, 0.06, 0.02, black, 0, 0.69, z - 0.02);         // nose
       for (let i = -2; i <= 2; i++) box(0.035, 0.07, 0.02, i % 2 ? black : white, i * 0.045, 0.6, z - 0.02); // teeth
       break;
-    case 'cyber': {
+    case 'cyberface': {
       // Curved dark faceplate with a glowing eye line and mouth grille.
       const plate = mat('#15161c'); plate.side = THREE.DoubleSide;
       const arc = (r, h, a) => new THREE.CylinderGeometry(r, r, h, 24, 1, true, Math.PI - a / 2, a);

@@ -885,6 +885,9 @@ function onlineStatus(text, err = false) {
   el.classList.toggle('err', err);
 }
 
+// Closing or leaving the page: say goodbye right away, so the others don't wait for a timeout.
+addEventListener('pagehide', () => { try { if (room) room.leave(); } catch (e) { /* ignore */ } });
+
 function leaveRoom() {
   clearTimeout(autoStartT);
   if (room) room.leave();

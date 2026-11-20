@@ -193,6 +193,10 @@ export class Room {
     else if (this.hostConn && this.hostConn.open) this.hostConn.send(msg);
   }
 
+  // Host: drop a player we stopped hearing from (closing their connection runs the normal
+  // "player left" steps, so a bot takes over).
+  drop(id) { const c = this.conns.get(id); if (c) { try { c.close(); } catch (e) { /* ignore */ } } }
+
   leave() {
     if (this.left) return;
     this.left = this.closed = true;

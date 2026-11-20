@@ -25,6 +25,11 @@ export class NetSync {
     this.isHost = room.isHost;
     this.myId = room.myId;
     this.sendT = 0;
+    this.heard = {};            // player id -> last time we got anything from them
+    this.checkT = 0;
+    // Players: a small "still here" every 2 s. Timers keep running in a background tab (the game
+    // itself pauses there), so switching tabs for a moment doesn't get you dropped.
+    if (!this.isHost) this.keepAlive = setInterval(() => { try { this.room.broadcast({ t: 'ka' }); } catch (e) { /* ignore */ } }, 2000);
     this.states = new Map();   // netId -> latest packed state (from other browsers)
     this.onMessage = (msg, from) => this.receive(msg, from);
     room.on('message', this.onMessage);
@@ -47,6 +52,16 @@ export class NetSync {
   }
 
   tick(dt) {
+    // Host: someone who went silent for 8 s (closed the tab, lost the internet) has left.
+    if (this.isHost && (this.checkT -= dt) <= 0) {
+      this.checkT = 1;
+      const now = performance.now();
+      for (const p of this.room.players) {
+        if (p.id === 'h') continue;
+        this.heard[p.id] ??= now;
+        if (now - this.heard[p.id] > 8000) { delete this.heard[p.id]; this.room.drop(p.id); }
+      }
+    }
     this.sendT -= dt;
     if (this.sendT > 0) return;
     this.sendT = SEND_RATE;
@@ -118,6 +133,7 @@ export class NetSync {
   }
 
   receive(msg, from) {
+    this.heard[from] = performance.now();
     if (msg.t === 's') {
       for (const s of msg.list) {
         const c = this.m.byNet[s[0]];
@@ -148,6 +164,7 @@ export class NetSync {
   }
 
   dispose() {
+    clearInterval(this.keepAlive);
     const h = this.room.handlers;
     for (const [type, fn] of [['message', this.onMessage], ['left', this.onLeft], ['closed', this.onClosed]])
       if (h[type]) h[type] = h[type].filter(f => f !== fn);
