@@ -18,7 +18,7 @@ const HOLD = {
 export class Viewmodel {
   constructor() {
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(60, 1, 0.01, 10);
+    this.camera = new THREE.PerspectiveCamera(74, 1, 0.01, 10); // wider than before: the gun takes less of the screen
     this.scene.add(new THREE.HemisphereLight('#ffffff', '#555566', 2.4));
     const d = new THREE.DirectionalLight('#ffffff', 1.6); d.position.set(1, 2, 1); this.scene.add(d);
 
