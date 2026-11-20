@@ -16,7 +16,7 @@ import { DEFAULT_LOOK } from './game/Look.js';
 
 const DEFAULT = {
   coins: 0, xp: 0, upgrades: {}, color: COLORS[0], mode: '1v1', difficulty: 'ranked', rating: 800, map: 'arena',
-  gunSkin: 'default', killFx: 'sparks', gunMods: {},
+  gunSkin: 'default', killFx: 'none', gunMods: {},
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },
   owned: ['none', 'cap', 'beanie'],

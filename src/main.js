@@ -91,6 +91,8 @@ portals.lowQuality = touchMode;
 const touch = new TouchControls(input, { onPause: () => pause() });
 
 let save = loadSave();
+// Sparks used to be the free default: players who never bought it go back to no effect.
+if (save.killFx && save.killFx !== 'none' && !owns(save, KILL_FX.find(k => k.id === save.killFx) || {})) save.killFx = 'none';
 let match = null;
 let state = 'menu'; // menu | lobby | playing | paused | results
 
@@ -587,8 +589,8 @@ function buildShop() {
     skins.appendChild(shopItem(s, (save.gunSkin || 'default') === s.id, sw, () => { save.gunSkin = s.id; }));
   }
   const fx = $('shop-fx'); fx.innerHTML = '';
-  const fxSwatch = { sparks: '#ff7040', confetti: 'linear-gradient(90deg,#f44,#fd4,#4f6,#4cf)', pixels: save.color, ghost: '#dde', vortex: `radial-gradient(${save.color}, #000)` };
-  for (const k of KILL_FX) fx.appendChild(shopItem(k, (save.killFx || 'sparks') === k.id, fxSwatch[k.id], () => { save.killFx = k.id; }));
+  const fxSwatch = { none: 'repeating-linear-gradient(45deg,#2a2f36 0 6px,#1b1f24 6px 12px)', sparks: '#ff7040', confetti: 'linear-gradient(90deg,#f44,#fd4,#4f6,#4cf)', pixels: save.color, ghost: '#dde', vortex: `radial-gradient(${save.color}, #000)` };
+  for (const k of KILL_FX) fx.appendChild(shopItem(k, (save.killFx || 'none') === k.id, fxSwatch[k.id], () => { save.killFx = k.id; }));
 }
 
 // ---------- Daily ----------

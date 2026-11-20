@@ -7,7 +7,7 @@ import { randomLook, EMOTES } from './Look.js';
 import { randomMods, modEffects, opticZooms } from './Gunsmith.js';
 import { EmoteWheel } from './EmoteWheel.js';
 import { Projectiles } from './Projectiles.js';
-import { GUN_SKINS } from '../progress.js';
+import { GUN_SKINS, KILL_FX, owns } from '../progress.js';
 import { Tutorial } from './Tutorial.js';
 import { Sfx } from '../audio.js';
 import { COLORS } from '../save.js';
@@ -753,8 +753,10 @@ export class Match {
         if (killer === this.player) { this.hud.toast(`Next gun: ${WEAPONS[GUN_LADDER[killer.gunLevel]].name}`, '#7cf'); Sfx.swap(); }
       }
     }
-    const fx = killer === this.player && !self ? (this.save.killFx || 'sparks') : 'sparks';
-    this.effects.killFx(fx, victim.pos.clone(), killer.portalColor);
+    // Kill effects only for your own kills, and only one you own (bought or unlocked).
+    const fx = killer === this.player && !self ? (this.save.killFx || 'none') : 'none';
+    const item = KILL_FX.find(k => k.id === fx);
+    if (item && fx !== 'none' && owns(this.save, item)) this.effects.killFx(fx, victim.pos.clone(), killer.portalColor);
     this.portals.removeOwner(victim);
     if (victim === this.player) {
       this.earned.deaths++;

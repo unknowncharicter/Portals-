@@ -34,7 +34,8 @@ export const GUN_SKINS = [
 const WEEKLY_SKINS = GUN_SKINS.filter(s => s.weekly);
 
 export const KILL_FX = [
-  { id: 'sparks',   name: 'Sparks',   price: 0 },
+  { id: 'none',     name: 'None',     price: 0 },
+  { id: 'sparks',   name: 'Sparks',   price: 150 },
   { id: 'confetti', name: 'Confetti', price: 200 },
   { id: 'pixels',   name: 'Pixels',   price: 250 },
   { id: 'ghost',    name: 'Ghost',    price: 300 },
