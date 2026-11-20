@@ -15,12 +15,33 @@ import { Peer } from 'peerjs';
 const PREFIX = 'portalduel-v1-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O, 1/I
 
-function peerOptions() {
+// Connection helpers (STUN finds your public address; TURN relays when a direct connection is
+// impossible). Relay logins come from our own site (/api/turn), fetched once and kept a while.
+const STUN = [{ urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+const host = location.hostname;
+const TURN_API = host.endsWith('.pages.dev') ? '/api/turn' : /crazygames|1001juegos/.test(host) ? 'https://fps-portals.pages.dev/api/turn' : null;
+let ice = null, iceAt = 0;
+export async function iceServers() {
+  if (ice && Date.now() - iceAt < 6 * 3600e3) return ice;
+  ice = STUN;
+  if (TURN_API) {
+    try {
+      const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 4000);
+      const r = await fetch(TURN_API, { signal: ctl.signal }); clearTimeout(t);
+      const d = await r.json();
+      if (Array.isArray(d.iceServers) && d.iceServers.length) { ice = d.iceServers; iceAt = Date.now(); }
+    } catch (e) { /* offline or not set up: STUN only */ }
+  }
+  return ice;
+}
+
+function peerOptions(servers = STUN) {
+  const config = { iceServers: servers, iceCandidatePoolSize: 2 };
   // ?peer=host:port uses a local PeerJS server (for testing); default is the free cloud server.
   const q = new URLSearchParams(location.search).get('peer');
-  if (!q) return { debug: 0 };
-  const [host, port] = q.split(':');
-  return { host, port: +port || 9000, path: '/', secure: false, debug: 0 };
+  if (!q) return { debug: 0, config };
+  const [h, port] = q.split(':');
+  return { host: h, port: +port || 9000, path: '/', secure: false, debug: 0, config };
 }
 
 export function makeCode() {
@@ -50,13 +71,14 @@ export class Room {
 
   // ---------- Host ----------
   // code: a fixed code (public rooms); otherwise a random one.
-  host(me, tries = 3, code = null, netTries = 2) {
+  async host(me, tries = 3, code = null, netTries = 2) {
+    const servers = await iceServers();
     return new Promise((resolve, reject) => {
       this.isHost = true;
       this.code = code || makeCode();
       this.myId = 'h';
       this.players = [{ ...me, id: 'h' }];
-      const peer = this.peer = new Peer(PREFIX + this.code, peerOptions());
+      const peer = this.peer = new Peer(PREFIX + this.code, peerOptions(servers));
       const fail = (e) => {
         peer.destroy();
         if (e && e.type === 'unavailable-id' && tries > 0 && !code) this.host(me, tries - 1, null, netTries).then(resolve, reject);
@@ -114,13 +136,14 @@ export class Room {
   }
 
   // ---------- Player ----------
-  join(code, me, timeoutMs = 12000, netTries = 2) {
+  async join(code, me, timeoutMs = 15000, netTries = 2) {
+    const servers = await iceServers();
     return new Promise((resolve, reject) => {
       this.isHost = false;
       this.code = code.toUpperCase().replace(/[^A-Z0-9]/g, '');
-      const peer = this.peer = new Peer(peerOptions());
+      const peer = this.peer = new Peer(peerOptions(servers));
       let done = false;
-      const timer = setTimeout(() => { if (!done) { done = true; peer.destroy(); reject(err('Could not reach that room. Check the code and try again.', 'timeout')); } }, timeoutMs);
+      const timer = setTimeout(() => { if (!done) { done = true; peer.destroy(); reject(err('Found the room but could not connect to it. Your network (or theirs) may be blocking online play. Try again, or try another network.', 'timeout')); } }, timeoutMs);
       peer.once('error', (e) => {
         if (done) return; done = true; clearTimeout(timer); peer.destroy();
         if (isNetErr(e) && netTries > 0) { setTimeout(() => this.join(code, me, timeoutMs, netTries - 1).then(resolve, reject), 1200); return; }

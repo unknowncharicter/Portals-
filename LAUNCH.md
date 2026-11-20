@@ -13,6 +13,18 @@ The game already has the leaderboard code (`functions/api/leaderboard.js`). It j
 
 Until this is done the Stats tab just says "The global leaderboard is coming soon" — nothing breaks.
 
+## 1b. Make room codes work between different networks (Cloudflare, about 5 minutes, free)
+
+Without this, online play only works when both players' networks allow a direct connection (often not on phone data, school/work Wi-Fi or strict routers). This adds a free relay (Cloudflare gives 1000 GB a month free).
+
+1. Cloudflare dashboard → search **TURN** (it's under **Realtime** → **TURN Server**) → **Create** a TURN key. Name it `portal-duel`.
+2. Copy the **Turn Token ID** and the **API Token** it shows (the token is shown only once).
+3. **Workers & Pages** → **fps-portals** → **Settings** → **Variables and Secrets** → **Add**:
+   - `TURN_KEY_ID` = the Turn Token ID (type: Text)
+   - `TURN_KEY_TOKEN` = the API Token (type: **Secret**)
+4. **Deployments** → **⋯** → **Retry deployment** on the newest one.
+5. Check: open https://fps-portals.pages.dev/api/turn . It should say `"relay":true`.
+
 ## 2. Play-test (you + a friend)
 
 - [ ] Computer: play a 1v1, a 2v2, Capture the Flag and King of the Hill against bots.
