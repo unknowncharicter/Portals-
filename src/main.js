@@ -21,6 +21,7 @@ import { buildCharacterMesh, SHIRTS, PANTS, SKINS, HATS, FACES, BACKS, BODIES, E
 import { Hud } from './ui/Hud.js';
 import { Input } from './input.js';
 import { TouchControls, isTouchDevice } from './touch.js';
+import { Gamepads } from './gamepad.js';
 import { MAPS, MAP_IDS, PROPS } from './game/maps.js';
 import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
 import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
@@ -89,6 +90,23 @@ const hud = new Hud();
 const input = new Input(canvas);
 portals.lowQuality = touchMode;
 const touch = new TouchControls(input, { onPause: () => pause() });
+// Xbox / PlayStation controllers.
+const pads = new Gamepads(input);
+pads.onUse = () => { if (touchMode) setTouchMode(false); };
+pads.onPause = () => {
+  if (state === 'playing') pause();
+  else if (state === 'paused') resume();
+  else if (state === 'results') $('btn-continue').onclick();
+  else if (state === 'lobby' && !$('intro').classList.contains('hidden')) $('intro-skip').onclick();
+  else if (state === 'lobby') $('btn-start-top').click();
+  else if (state === 'menu') $('btn-play').click();
+};
+pads.onConfirm = () => {
+  if (state === 'paused') resume();
+  else if (state === 'results') $('btn-continue').onclick();
+  else if (state === 'menu') $('btn-play').click();
+};
+let padHp = null;
 
 let save = loadSave();
 // Sparks used to be the free default: players who never bought it go back to no effect.
@@ -103,7 +121,8 @@ const SETTINGS = [
   { group: 'Controls' },
   { id: 'sens',    label: 'Mouse speed', min: 0.2, max: 3, step: 0.05, fmt: v => v.toFixed(2) },
   { id: 'adsSens', label: 'Aim speed', min: 0.3, max: 1.5, step: 0.05, fmt: v => Math.round(v * 100) + '%', hint: 'Mouse speed while aiming' },
-  { id: 'invertY', label: 'Invert mouse Y', type: 'toggle' },
+  { id: 'invertY', label: 'Invert look Y', type: 'toggle' },
+  { id: 'padSens', label: 'Controller look', min: 0.3, max: 2.5, step: 0.05, fmt: v => v.toFixed(2), hint: 'Look speed with an Xbox / PlayStation controller' },
   { group: 'View' },
   { id: 'fov',     label: 'Field of view', min: 60, max: 110, step: 1, fmt: v => String(v) },
   { id: 'shake',   label: 'Head bob & shake', type: 'toggle' },
@@ -779,7 +798,7 @@ function resume() {
 }
 
 document.addEventListener('pointerlockchange', () => {
-  if (!document.pointerLockElement && state === 'playing' && !touchMode) pause();
+  if (!document.pointerLockElement && state === 'playing' && !touchMode && !pads.active) pause();
 });
 // Clicking the game while playing re-grabs the mouse (e.g. after a failed lock).
 canvas.addEventListener('click', () => { if (!touchMode && state === 'playing' && !input.locked) input.lock(); });
@@ -1116,6 +1135,14 @@ function frame(now = performance.now()) {
     lastFrame = Math.max(lastFrame + 1000 / limit, now);
   }
   const dt = Math.min(clock.getDelta(), 1 / 30);
+  pads.lookSpeed = save.settings.padSens ?? 1;
+  pads.poll(dt, state === 'playing' && input.enabled);
+  // Controller rumble when you get hit.
+  if (match && match.player && state === 'playing') {
+    const hp = match.player.hp;
+    if (padHp !== null && hp < padHp - 1) pads.rumble(Math.min(1, (padHp - hp) / 40), 0.4, 140);
+    padHp = hp;
+  } else padHp = null;
 
   if (match && (state === 'playing' || (state === 'paused' && match.online) || (state === 'results' && match.state === 'outro'))) {
     match.update(dt);
@@ -1123,7 +1150,7 @@ function frame(now = performance.now()) {
   }
   // Mouse players: if the game doesn't have the mouse yet, ask for a click.
   // Only while actually playing (the match may have just ended during update()).
-  $('lockprompt').classList.toggle('hidden', state !== 'playing' || touchMode || input.locked || match?.state === 'outro');
+  $('lockprompt').classList.toggle('hidden', state !== 'playing' || touchMode || input.locked || pads.active || match?.state === 'outro');
 
   if (match && (state === 'playing' || state === 'paused' || state === 'results')) {
     match.render();

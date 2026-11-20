@@ -20,7 +20,7 @@ const DEFAULT = {
   loadout: { primary: 'ar', secondary: 'pistol' },
   look: { ...DEFAULT_LOOK },
   owned: ['none', 'cap', 'beanie'],
-  settings: { sens: 1, adsSens: 1, fov: 80, volume: 0.7, music: 0.5, invertY: false, quality: 'medium', showFps: false, fpsLimit: 120,
+  settings: { sens: 1, adsSens: 1, padSens: 1, fov: 80, volume: 0.7, music: 0.5, invertY: false, quality: 'medium', showFps: false, fpsLimit: 120,
     dmgNumbers: true, shake: true, crosshair: 'classic', chColor: '#ffffff', chSize: 1, keys: {} },
 };
 
