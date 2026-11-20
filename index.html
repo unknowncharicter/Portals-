@@ -14,7 +14,7 @@
 </head>
 <body>
   <!-- Intro + loading screen: the Paper Comet Games intro, the same one as in Sock Run (recorded from it: picture and
-       sound, 4 s). It always plays in full, then fades out once the game has also finished loading (a comet-trail bar
+       sound, 4 s). It plays on the first visit only (a click skips it), then fades out once the game has also finished loading (a comet-trail bar
        shows if loading takes longer). Silent if the game's Sound is at 0, on CrazyGames until their SDK says sound is
        on, or when the browser doesn't allow sound yet. If the video can't play, the logo shows for the same time. -->
   <div id="boot" style="position:fixed;inset:0;z-index:100;background:#1a2348;transition:opacity .4s">
@@ -58,6 +58,13 @@
     }
     v.addEventListener('ended', end);
     v.addEventListener('error', fallBack, true);
+    // The full intro only on the very first visit; after that just the loading bar (straight into the game).
+    var seen = false;
+    try { seen = localStorage.getItem('pd-intro-seen') === '1'; localStorage.setItem('pd-intro-seen', '1'); } catch (e) {}
+    if (seen) { v.style.display = 'none'; ended = true; bar.style.display = 'block'; }
+    // A click, tap or key skips the intro.
+    var skip = function () { if (!ended) { v.pause(); end(); } };
+    box.addEventListener('pointerdown', skip); addEventListener('keydown', skip, { once: true });
     v.volume = Math.max(0, Math.min(1, volume));
     // With sound if allowed (not on CrazyGames before their SDK answers; see __bootSound), else silent.
     function start(withSound) {
@@ -65,8 +72,10 @@
       var p = v.play();
       if (p && p.catch) p.catch(function () { if (withSound) start(false); else fallBack(); });
     }
-    start(volume > 0 && !onCrazyGames);
-    setTimeout(function () { if (v.currentTime === 0) fallBack(); }, 2500); // never got going
+    if (!seen) {
+      start(volume > 0 && !onCrazyGames);
+      setTimeout(function () { if (v.currentTime === 0) fallBack(); }, 2500); // never got going
+    }
     setTimeout(end, (LENGTH + 3) * 1000); // never stuck on the intro
     var tick = setInterval(function () {
       prog = done ? Math.min(1, prog + 0.2) : prog + (0.92 - prog) * 0.05;
