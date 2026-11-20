@@ -109,7 +109,7 @@ const SETTINGS = [
   { id: 'shake',   label: 'Head bob & shake', type: 'toggle' },
   { id: 'dmgNumbers', label: 'Damage numbers', type: 'toggle' },
   { id: 'showFps', label: 'Show FPS', type: 'toggle' },
-  { id: 'fpsLimit', label: 'FPS limit', type: 'choice', options: [[30, '30'], [60, '60'], [120, '120'], [144, '144'], [240, '240'], [0, 'Max']], hint: 'Highest frames per second' },
+  { id: 'fpsLimit', label: 'FPS limit', type: 'choice', options: [[30, '30'], [60, '60'], [120, '120'], [144, '144'], [240, '240'], [0, 'Max']], hint: 'Highest frames per second. Browsers never go above your screen\'s refresh rate (often 60 Hz)' },
   { id: 'quality', label: 'Graphics', type: 'choice', options: [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], hint: 'Lower = smoother on slow computers' },
   { group: 'Crosshair', lobbyOnly: true },
   { id: 'crosshair', label: 'Style', type: 'choice', lobbyOnly: true, options: [['classic', '✚'], ['dot', '•'], ['crossdot', '✛•'], ['circle', '◯'], ['tee', '┬']] },
@@ -1109,9 +1109,12 @@ let lastFrame = 0;
 function frame(now = performance.now()) {
   requestAnimationFrame(frame);
   // FPS limit (Settings): skip this screen refresh if the last frame was too recent.
+  // Carry over the leftover time so e.g. 120 on a 144 Hz screen gives ~120, not 72.
   const limit = save.settings.fpsLimit || 0;
-  if (limit && now - lastFrame < 1000 / limit - 1) return;
-  lastFrame = now;
+  if (limit) {
+    if (now < lastFrame - 1) return;               // lastFrame = when the next frame is due
+    lastFrame = Math.max(lastFrame + 1000 / limit, now);
+  }
   const dt = Math.min(clock.getDelta(), 1 / 30);
 
   if (match && (state === 'playing' || (state === 'paused' && match.online) || (state === 'results' && match.state === 'outro'))) {
