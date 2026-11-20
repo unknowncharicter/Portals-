@@ -10,13 +10,18 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...CORS } });
+const BLOCKED = ['fuck', 'fuk', 'shit', 'bitch', 'cunt', 'dick', 'cock', 'pussy', 'porn', 'sex', 'nigg', 'nigga', 'fag', 'retard',
+  'whore', 'slut', 'rape', 'nazi', 'hitler', 'kys', 'killyourself', 'penis', 'vagina', 'boob', 'tits', 'anal', 'asshole', 'bastard',
+  'wank', 'twat', 'spic', 'chink', 'kike', 'coon', 'tranny', 'molest', 'pedo', 'cum', 'jizz', 'dildo', 'horny', 'nude', 'naked'];
 const TOP = 50;
 // Public tag for a player id (so the game can find "you" in the list without exposing ids).
 export function tag(id) { let h = 2166136261; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
 
 function clean(b) {
   const id = String(b.id || '').replace(/[^a-z0-9]/gi, '').slice(0, 24);
-  const name = String(b.name || 'Player').replace(/[^\w \-.]/g, '').trim().slice(0, 14) || 'Player';
+  let name = String(b.name || 'Player').replace(/[^\w \-.]/g, '').trim().slice(0, 14) || 'Player';
+  const flat = name.toLowerCase().replace(/[\s._\-]/g, '').replace(/0/g, 'o').replace(/1|!/g, 'i').replace(/3/g, 'e').replace(/4|@/g, 'a').replace(/5|\$/g, 's').replace(/7/g, 't');
+  if (BLOCKED.some(w => flat.includes(w))) name = 'Player';
   const num = (v, max) => Math.max(0, Math.min(max, Math.floor(Number(v) || 0)));
   if (id.length < 8) return null;
   return { id, name, rp: num(b.rp, 10000), kills: num(b.kills, 1e7), wins: num(b.wins, 1e6), t: Date.now() };

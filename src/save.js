@@ -26,9 +26,14 @@ const DEFAULT = {
 
 export function upgradeCost(level) { return 60 * (level + 1); }
 
-export function loadSave() {
+// Cloud save (the CrazyGames Data module) when available: a localStorage-like store.
+let cloud = null;
+export function setCloud(store) { cloud = store; }
+export const SAVE_KEY = KEY;
+
+export function loadSave(rawText) {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = rawText ?? localStorage.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw);
       // The Cyber face mask used the same id as the Cyber gun skin ('cyber'): give it its own.
@@ -46,7 +51,9 @@ export function loadSave() {
 }
 
 export function writeSave(save) {
-  try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+  const text = JSON.stringify(save);
+  try { localStorage.setItem(KEY, text); } catch (e) { /* ignore */ }
+  try { if (cloud) cloud.setItem(KEY, text); } catch (e) { /* ignore (e.g. over the size limit) */ }
 }
 
 export function lvl(save, id) { return save.upgrades[id] || 0; }

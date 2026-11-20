@@ -27,7 +27,7 @@ import { Sfx, setVolume, setMusicVolume, setMuted, Music } from './audio.js';
 import { SDK, initSDK, setAdAudioHooks } from './sdk.js';
 import { loadModels, gunModel, mapModel, applySkin } from './game/Models.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from './game/Weapons.js';
-import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl } from './save.js';
+import { loadSave, writeSave, UPGRADES, COLORS, upgradeCost, lvl, setCloud, SAVE_KEY } from './save.js';
 import { levelInfo, GUN_SKINS, KILL_FX, owns, dailyReward, claimDailyReward, dailyChallenges, applyMatch, applyRanked, rankInfo, weeklyChallenges, weeklySkin, daysLeftInWeek } from './progress.js';
 
 const $ = (id) => document.getElementById(id);
@@ -350,7 +350,7 @@ function buildCharacterPanel() {
   const L = save.look;
   const nameInput = $('name-input');
   nameInput.value = L.name;
-  nameInput.onchange = () => { L.name = cleanName(nameInput.value); nameInput.value = L.name; writeSave(save); };
+  nameInput.onchange = () => { L.name = cleanName(nameInput.value); nameInput.value = L.name; save.nameSet = true; writeSave(save); };
   nameInput.onkeydown = (e) => e.stopPropagation();
 
   for (const [key, list] of [['shirt', SHIRTS], ['pants', PANTS], ['skin', SKINS]]) {
@@ -687,7 +687,10 @@ async function buildLeaderboard(force = false) {
   if (mine >= 20) el.innerHTML += `<div class="me"><span class="n">${mine + 1}</span><span class="who">${escapeHtml(save.look.name)} (you)</span><b>${lbKey === 'rp' ? save.rating : (save.stats || {}).kills}</b></div>`;
 }
 
-setAdAudioHooks(() => setMuted(true), () => setMuted(false));
+// Sound is off while an ad plays, and whenever CrazyGames' mute setting is on (it wins over ours).
+let adPlaying = false;
+const applyMute = () => setMuted(adPlaying || SDK.muteAudio);
+setAdAudioHooks(() => { adPlaying = true; applyMute(); input.enabled = false; }, () => { adPlaying = false; applyMute(); if (state === 'playing') input.enabled = true; });
 
 function goLobby() {
   Music.play('menu');
@@ -775,6 +778,7 @@ function onMatchEnd(res) {
   if (prog.levelUps.length) setTimeout(() => Sfx.levelUp(), 600);
   showScreen('results');
   $('results').classList.toggle('over-outro', !!(match && match.state === 'outro'));
+  offerReward(online ? 0 : res.coins);
   // Public room host: carry on by itself (other players are waiting for the next match).
   if (online && room && room.isHost && room.isPublic) setTimeout(() => { if (state === 'results') $('btn-continue').onclick(); }, 9000);
 }
@@ -824,23 +828,25 @@ addEventListener('pointerdown', (e) => {
 
 $('btn-play').onclick = () => {
   Sfx.unlock();
-  if (touchMode) {
-    // Full screen + landscape where the browser allows it.
+  if (touchMode && !SDK.onCrazyGames) {
+    // Full screen + landscape where the browser allows it (CrazyGames has its own full screen).
     const el = document.documentElement;
     try { (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {}); } catch (e) { /* ignore */ }
     try { screen.orientation?.lock?.('landscape')?.catch?.(() => {}); } catch (e) { /* ignore */ }
   }
   goLobby();
 };
+// First visit: show "New to Portal Duel?" straight away (tutorial or match: one click to play).
+function offerTutorialIfNew() {
+  if (save.tutorialDone || save.tutorialOffered || ((save.stats || {}).matches) || state !== 'lobby') return false;
+  save.tutorialOffered = true; writeSave(save);
+  if (touchMode) $('intro').querySelector('.intro-steps div').innerHTML = `<b>${ic('portal')}</b><span>tap PORTAL to aim one<br>(tap again to place it)</span>`;
+  $('intro').classList.remove('hidden');
+  return true;
+}
 $('btn-start').onclick = async () => {
   Sfx.unlock();
-  // First match ever: offer the 1-minute tutorial first.
-  if (!save.tutorialDone && !save.tutorialOffered && !((save.stats || {}).matches)) {
-    save.tutorialOffered = true; writeSave(save);
-    if (touchMode) $('intro').querySelector('.intro-steps div').innerHTML = `<b>${ic('portal')}</b><span>tap PORTAL to aim one<br>(tap again to place it)</span>`;
-    $('intro').classList.remove('hidden');
-    return;
-  }
+  if (offerTutorialIfNew()) return;
   const b = $('btn-start');
   b.disabled = true; b.textContent = 'LOADING...';
   await models;
@@ -858,7 +864,34 @@ $('btn-quit').onclick = () => {
   if (wasOnline) { leaveRoom(); currentTab = 'online'; }
   goLobby();
 };
+// Optional rewarded video after a match: double the coins you just earned. Only when an ad
+// can actually play (CrazyGames, no ad blocker); one per match; then no extra ad on CONTINUE.
+let rewardCoins = 0, rewardWatched = false;
+async function offerReward(coins) {
+  rewardCoins = coins; rewardWatched = false;
+  const b = $('btn-reward');
+  b.classList.add('hidden');
+  if (coins <= 0 || !(await SDK.canRewarded())) return;
+  if (state !== 'results') return;
+  b.querySelector('span').textContent = `Watch a video: +${coins} coins`;
+  b.disabled = false;
+  b.classList.remove('hidden');
+}
+$('btn-reward').onclick = async () => {
+  const b = $('btn-reward');
+  b.disabled = true; $('btn-continue').disabled = true;
+  const ok = await SDK.rewardedAd();
+  $('btn-continue').disabled = false;
+  b.classList.add('hidden');
+  if (ok && rewardCoins > 0) {
+    save.coins += rewardCoins; writeSave(save); Sfx.coin();
+    rewardWatched = true;
+    $('results-detail').insertAdjacentHTML('beforeend', `<div class="lvlup">${coin('+' + rewardCoins)} bonus coins!</div>`);
+  }
+};
+
 $('btn-continue').onclick = async () => {
+  $('btn-reward').classList.add('hidden');
   const wasOnline = !!(match && match.online);
   if (match) { match.dispose(); match = null; }
   if (wasOnline && room) {
@@ -869,7 +902,8 @@ $('btn-continue').onclick = async () => {
     scheduleAutoStart();
     return;
   }
-  await SDK.midgameAd();
+  if (!rewardWatched) await SDK.midgameAd(); // (never two ads in one break)
+  rewardWatched = false;
   goLobby();
 };
 
@@ -890,12 +924,17 @@ addEventListener('pagehide', () => { try { if (room) room.leave(); } catch (e) {
 
 function leaveRoom() {
   clearTimeout(autoStartT);
-  if (room) room.leave();
+  if (room) { room.leave(); SDK.leftRoom(); }
   room = null;
+}
+// Keep CrazyGames up to date about our private room (its Invite / Join buttons use this).
+function syncRoomToSDK() {
+  if (!room || !room.code || room.isPublic || room.code.startsWith('Q')) return;
+  SDK.updateRoom(room.code, room.players.length < 6);
 }
 
 function bindRoom(r) {
-  r.on('players', () => { if (state === 'lobby') buildOnline(); });
+  r.on('players', () => { syncRoomToSDK(); if (state === 'lobby') buildOnline(); });
   r.on('message', (msg) => { if (msg.t === 'start' && !r.isHost) startOnline(msg); });
   r.on('closed', (why) => {
     if (match && match.online) return; // the match shows it
@@ -1100,6 +1139,7 @@ $('btn-create').onclick = async () => {
   try {
     await room.host(me());
     room.setSettings(ONLINE_MODES.includes(save.mode) ? save.mode : '2v2', save.map || 'arena');
+    syncRoomToSDK();
     buildOnline();
   } catch (e) { leaveRoom(); onlineStatus(e.message, true); }
   $('btn-create').disabled = false;
@@ -1113,12 +1153,16 @@ $('btn-join').onclick = async () => {
   bindRoom(room);
   onlineStatus('Joining…');
   $('btn-join').disabled = true;
-  try { await room.join(code, me()); buildOnline(); }
+  try { await room.join(code, me()); syncRoomToSDK(); buildOnline(); }
   catch (e) { leaveRoom(); onlineStatus(e.message, true); }
   $('btn-join').disabled = false;
 };
 $('join-code').onkeydown = (e) => { e.stopPropagation(); if (e.key === 'Enter') $('btn-join').onclick(); };
-$('btn-copy').onclick = () => { navigator.clipboard?.writeText(room ? room.code : '').then(() => onlineStatus('Code copied! Send it to your friends.')).catch(() => {}); };
+$('btn-copy').onclick = () => {
+  // On CrazyGames: a link that opens the game straight into this room. Elsewhere: the code.
+  const link = room && SDK.inviteLink(room.code);
+  navigator.clipboard?.writeText(link || (room ? room.code : '')).then(() => onlineStatus(link ? 'Invite link copied! Send it to your friends.' : 'Code copied! Send it to your friends.')).catch(() => {});
+};
 $('btn-leave').onclick = () => { Sfx.click(); leaveRoom(); onlineStatus(''); buildOnline(); };
 $('btn-room-start').onclick = () => { Sfx.unlock(); hostStart(); };
 $('btn-quick').onclick = () => { Sfx.unlock(); quickMatch($('quick-mode').value); };
@@ -1186,16 +1230,54 @@ Promise.all([...MAP_IDS.filter(id => MAPS[id].model).map(id => mapModel(MAPS[id]
 }, 300));
 applySettings();
 buildSettings();
-showScreen('menu');
+// Straight to the lobby (one click from playing): no separate title screen.
+goLobby();
 frame();
-// The SDK loads in the background; it never changes the current screen.
-initSDK().then(() => {
+// The SDK loads in the background.
+initSDK().then(async () => {
   SDK.loadingStart(); SDK.loadingStop();
-  // The intro's sound waits for CrazyGames' mute setting (no SDK: nothing to wait for, it already chose).
-  let muted = false;
-  try { muted = !!(window.CrazyGames && window.CrazyGames.SDK.game.settings.muteAudio); } catch (e) { /* no SDK */ }
-  if (window.__bootSound) window.__bootSound(!muted);
+  // Sound: CrazyGames' mute setting always wins (and can change while playing).
+  if (window.__bootSound) window.__bootSound(!SDK.muteAudio);
+  applyMute(); SDK.onSettings(() => applyMute());
+  // Phones / tablets: CrazyGames tells us the device type.
+  const dev = SDK.deviceType;
+  if (dev) setTouchMode(dev !== 'desktop');
+  // Cloud save on the player's CrazyGames account (falls back to this browser's save).
+  const store = SDK.data;
+  if (store) {
+    try {
+      const raw = store.getItem(SAVE_KEY);
+      if (raw) { save = loadSave(raw); writeSave(save); }
+      else store.setItem(SAVE_KEY, JSON.stringify(save)); // first time: move this browser's progress up
+      setCloud(store);
+    } catch (e) { /* data module off: keep the local save */ }
+  }
+  // CrazyGames account: use its username (unless you picked your own) and show its picture.
+  const user = await SDK.getUser();
+  if (user) {
+    // (a name other than the default counts as your own choice)
+    if (!save.nameSet && (!save.look.name || save.look.name === 'Player') && user.username) { save.look.name = cleanName(user.username); writeSave(save); }
+    if (user.profilePictureUrl) { $('hero-avatar').src = user.profilePictureUrl; $('hero-avatar').classList.remove('hidden'); }
+  }
+  SDK.onAuth(() => location.reload()); // logged in / out on CrazyGames: start again with that account
+  applySettings();
+  if (state === 'lobby') { rebuildPreview(); buildLobby(); }
+  // Opened from a friend's invite: join their room. "Instant multiplayer": open a room for friends.
+  SDK.onJoinRoom((code) => joinFromInvite(code));
+  const invited = SDK.inviteRoom;
+  if (invited) joinFromInvite(String(invited));
+  else if (SDK.instantMultiplayer) { currentTab = 'online'; buildLobby(); $('btn-create').onclick(); }
+  else offerTutorialIfNew();
 });
+if (!window.CrazyGames) offerTutorialIfNew();
+
+function joinFromInvite(code) {
+  if (state !== 'lobby') return;
+  currentTab = 'online';
+  buildLobby();
+  $('join-code').value = code;
+  $('btn-join').onclick();
+}
 
 // Debug handle (handy for testing in the browser console).
 window.__game = { get match() { return match; }, portals, world, camera, renderer, WEAPONS, get preview() { return previewParts; } };

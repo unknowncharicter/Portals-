@@ -1,4 +1,5 @@
 import { Peer } from 'peerjs';
+import { cleanName } from '../game/Look.js';
 
 // Online rooms over WebRTC (PeerJS). The host's browser is the hub: every player connects to
 // the host, and the host passes messages on. A room code is the host's PeerJS id.
@@ -218,7 +219,7 @@ function err(message, code) { const e = new Error(message); e.code = code; retur
 
 function cleanMe(me = {}) {
   return {
-    name: String(me.name || 'Player').slice(0, 14),
+    name: cleanName(String(me.name || 'Player')),
     look: me.look || {},
     color: me.color || '#36b5ff',
     loadout: me.loadout || { primary: 'ar', secondary: 'pistol' },

@@ -720,3 +720,9 @@ body.touch #tutorial small { font-size: 10px; margin-bottom: 2px; }
 .team-head button:disabled { opacity: .35; }
 .room-players [data-move] { cursor: pointer; }
 .room-players [data-move]:hover { background: var(--panel-3); }
+
+/* CrazyGames account picture next to your name; rewarded video button on the results screen */
+.hero-name { display: flex; align-items: center; justify-content: center; gap: 10px; }
+#hero-avatar { width: 34px; height: 34px; border: 2px solid var(--accent); object-fit: cover; }
+.results-btns { display: flex; gap: 10px; align-items: stretch; justify-content: center; flex-wrap: wrap; }
+#btn-reward { display: inline-flex; align-items: center; gap: 8px; padding: 12px 22px; font-size: 18px; font-family: var(--display); text-transform: uppercase; letter-spacing: .06em; }

@@ -106,7 +106,7 @@
       <aside class="hero">
         <div class="hero-stage"><canvas id="preview"></canvas><div class="hero-floor"></div></div>
         <div class="hero-info">
-          <div class="hero-name" id="hero-name">Player</div>
+          <div class="hero-name"><img id="hero-avatar" class="hidden" alt="" /><span id="hero-name">Player</span></div>
           <div class="hero-sub" id="hero-sub"></div>
         </div>
         <button id="btn-start-top" class="play-btn">PLAY</button>
@@ -218,6 +218,7 @@
                       <h3>Leaderboard</h3>
             <div id="lb-seg" class="seg"><button data-k="rp" class="sel">Rank points</button><button data-k="kills">Kills</button></div>
             <div id="leaderboard" class="leaderboard"><p class="hint left">Loading…</p></div>
+            <p class="hint left">Privacy: the leaderboard stores your player name, rank points and kills (no email or account details). Online play connects you directly to the other players in your room.</p>
 </section>
           <section data-tab="settings" class="panel">
             <h3>Settings</h3>
@@ -299,7 +300,10 @@
   <div id="results" class="screen hidden">
     <h2 id="results-title"></h2>
     <div id="results-detail" class="results"></div>
-    <button id="btn-continue" class="big">CONTINUE</button>
+    <div class="results-btns">
+      <button id="btn-continue" class="big">CONTINUE</button>
+      <button id="btn-reward" class="hidden"><i data-ic="play"></i> <span>Watch a video: double coins</span></button>
+    </div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

@@ -91,8 +91,18 @@ export function randomLook(name) {
     back: pick(['noback', 'noback', 'backpack', 'cape', 'katana']) };
 }
 
+// Words that can't be in a name (other players see names online). Checked without spaces,
+// dots or digit look-alikes, so "f.u.c.k" or "sh1t" are caught too.
+const BLOCKED = ['fuck', 'fuk', 'shit', 'bitch', 'cunt', 'dick', 'cock', 'pussy', 'porn', 'sex', 'nigg', 'nigga', 'fag', 'retard',
+  'whore', 'slut', 'rape', 'nazi', 'hitler', 'kys', 'killyourself', 'penis', 'vagina', 'boob', 'tits', 'anal', 'asshole', 'bastard',
+  'wank', 'twat', 'spic', 'chink', 'kike', 'coon', 'tranny', 'molest', 'pedo', 'cum', 'jizz', 'dildo', 'horny', 'nude', 'naked'];
+export function nameAllowed(s) {
+  const flat = s.toLowerCase().replace(/[\s._\-]/g, '').replace(/0/g, 'o').replace(/1|!/g, 'i').replace(/3/g, 'e').replace(/4|@/g, 'a').replace(/5|\$/g, 's').replace(/7/g, 't');
+  return !BLOCKED.some(w => flat.includes(w));
+}
 export function cleanName(s) {
-  return (s || '').replace(/[^\w \-.]/g, '').trim().slice(0, 14) || 'Player';
+  const n = (s || '').replace(/[^\w \-.]/g, '').trim().slice(0, 14) || 'Player';
+  return nameAllowed(n) ? n : 'Player';
 }
 
 function nameTag(text, color) {
