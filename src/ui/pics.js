@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildCharacterMesh } from '../game/Look.js';
+import { modelsReady } from '../game/Models.js';
 
 // Small pictures of your character wearing an item (Character tab), rendered once and cached.
 // view: 'body' (whole character), 'head' (hats, face items) or 'back' (back items, from behind).
@@ -23,6 +24,7 @@ function renderer() {
 export function charPic(look, view = 'body') {
   const key = JSON.stringify([look.model, look.hat, look.face, look.back, look.shirt, look.pants, look.skin, view]);
   if (cache.has(key)) return cache.get(key);
+  if (!modelsReady()) return null; // (still loading: the lobby is rebuilt with pictures when it's done)
   let url = null;
   try {
     const { r, scene, cam } = renderer();

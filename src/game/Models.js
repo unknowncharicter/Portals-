@@ -55,6 +55,9 @@ const BACK_MODELS = {
 const hatTemplates = {}, faceTemplates = {}, backTemplates = {};
 
 const templates = {};
+let ready = false;
+// True once every model (characters, accessories, guns) has loaded.
+export const modelsReady = () => ready;
 const frameTemplates = {}, partScenes = {}, gunScale = {};
 let loading = null;
 
@@ -114,6 +117,7 @@ export function loadModels() {
     }
     catch (e) { console.warn('Could not load gun part', id, e); }
   })]);
+  loading.then(() => { ready = true });
   // Blocky guns built in code (no model file needed).
   templates.crossbow = makeCrossbow();
   templates.rocket = makeRocket();

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { gunModel, applySkin, partModel } from '../game/Models.js';
+import { gunModel, applySkin, partModel, modelsReady } from '../game/Models.js';
 import { GUN_FRAMES, PARTS, SLOTS, SLOTS_FOR, EFFECT_TEXT, partFits, frameOf, cleanMods } from '../game/Gunsmith.js';
 import { WEAPONS } from '../game/Weapons.js';
 import { ic, coin } from './icons.js';
@@ -176,6 +176,7 @@ const pics = new Map();
 let picR = null;
 function thumb(key, make) {
   if (pics.has(key)) return pics.get(key);
+  if (!modelsReady()) return null;
   let url = null;
   try {
     const obj = make();
