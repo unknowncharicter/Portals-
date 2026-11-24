@@ -83,3 +83,8 @@ Cover images for the store page are in `marketing/`: `cover_1920x1080.png`, `cov
 - Back items: Wings by Michael Fuchs, Jetpack by Roman Miller, Katana by dook, Backpack by Quaternius.
 - Face items: Gas mask by Marisha, Pixel Sunglasses by TRASH - TANUKI, Glasses by iPoly3D, Skull by Quaternius.
 - Extra characters from the Ultimate Modular Men pack by Quaternius (CC0).
+- Guns and attachments: Ultimate Gun Pack by Quaternius (CC0). Red dot sight made for this game.
+- More characters (Casual, Hoodie, Farmer, Worker, Beach, Business, Adventurer, Astronaut, King) by Quaternius (CC0).
+- Fonts: Barlow and Barlow Condensed by Jeremy Tribby (SIL Open Font License).
+- Intro animation: Paper Comet Games (the studio's own).
+- Code, maps built in the game, effects, icons and UI: made for Portal Duel.
